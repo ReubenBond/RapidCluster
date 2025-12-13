@@ -1,0 +1,272 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.vrg.rapid.pb";
+option java_outer_classname = "Remoting";
+option csharp_namespace = "RapidCluster.Pb";
+
+package remoting;
+
+service MembershipService {
+  rpc SendRequest (RapidClusterRequest) returns (RapidClusterResponse) {}
+}
+
+message Endpoint
+{
+    bytes hostname = 1;
+    int32 port = 2;
+    int64 monotonic_node_id = 3;  // Monotonically increasing ID assigned during join for Paxos correctness
+}
+
+
+// All-in-one message type.
+message RapidClusterRequest
+{
+   oneof content {
+        PreJoinMessage preJoinMessage = 1;
+        JoinMessage joinMessage = 2;
+        BatchedAlertMessage batchedAlertMessage = 3;
+        ProbeMessage probeMessage = 4;
+        FastRoundPhase2bMessage fastRoundPhase2bMessage = 5;
+        Phase1aMessage phase1aMessage = 6;
+        Phase1bMessage phase1bMessage = 7;
+        Phase2aMessage phase2aMessage = 8;
+        Phase2bMessage phase2bMessage = 9;
+        LeaveMessage leaveMessage = 10;
+        MembershipViewRequest membershipViewRequest = 11;
+   }
+}
+
+message RapidClusterResponse
+{
+   oneof content {
+        JoinResponse joinResponse = 1;
+        Response response = 2;
+        ConsensusResponse consensusResponse = 3;
+        ProbeResponse probeResponse = 4;
+        MembershipViewResponse membershipViewResponse = 5;
+   }
+}
+
+
+// ******* Join protocol messages *******
+
+message NodeId
+{
+   int64 high = 1;
+   int64 low = 2;
+}
+
+// TODO: JoinMessage and JoinResponse are overloaded because they are being used for phase 1 and 2 of the bootstrap.
+message PreJoinMessage
+{
+   Endpoint sender = 1;
+   NodeId nodeId = 2;
+   repeated int32 ringNumber = 3;
+   int64 configurationId = 4;
+}
+
+message JoinMessage
+{
+   Endpoint sender = 1;
+   NodeId nodeId = 2;
+   repeated int32 ringNumber = 3;
+   int64 configurationId = 4;
+   Metadata metadata = 5;
+}
+
+message JoinResponse
+{
+   Endpoint sender = 1;
+   JoinStatusCode statusCode = 2;
+   int64 configurationId = 3;
+   repeated Endpoint endpoints = 4;
+   repeated NodeId identifiers = 5;
+   repeated Endpoint metadataKeys = 6;
+   repeated Metadata metadataValues = 7;
+   int64 max_monotonic_id = 8;  // Highest monotonic_node_id ever assigned (for Paxos correctness)
+}
+
+enum JoinStatusCode {
+    HOSTNAME_ALREADY_IN_RING = 0;
+    UUID_ALREADY_IN_RING = 1;
+    SAFE_TO_JOIN = 2;
+    CONFIG_CHANGED = 3;
+    MEMBERSHIP_REJECTED = 4;
+};
+
+// ******* Alert messages *******
+
+message BatchedAlertMessage
+{
+    Endpoint sender = 1;
+    repeated AlertMessage messages = 3;
+}
+
+message AlertMessage
+{
+    Endpoint edgeSrc = 1;
+    Endpoint edgeDst = 2;
+    EdgeStatus edgeStatus = 3;
+    int64 configurationId = 4;
+    repeated int32 ringNumber = 5;
+    NodeId nodeId = 6;                      // Required only for join protocol
+    Metadata metadata = 7;                // Required only for join protocol
+}
+
+enum EdgeStatus {
+    UP = 0;
+    DOWN = 1;
+};
+
+message Response
+{
+}
+
+
+// ******* Consensus proposal - represents the decided membership state *******
+// This message carries all information needed to construct a new MembershipView.
+// By including the full member list with NodeIds, all nodes can independently
+// arrive at the same view state after consensus.
+message MembershipProposal
+{
+    // The new configuration ID (version) for this view
+    int64 configurationId = 1;
+
+    // All members in the new view with their identifiers
+    repeated MemberInfo members = 2;
+
+    // Metadata for each member (parallel array with members)
+    repeated Metadata memberMetadata = 3;
+
+    // All NodeIds ever seen (for UUID uniqueness checking)
+    repeated NodeId allNodeIds = 4;
+
+    // Highest monotonic_node_id ever assigned (only increments, never decreases)
+    // Used to assign unique IDs to new joiners for Paxos correctness
+    int64 max_monotonic_id = 5;
+}
+
+// Information about a single member in the cluster
+message MemberInfo
+{
+    Endpoint endpoint = 1;
+    NodeId nodeId = 2;
+}
+
+// ******* Fast Paxos Phase 2 message *******
+
+message FastRoundPhase2bMessage
+{
+    Endpoint sender = 1;
+    int64 configurationId = 2;
+    MembershipProposal proposal = 3;
+}
+
+
+// ******* Classic Paxos messages *********
+message Rank
+{
+    int32 round = 1;
+    int32 nodeIndex = 2;
+}
+
+message Phase1aMessage
+{
+    Endpoint sender = 1;
+    int64 configurationId = 2;
+    Rank rank = 3;
+}
+
+message Phase1bMessage
+{
+    Endpoint sender = 1;
+    int64 configurationId = 2;
+    Rank rnd = 3;
+    Rank vrnd = 4;
+    MembershipProposal proposal = 5;
+}
+
+message Phase2aMessage
+{
+    Endpoint sender = 1;
+    int64 configurationId = 2;
+    Rank rnd = 3;
+    MembershipProposal proposal = 4;
+}
+
+message Phase2bMessage
+{
+    Endpoint sender = 1;
+    int64 configurationId = 2;
+    Rank rnd = 3;
+    MembershipProposal proposal = 4;
+}
+
+
+message ConsensusResponse
+{
+}
+
+
+// ******* Node Metadata *********
+message Metadata
+{
+    map<string, bytes> metadata = 1;
+}
+
+// ******* Leave protocol *******
+
+message LeaveMessage
+{
+    Endpoint sender = 1;
+}
+
+// ******* Used by simple probing failure detector *******
+
+message ProbeMessage
+{
+    Endpoint sender = 1;
+    repeated bytes payload = 3;
+    int64 configurationId = 4;  // Sender's configuration ID for bidirectional stale view detection
+}
+
+message ProbeResponse
+{
+    NodeStatus status = 1;
+    int64 configurationId = 2;
+    bool senderInMembership = 3;  // Indicates if the probe sender is in the responder's membership view
+}
+
+enum NodeStatus {
+    OK = 0;             // this is the default value
+    BOOTSTRAPPING = 1;
+};
+
+// ******* Paxos Learner - Membership view synchronization *******
+//
+// In Paxos terminology, a "learner" is a node that needs to discover
+// the decided value. When a node misses consensus messages (e.g., due
+// to network issues), it can detect this via probe responses showing
+// a higher configuration ID, then request the current view from that node.
+
+// Request to fetch the current membership view from a node.
+// Used when a node detects it has a stale view (e.g., via probe response).
+message MembershipViewRequest
+{
+    Endpoint sender = 1;
+    int64 currentConfigurationId = 2;  // The requester's current configuration ID
+}
+
+// Response containing the full membership view.
+// Reuses the same structure as JoinResponse for consistency.
+message MembershipViewResponse
+{
+    Endpoint sender = 1;
+    int64 configurationId = 2;
+    repeated Endpoint endpoints = 3;
+    repeated NodeId identifiers = 4;
+    repeated Endpoint metadataKeys = 5;
+    repeated Metadata metadataValues = 6;
+    int64 max_monotonic_id = 7;  // Highest monotonic_node_id ever assigned (for Paxos correctness)
+}

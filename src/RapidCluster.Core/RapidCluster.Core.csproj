@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+<PropertyGroup>
+		<Description>RapidCluster - A distributed membership service for .NET. Fast, scalable, and stable failure detection and membership tracking for distributed systems.</Description>
+		<RootNamespace>RapidCluster</RootNamespace>
+		<PackageId>RapidCluster</PackageId>
+		<Version>1.0.0-beta.1</Version>
+		<PackageTags>distributed-systems;membership;failure-detection;consensus;cluster;microservices;grpc;paxos</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="RapidCluster.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Google.Protobuf" />
+		<PackageReference Include="Grpc.Net.Client" />
+		<PackageReference Include="Grpc.AspNetCore" />
+		<PackageReference Include="Grpc.Core" />
+		<PackageReference Include="Grpc.Tools">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+		<PackageReference Include="System.IO.Hashing" />
+		<PackageReference Include="System.Reactive" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Protobuf Include="Protos\rapid.proto" GrpcServices="Both" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+</Project>

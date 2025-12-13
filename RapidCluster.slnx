@@ -1,0 +1,17 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+<Folder Name="/samples/">
+    <Project Path="samples/RapidCluster.Examples/RapidCluster.Examples.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Clockwork/Clockwork.csproj" />
+    <Project Path="src/RapidCluster.Core/RapidCluster.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RapidCluster.Tests/RapidCluster.Tests.csproj" />
+  </Folder>
+</Solution>

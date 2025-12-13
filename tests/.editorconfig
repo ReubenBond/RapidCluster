@@ -1,0 +1,12 @@
+# EditorConfig overrides for test project
+# Inherits from parent .editorconfig
+
+[*.cs]
+
+# CA1707: Identifiers should not contain underscores
+# Test methods commonly use underscores for readability (e.g., MethodName_Scenario_ExpectedResult)
+dotnet_diagnostic.CA1707.severity = none
+
+# CA1515: Types can be made internal
+# Suppressed due to false positives with C# 14 extension members
+dotnet_diagnostic.CA1515.severity = none

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using RapidCluster.Discovery;
 using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 
@@ -57,6 +59,9 @@ public static class RapidClusterServiceCollectionExtensions
             return new SharedResources(sp.GetRequiredService<TimeProvider>(), shuttingDownToken: shuttingDownToken);
         });
 
+        // Register metrics
+        services.AddSingleton<RapidClusterMetrics>();
+
         // Register messaging infrastructure
         // GrpcClient is registered as a hosted service so it shuts down AFTER RapidClusterService
         // (hosted services are stopped in reverse registration order)
@@ -72,8 +77,9 @@ public static class RapidClusterServiceCollectionExtensions
             var protocolOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterProtocolOptions>>();
             var client = sp.GetRequiredService<IMessagingClient>();
             var sharedResources = sp.GetRequiredService<SharedResources>();
+            var metrics = sp.GetRequiredService<RapidClusterMetrics>();
             var logger = sp.GetRequiredService<ILogger<PingPongFailureDetector>>();
-            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, logger);
+            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, metrics, logger);
         });
 
         // Register ConsensusCoordinator factory
@@ -81,6 +87,9 @@ public static class RapidClusterServiceCollectionExtensions
 
         // Register CutDetector factory
         services.AddSingleton<ICutDetectorFactory, CutDetectorFactory>();
+
+        // Register seed provider (default to StaticSeedProvider if not already registered)
+        services.TryAddSingleton<ISeedProvider, StaticSeedProvider>();
 
         // Register MembershipViewAccessor as singleton (used by both MembershipService and consumers)
         services.AddSingleton<MembershipViewAccessor>();

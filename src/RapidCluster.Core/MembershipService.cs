@@ -820,7 +820,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             if (nodeId == null)
             {
                 // This should not happen - skip the node if we don't have its ID
-                    _log.DecidedNodeWithoutUuid(endpoint);
+                _log.DecidedNodeWithoutUuid(endpoint);
                 continue;
             }
 

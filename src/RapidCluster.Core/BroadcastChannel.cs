@@ -153,7 +153,7 @@ public sealed class BroadcastChannel<T> : IDisposable
         _subject.Dispose();
     }
 
-/// <summary>
+    /// <summary>
     /// Disposes the channel, completing it if not already completed.
     /// </summary>
     public void Dispose() => Complete();

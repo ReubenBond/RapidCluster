@@ -1540,7 +1540,45 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         // Reset internal state with new membership
-        ResetStateAfterRejoin(successfulResponse);
+        ConsensusCoordinator? oldConsensus;
+        lock (_membershipUpdateLock)
+        {
+            // Clear pending data before setting new view
+            _joinersToRespondTo.Clear();
+            _joinerUuid.Clear();
+            _joinerMetadata.Clear();
+            _pendingConsensusMessages.Clear();
+
+            // Build new membership view from response
+            var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
+            for (var i = 0; i < successfulResponse.MetadataKeys.Count && i < successfulResponse.MetadataValues.Count; i++)
+            {
+                metadataMap[successfulResponse.MetadataKeys[i]] = successfulResponse.MetadataValues[i];
+            }
+
+            // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
+            var newView = new MembershipViewBuilder(
+                _options.ObserversPerSubject,
+                [.. successfulResponse.Identifiers],
+                [.. successfulResponse.Endpoints],
+                successfulResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(successfulResponse.ConfigurationId));
+
+            // Update _memberNodeIds for all members in the new view
+            _memberNodeIds.Clear();
+            for (var i = 0; i < successfulResponse.Endpoints.Count && i < successfulResponse.Identifiers.Count; i++)
+            {
+                _memberNodeIds[successfulResponse.Endpoints[i]] = successfulResponse.Identifiers[i];
+            }
+
+            // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
+            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null);
+        }
+
+        // Dispose old consensus instance.
+        if (oldConsensus != null)
+        {
+            await oldConsensus.DisposeAsync().ConfigureAwait(true);
+        }
 
         _log.RejoinSuccessful(
             _myAddr,
@@ -1622,52 +1660,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         var responses = await Task.WhenAll(tasks).ConfigureAwait(true);
         return responses.FirstOrDefault(r => r?.JoinResponse?.StatusCode == JoinStatusCode.SafeToJoin)?.JoinResponse;
-    }
-
-    /// <summary>
-    /// Resets the internal state after a successful rejoin.
-    /// </summary>
-    private void ResetStateAfterRejoin(JoinResponse response)
-    {
-        ConsensusCoordinator? oldConsensus;
-        lock (_membershipUpdateLock)
-        {
-            // Clear pending data before setting new view
-            _joinersToRespondTo.Clear();
-            _joinerUuid.Clear();
-            _joinerMetadata.Clear();
-            _pendingConsensusMessages.Clear();
-
-            // Build new membership view from response
-            var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
-            for (var i = 0; i < response.MetadataKeys.Count && i < response.MetadataValues.Count; i++)
-            {
-                metadataMap[response.MetadataKeys[i]] = response.MetadataValues[i];
-            }
-
-            // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
-            var newView = new MembershipViewBuilder(
-                _options.ObserversPerSubject,
-                [.. response.Identifiers],
-                [.. response.Endpoints],
-                response.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(response.ConfigurationId));
-
-            // Update _memberNodeIds for all members in the new view
-            _memberNodeIds.Clear();
-            for (var i = 0; i < response.Endpoints.Count && i < response.Identifiers.Count; i++)
-            {
-                _memberNodeIds[response.Endpoints[i]] = response.Identifiers[i];
-            }
-
-            // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
-            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null);
-        }
-
-        // Dispose old consensus - track it so we await it during shutdown
-        if (oldConsensus != null)
-        {
-            TrackBackgroundTask(oldConsensus.DisposeAsync().AsTask());
-        }
     }
 
     /// <summary>

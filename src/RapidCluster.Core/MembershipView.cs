@@ -283,7 +283,7 @@ public sealed class MembershipView
         return ringIndexes.ToImmutable();
     }
 
-/// <summary>
+    /// <summary>
     /// Creates a new MembershipViewBuilder initialized from this view.
     /// </summary>
     /// <returns>A new MembershipViewBuilder that can be used to create modified views.</returns>
@@ -375,7 +375,7 @@ public sealed class MembershipView
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class MembershipViewConfiguration
 {
-public MembershipViewConfiguration(IEnumerable<NodeId> nodeIds, IEnumerable<Endpoint> endpoints, long maxNodeId)
+    public MembershipViewConfiguration(IEnumerable<NodeId> nodeIds, IEnumerable<Endpoint> endpoints, long maxNodeId)
     {
         ArgumentNullException.ThrowIfNull(nodeIds);
         ArgumentNullException.ThrowIfNull(endpoints);

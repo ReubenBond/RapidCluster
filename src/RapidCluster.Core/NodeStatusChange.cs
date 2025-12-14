@@ -20,7 +20,7 @@ public sealed class NodeStatusChange
         Metadata = metadata;
     }
 
-public override string ToString() => $"{Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port}:{Status}:{Metadata}";
+    public override string ToString() => $"{Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port}:{Status}:{Metadata}";
 
     private string DebuggerDisplay => $"{Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port} {Status}";
 }

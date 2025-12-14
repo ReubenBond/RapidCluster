@@ -380,6 +380,7 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordConsensusLatency(string protocol, string result, Stopwatch stopwatch)
     {
+        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordConsensusLatency(protocol, result, stopwatch.Elapsed.TotalSeconds);
     }
 
@@ -432,6 +433,7 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordJoinLatency(string result, Stopwatch stopwatch)
     {
+        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordJoinLatency(result, stopwatch.Elapsed.TotalSeconds);
     }
 
@@ -484,6 +486,7 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordProbeLatency(string result, Stopwatch stopwatch)
     {
+        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordProbeLatency(result, stopwatch.Elapsed.TotalSeconds);
     }
 
@@ -552,6 +555,7 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordGrpcCallDuration(string method, string status, Stopwatch stopwatch)
     {
+        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordGrpcCallDuration(method, status, stopwatch.Elapsed.TotalSeconds);
     }
 }

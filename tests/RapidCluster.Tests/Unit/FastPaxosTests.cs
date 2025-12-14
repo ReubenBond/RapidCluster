@@ -1,4 +1,6 @@
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging.Abstractions;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Tests.Unit;
@@ -8,6 +10,9 @@ namespace RapidCluster.Tests.Unit;
 /// </summary>
 public class FastPaxosTests
 {
+    private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
+    private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
+
     [Fact]
     public async Task DeclaresSuccess_BeforeAllVotesReceived()
     {
@@ -15,7 +20,7 @@ public class FastPaxosTests
         // Early success: if a single proposal gets 4 votes, decide immediately
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxos(myAddr, configurationId: 1, membershipSize: 5, broadcaster, NullLogger<FastPaxos>.Instance);
+        var fastPaxos = new FastPaxos(myAddr, configurationId: 1, membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxos>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -43,7 +48,7 @@ public class FastPaxosTests
         // In a 5-node cluster, threshold is N - f = 5 - 1 = 4
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxos(myAddr, configurationId: 1, membershipSize: 5, broadcaster, NullLogger<FastPaxos>.Instance);
+        var fastPaxos = new FastPaxos(myAddr, configurationId: 1, membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxos>.Instance);
 
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
@@ -84,7 +89,7 @@ public class FastPaxosTests
         // In a 5-node cluster, threshold is N - f = 5 - 1 = 4
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxos(myAddr, configurationId: 1, membershipSize: 5, broadcaster, NullLogger<FastPaxos>.Instance);
+        var fastPaxos = new FastPaxos(myAddr, configurationId: 1, membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxos>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -136,5 +141,29 @@ public class FastPaxosTests
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) { }
         public void Broadcast(RapidClusterRequest request, Messaging.BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
+    }
+
+    /// <summary>
+    /// Simple meter factory for test metrics collection.
+    /// </summary>
+    private sealed class TestMeterFactory : IMeterFactory
+    {
+        private readonly List<Meter> _meters = [];
+
+        public Meter Create(MeterOptions options)
+        {
+            var meter = new Meter(options);
+            _meters.Add(meter);
+            return meter;
+        }
+
+        public void Dispose()
+        {
+            foreach (var meter in _meters)
+            {
+                meter.Dispose();
+            }
+            _meters.Clear();
+        }
     }
 }

@@ -200,13 +200,13 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
 
     #endregion
 
-    #region StaticSeedProvider Contract Verification
+    #region ConfigurationSeedProvider Contract Verification
 
     /// <summary>
-    /// Tests that StaticSeedProvider returns the same seeds on every call.
+    /// Tests that ConfigurationSeedProvider returns the same seeds on every call.
     /// </summary>
     [Fact]
-    public async Task StaticSeedProvider_ReturnsConsistentSeeds()
+    public async Task ConfigurationSeedProvider_ReturnsConsistentSeeds()
     {
         var seeds = new List<Endpoint>
         {
@@ -214,7 +214,9 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
             RapidClusterUtils.HostFromParts("host2", 5000)
         };
 
-        var provider = new StaticSeedProvider(seeds);
+        var options = new RapidClusterOptions { SeedAddresses = seeds };
+        var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
+        var provider = new ConfigurationSeedProvider(optionsMonitor);
 
         var result1 = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
         var result2 = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
@@ -226,16 +228,28 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tests that StaticSeedProvider with empty list returns empty.
+    /// Tests that ConfigurationSeedProvider with empty list returns empty.
     /// </summary>
     [Fact]
-    public async Task StaticSeedProvider_EmptyList_ReturnsEmpty()
+    public async Task ConfigurationSeedProvider_EmptyList_ReturnsEmpty()
     {
-        var provider = new StaticSeedProvider([]);
+        var options = new RapidClusterOptions { SeedAddresses = [] };
+        var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
+        var provider = new ConfigurationSeedProvider(optionsMonitor);
 
         var result = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(result);
+    }
+
+    /// <summary>
+    /// Simple options monitor for tests that returns a fixed value.
+    /// </summary>
+    private sealed class TestOptionsMonitor<T>(T value) : Microsoft.Extensions.Options.IOptionsMonitor<T>
+    {
+        public T CurrentValue => value;
+        public T Get(string? name) => value;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
     #endregion

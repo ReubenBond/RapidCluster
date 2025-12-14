@@ -88,8 +88,8 @@ public static class RapidClusterServiceCollectionExtensions
         // Register CutDetector factory
         services.AddSingleton<ICutDetectorFactory, CutDetectorFactory>();
 
-        // Register seed provider (default to StaticSeedProvider if not already registered)
-        services.TryAddSingleton<ISeedProvider, StaticSeedProvider>();
+        // Register seed provider (default to ConfigurationSeedProvider if not already registered)
+        services.TryAddSingleton<ISeedProvider, ConfigurationSeedProvider>();
 
         // Register MembershipViewAccessor as singleton (used by both MembershipService and consumers)
         services.AddSingleton<MembershipViewAccessor>();

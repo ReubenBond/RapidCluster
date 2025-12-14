@@ -2,10 +2,9 @@ namespace RapidCluster;
 
 /// <summary>
 /// Provides read-only access to the current membership view and view change notifications.
-/// This interface is the public way to consume membership information - 
-/// MembershipService publishes view changes to the implementation of this interface.
+/// This interface is used internally - MembershipService publishes view changes to the implementation of this interface.
 /// </summary>
-public interface IMembershipViewAccessor
+internal interface IMembershipViewAccessor
 {
     /// <summary>
     /// Gets the current membership view.

@@ -25,7 +25,7 @@ internal sealed partial class SimpleCutDetector : ICutDetector
     private readonly Lock _lock = new();
     private int _proposalCount;
     private readonly Dictionary<Endpoint, Dictionary<int, Endpoint>> _reportsPerHost = new(EndpointAddressComparer.Instance);
-    private readonly SortedSet<Endpoint> _pendingProposals = new(EndpointComparer.Instance);
+    private readonly SortedSet<Endpoint> _pendingProposals = new(ProtobufEndpointComparer.Instance);
     private readonly HashSet<Endpoint> _alreadyProposed = new(EndpointAddressComparer.Instance);
     private bool _seenLinkDownEvents;
 

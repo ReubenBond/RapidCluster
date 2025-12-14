@@ -3,14 +3,14 @@ using RapidCluster.Pb;
 namespace RapidCluster;
 
 /// <summary>
-/// Comparer for individual Endpoint instances that delegates to Endpoint.CompareTo.
+/// Comparer for individual protobuf Endpoint instances that delegates to Endpoint.CompareTo.
 /// Used with SortedSet to ensure consistent ordering across nodes.
 /// </summary>
-internal sealed class EndpointComparer : IComparer<Endpoint>
+internal sealed class ProtobufEndpointComparer : IComparer<Endpoint>
 {
-    public static readonly EndpointComparer Instance = new();
+    public static readonly ProtobufEndpointComparer Instance = new();
 
-    private EndpointComparer() { }
+    private ProtobufEndpointComparer() { }
 
     public int Compare(Endpoint? x, Endpoint? y)
     {
@@ -109,7 +109,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
 
         for (var i = 0; i < x.Members.Count; i++)
         {
-            if (EndpointComparer.Instance.Compare(x.Members[i].Endpoint, y.Members[i].Endpoint) != 0)
+            if (ProtobufEndpointComparer.Instance.Compare(x.Members[i].Endpoint, y.Members[i].Endpoint) != 0)
             {
                 return false;
             }
@@ -149,7 +149,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         // Then compare members lexicographically
         for (var i = 0; i < x.Members.Count; i++)
         {
-            var endpointCompare = EndpointComparer.Instance.Compare(x.Members[i].Endpoint, y.Members[i].Endpoint);
+            var endpointCompare = ProtobufEndpointComparer.Instance.Compare(x.Members[i].Endpoint, y.Members[i].Endpoint);
             if (endpointCompare != 0) return endpointCompare;
         }
 

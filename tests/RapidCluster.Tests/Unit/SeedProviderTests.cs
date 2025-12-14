@@ -1,6 +1,6 @@
+using System.Net;
 using Microsoft.Extensions.Options;
 using RapidCluster.Discovery;
-using RapidCluster.Pb;
 
 namespace RapidCluster.Tests.Unit;
 
@@ -14,10 +14,10 @@ public class SeedProviderTests
     [Fact]
     public async Task ConfigurationSeedProvider_WithSeeds_ReturnsSeeds()
     {
-        var seeds = new List<Endpoint>
+        var seeds = new List<EndPoint>
         {
-            Utils.HostFromParts("192.168.1.1", 5000),
-            Utils.HostFromParts("192.168.1.2", 5001)
+            new DnsEndPoint("192.168.1.1", 5000),
+            new DnsEndPoint("192.168.1.2", 5001)
         };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
@@ -27,10 +27,12 @@ public class SeedProviderTests
         var result = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Count);
-        Assert.Equal("192.168.1.1", result[0].Hostname.ToStringUtf8());
-        Assert.Equal(5000, result[0].Port);
-        Assert.Equal("192.168.1.2", result[1].Hostname.ToStringUtf8());
-        Assert.Equal(5001, result[1].Port);
+        var seed0 = Assert.IsType<DnsEndPoint>(result[0]);
+        Assert.Equal("192.168.1.1", seed0.Host);
+        Assert.Equal(5000, seed0.Port);
+        var seed1 = Assert.IsType<DnsEndPoint>(result[1]);
+        Assert.Equal("192.168.1.2", seed1.Host);
+        Assert.Equal(5001, seed1.Port);
     }
 
     [Fact]
@@ -68,7 +70,7 @@ public class SeedProviderTests
     [Fact]
     public async Task ConfigurationSeedProvider_MultipleCalls_ReturnsSameSeeds()
     {
-        var seeds = new List<Endpoint> { Utils.HostFromParts("192.168.1.1", 5000) };
+        var seeds = new List<EndPoint> { new DnsEndPoint("192.168.1.1", 5000) };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
 
@@ -83,11 +85,11 @@ public class SeedProviderTests
     [Fact]
     public async Task ConfigurationSeedProvider_ReReadsOptionsOnEachCall()
     {
-        var seeds1 = new List<Endpoint> { Utils.HostFromParts("192.168.1.1", 5000) };
-        var seeds2 = new List<Endpoint>
+        var seeds1 = new List<EndPoint> { new DnsEndPoint("192.168.1.1", 5000) };
+        var seeds2 = new List<EndPoint>
         {
-            Utils.HostFromParts("192.168.1.1", 5000),
-            Utils.HostFromParts("192.168.1.2", 5000)
+            new DnsEndPoint("192.168.1.1", 5000),
+            new DnsEndPoint("192.168.1.2", 5000)
         };
 
         var options = new RapidClusterOptions { SeedAddresses = seeds1 };
@@ -108,7 +110,7 @@ public class SeedProviderTests
     [Fact]
     public async Task ConfigurationSeedProvider_WithCancellationToken_Completes()
     {
-        var seeds = new List<Endpoint> { Utils.HostFromParts("192.168.1.1", 5000) };
+        var seeds = new List<EndPoint> { new DnsEndPoint("192.168.1.1", 5000) };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
 
@@ -122,10 +124,10 @@ public class SeedProviderTests
     [Fact]
     public async Task ConfigurationSeedProvider_WithIPv6Addresses_ReturnsCorrectly()
     {
-        var seeds = new List<Endpoint>
+        var seeds = new List<EndPoint>
         {
-            Utils.HostFromParts("[::1]", 5000),
-            Utils.HostFromParts("[2001:db8::1]", 5001)
+            new IPEndPoint(IPAddress.IPv6Loopback, 5000),
+            new IPEndPoint(IPAddress.Parse("2001:db8::1"), 5001)
         };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
@@ -135,19 +137,21 @@ public class SeedProviderTests
         var result = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Count);
-        Assert.Equal("[::1]", result[0].Hostname.ToStringUtf8());
-        Assert.Equal(5000, result[0].Port);
-        Assert.Equal("[2001:db8::1]", result[1].Hostname.ToStringUtf8());
-        Assert.Equal(5001, result[1].Port);
+        var ip0 = Assert.IsType<IPEndPoint>(result[0]);
+        Assert.Equal(IPAddress.IPv6Loopback, ip0.Address);
+        Assert.Equal(5000, ip0.Port);
+        var ip1 = Assert.IsType<IPEndPoint>(result[1]);
+        Assert.Equal(IPAddress.Parse("2001:db8::1"), ip1.Address);
+        Assert.Equal(5001, ip1.Port);
     }
 
     [Fact]
     public async Task ConfigurationSeedProvider_WithHostnames_ReturnsCorrectly()
     {
-        var seeds = new List<Endpoint>
+        var seeds = new List<EndPoint>
         {
-            Utils.HostFromParts("node1.example.com", 5000),
-            Utils.HostFromParts("node-2.cluster.local", 5001)
+            new DnsEndPoint("node1.example.com", 5000),
+            new DnsEndPoint("node-2.cluster.local", 5001)
         };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
@@ -157,8 +161,10 @@ public class SeedProviderTests
         var result = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Count);
-        Assert.Equal("node1.example.com", result[0].Hostname.ToStringUtf8());
-        Assert.Equal("node-2.cluster.local", result[1].Hostname.ToStringUtf8());
+        var dns0 = Assert.IsType<DnsEndPoint>(result[0]);
+        Assert.Equal("node1.example.com", dns0.Host);
+        var dns1 = Assert.IsType<DnsEndPoint>(result[1]);
+        Assert.Equal("node-2.cluster.local", dns1.Host);
     }
 
     #endregion

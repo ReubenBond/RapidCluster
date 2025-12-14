@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,12 +42,13 @@ internal sealed class TestCluster : IAsyncDisposable
     /// <summary>
     /// Creates a seed node at the specified address.
     /// </summary>
-    public async Task<(WebApplication App, IRapidCluster Cluster)> CreateSeedNodeAsync(Pb.Endpoint address, CancellationToken cancellationToken = default)
+    public async Task<(WebApplication App, IRapidCluster Cluster)> CreateSeedNodeAsync(EndPoint address, CancellationToken cancellationToken = default)
     {
+        var port = ((IPEndPoint)address).Port;
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(_loggerFactory);
-        builder.ConfigureRapidClusterKestrel(address.Port);
+        builder.ConfigureRapidClusterKestrel(port);
 
         builder.Services.AddRapidCluster(options =>
         {
@@ -72,14 +74,15 @@ internal sealed class TestCluster : IAsyncDisposable
     /// Creates a seed node with custom configuration.
     /// </summary>
     public async Task<(WebApplication App, IRapidCluster Cluster)> CreateSeedNodeAsync(
-        Pb.Endpoint address,
+        EndPoint address,
         Action<RapidClusterOptions> configureOptions,
         CancellationToken cancellationToken = default)
     {
+        var port = ((IPEndPoint)address).Port;
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(_loggerFactory);
-        builder.ConfigureRapidClusterKestrel(address.Port);
+        builder.ConfigureRapidClusterKestrel(port);
 
         builder.Services.AddRapidCluster(options =>
         {
@@ -106,14 +109,15 @@ internal sealed class TestCluster : IAsyncDisposable
     /// Creates a joiner node that joins through the specified seed.
     /// </summary>
     public async Task<(WebApplication App, IRapidCluster Cluster)> CreateJoinerNodeAsync(
-        Pb.Endpoint address,
-        Pb.Endpoint seedAddress,
+        EndPoint address,
+        EndPoint seedAddress,
         CancellationToken cancellationToken = default)
     {
+        var port = ((IPEndPoint)address).Port;
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(_loggerFactory);
-        builder.ConfigureRapidClusterKestrel(address.Port);
+        builder.ConfigureRapidClusterKestrel(port);
 
         builder.Services.AddRapidCluster(options =>
         {
@@ -139,15 +143,16 @@ internal sealed class TestCluster : IAsyncDisposable
     /// Creates a joiner node with custom configuration.
     /// </summary>
     public async Task<(WebApplication App, IRapidCluster Cluster)> CreateJoinerNodeAsync(
-        Pb.Endpoint address,
-        Pb.Endpoint seedAddress,
+        EndPoint address,
+        EndPoint seedAddress,
         Action<RapidClusterOptions> configureOptions,
         CancellationToken cancellationToken = default)
     {
+        var port = ((IPEndPoint)address).Port;
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(_loggerFactory);
-        builder.ConfigureRapidClusterKestrel(address.Port);
+        builder.ConfigureRapidClusterKestrel(port);
 
         builder.Services.AddRapidCluster(options =>
         {
@@ -175,7 +180,7 @@ internal sealed class TestCluster : IAsyncDisposable
     /// </summary>
     private static async Task WaitForClusterInitializedAsync(IRapidCluster cluster, CancellationToken cancellationToken)
     {
-        while (cluster.ViewAccessor.CurrentView.Size == 0)
+        while (cluster.CurrentView.Members.Count == 0)
         {
             await Task.Delay(10, cancellationToken).ConfigureAwait(true);
         }
@@ -189,7 +194,7 @@ internal sealed class TestCluster : IAsyncDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (cluster.GetMembershipSize() >= expectedSize)
+            if (cluster.CurrentView.Members.Count >= expectedSize)
                 return;
             await Task.Delay(10).ConfigureAwait(true);
         }
@@ -204,11 +209,11 @@ internal sealed class TestCluster : IAsyncDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (cluster.GetMembershipSize() == expectedSize)
+            if (cluster.CurrentView.Members.Count == expectedSize)
                 return;
             await Task.Delay(10).ConfigureAwait(true);
         }
-        throw new TimeoutException($"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.GetMembershipSize()}");
+        throw new TimeoutException($"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.CurrentView.Members.Count}");
     }
 
     public async ValueTask DisposeAsync()

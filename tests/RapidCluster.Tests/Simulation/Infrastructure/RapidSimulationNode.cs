@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
+using System.Net;
 using Clockwork;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -148,7 +149,7 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Create metrics for observability
         _meterFactory = new TestMeterFactory();
-        _metrics = new RapidClusterMetrics(_meterFactory, _viewAccessor);
+        _metrics = new RapidClusterMetrics(_meterFactory, null);
 
         // Create failure detector factory
         var failureDetectorLogger = _loggerFactory.CreateLogger<PingPongFailureDetector>();
@@ -182,12 +183,13 @@ internal sealed class RapidSimulationNode : SimulationNode
         // Create the MembershipService (but don't initialize it yet)
         var rapidClusterOptions = new RapidClusterOptions
         {
-            ListenAddress = address,
-            SeedAddresses = seedAddresses is not null ? [.. seedAddresses] : null,
-            Metadata = metadata ?? new Metadata()
+            ListenAddress = address.ToEndPointPreferIP(),
+            SeedAddresses = seedAddresses?.Select(s => s.ToEndPointPreferIP()).ToList(),
+            Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray()) ?? []
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
         var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterOptions>(rapidClusterOptions));
+        var metadataManager = new MetadataManager();
         _membershipService = new MembershipService(
             Options.Create(rapidClusterOptions),
             Options.Create(_protocolOptions),
@@ -200,6 +202,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             _sharedResources,
             _metrics,
             seedProvider,
+            metadataManager,
             _membershipServiceLogger);
     }
 

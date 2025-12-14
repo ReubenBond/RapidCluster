@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,14 +24,8 @@ internal sealed partial class Program
     [LoggerMessage(Level = LogLevel.Information, Message = "Current membership size: {Size}")]
     private static partial void LogMembershipSize(ILogger logger, int Size);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Proposal detected: {Change}")]
-    private static partial void LogProposalDetected(ILogger logger, ClusterStatusChange Change);
-
     [LoggerMessage(Level = LogLevel.Information, Message = "View change: Config={ConfigId}, Members={MemberCount}")]
     private static partial void LogViewChange(ILogger logger, long ConfigId, int MemberCount);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Kicked from cluster: {Change}")]
-    private static partial void LogKicked(ILogger logger, ClusterStatusChange Change);
 
     private static async Task<int> Main(string[] args)
     {
@@ -55,7 +50,7 @@ internal sealed partial class Program
             RunAgentAsync(listen!, seed!).Wait();
         });
 
-        return rootCommand.Parse(args).InvokeAsync().GetAwaiter().GetResult();
+        return await rootCommand.Parse(args).InvokeAsync();
     }
 
     private static async Task RunAgentAsync(string listenAddress, string seedAddress)
@@ -67,11 +62,11 @@ internal sealed partial class Program
         builder.Logging.AddConsole();
         builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-        var listen = RapidClusterUtils.HostFromString(listenAddress);
-        var seed = RapidClusterUtils.HostFromString(seedAddress);
+        var (listen, listenPort) = ParseEndPoint(listenAddress);
+        var (seed, _) = ParseEndPoint(seedAddress);
 
         // Configure Kestrel for gRPC
-        builder.ConfigureRapidClusterKestrel(listen.Port);
+        builder.ConfigureRapidClusterKestrel(listenPort);
 
         // Add Rapid services
         builder.Services.AddRapidCluster(options =>
@@ -103,46 +98,56 @@ internal sealed partial class Program
     }
 
     /// <summary>
-    /// Background service to monitor the cluster and subscribe to events.
+    /// Background service to monitor the cluster and subscribe to view updates.
     /// </summary>
 #pragma warning disable CA1812 // Avoid uninstantiated internal classes - Instantiated by DI
     private sealed class ClusterMonitorService(
         IRapidCluster cluster,
-        ILogger<ClusterMonitorService> logger,
-        IHostApplicationLifetime lifetime) : BackgroundService
+        ILogger<ClusterMonitorService> logger) : BackgroundService
 #pragma warning restore CA1812
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             try
             {
-                await foreach (var notification in cluster.EventStream.WithCancellation(stoppingToken))
+                await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
                 {
-                    switch (notification.Event)
-                    {
-                        case ClusterEvents.ViewChangeProposal:
-                            LogProposalDetected(logger, notification.Change);
-                            break;
-                        case ClusterEvents.ViewChange:
-                            LogViewChange(logger, notification.Change.ConfigurationId, notification.Change.Membership.Count);
-                            LogMembershipSize(logger, notification.Change.Membership.Count);
-                            break;
-                        case ClusterEvents.Kicked:
-                            LogKicked(logger, notification.Change);
-                            break;
-                    }
+                    LogViewChange(logger, view.ConfigurationId, view.Members.Count);
+                    LogMembershipSize(logger, view.Members.Count);
                 }
             }
             catch (OperationCanceledException)
             {
                 // Expected during shutdown
             }
-
-            // Leave gracefully
-            await cluster.LeaveGracefullyAsync();
-
-            // Signal shutdown
-            lifetime.StopApplication();
         }
+    }
+
+    /// <summary>
+    /// Parses an address string in "host:port" format to an EndPoint.
+    /// </summary>
+    private static (EndPoint endpoint, int port) ParseEndPoint(string address)
+    {
+        var colonIndex = address.LastIndexOf(':');
+        if (colonIndex < 0)
+        {
+            throw new ArgumentException($"Invalid address format: {address}. Expected 'host:port'.", nameof(address));
+        }
+
+        var host = address[..colonIndex];
+        var portString = address[(colonIndex + 1)..];
+
+        if (!int.TryParse(portString, out var port))
+        {
+            throw new ArgumentException($"Invalid port: {portString}.", nameof(address));
+        }
+
+        // Use IPEndPoint if it's an IP address, otherwise use DnsEndPoint
+        if (IPAddress.TryParse(host, out var ipAddress))
+        {
+            return (new IPEndPoint(ipAddress, port), port);
+        }
+
+        return (new DnsEndPoint(host, port), port);
     }
 }

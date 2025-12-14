@@ -1,4 +1,4 @@
-using RapidCluster.Pb;
+using System.Net;
 
 namespace RapidCluster.Discovery;
 
@@ -15,5 +15,5 @@ public interface ISeedProvider
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A list of seed endpoints to contact for joining the cluster.</returns>
-    ValueTask<IReadOnlyList<Endpoint>> GetSeedsAsync(CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default);
 }

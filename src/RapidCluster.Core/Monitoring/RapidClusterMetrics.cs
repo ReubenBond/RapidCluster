@@ -57,7 +57,7 @@ public sealed class RapidClusterMetrics
     // State for Observable Gauges
     // ========================================
 
-    private readonly IMembershipViewAccessor? _viewAccessor;
+    private readonly IRapidCluster? _cluster;
 
     /// <summary>
     /// Histogram bucket boundaries for fast operations (sub-millisecond to tens of milliseconds).
@@ -84,12 +84,12 @@ public sealed class RapidClusterMetrics
     /// Creates a new RapidClusterMetrics instance using an IMeterFactory.
     /// </summary>
     /// <param name="meterFactory">The meter factory for DI-aware meter creation.</param>
-    /// <param name="viewAccessor">Optional membership view accessor for observable gauges.</param>
-    public RapidClusterMetrics(IMeterFactory meterFactory, IMembershipViewAccessor? viewAccessor = null)
+    /// <param name="cluster">Optional cluster interface for observable gauges.</param>
+    public RapidClusterMetrics(IMeterFactory meterFactory, IRapidCluster? cluster = null)
     {
         ArgumentNullException.ThrowIfNull(meterFactory);
 
-        _viewAccessor = viewAccessor;
+        _cluster = cluster;
         _meter = meterFactory.Create(MetricNames.MeterName);
 
         // ========================================
@@ -255,17 +255,17 @@ public sealed class RapidClusterMetrics
         // Initialize Observable Gauges
         // ========================================
 
-        if (_viewAccessor != null)
+        if (_cluster != null)
         {
             _meter.CreateObservableGauge(
                 name: MetricNames.ClusterSize,
-                observeValue: () => _viewAccessor.CurrentView.Size,
+                observeValue: () => _cluster.CurrentView.Members.Count,
                 unit: "{nodes}",
                 description: "Current number of nodes in the cluster");
 
             _meter.CreateObservableGauge(
                 name: MetricNames.ClusterConfigurationId,
-                observeValue: () => _viewAccessor.CurrentView.ConfigurationId.Version,
+                observeValue: () => _cluster.CurrentView.ConfigurationId.Version,
                 unit: "{id}",
                 description: "Current configuration ID");
         }

@@ -1,3 +1,4 @@
+using System.Net;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Logging;
@@ -5,10 +6,26 @@ namespace RapidCluster.Logging;
 /// <summary>
 /// Wrapper for logging a single Endpoint.
 /// </summary>
-internal readonly struct LoggableEndpoint(Endpoint endpoint)
+internal readonly struct LoggableEndpoint
 {
-    private readonly Endpoint _endpoint = endpoint;
-    public override readonly string ToString() => _endpoint.GetNetworkAddressString();
+    private readonly string _display;
+
+    public LoggableEndpoint(Endpoint endpoint)
+    {
+        _display = endpoint.GetNetworkAddressString();
+    }
+
+    public LoggableEndpoint(EndPoint endpoint)
+    {
+        _display = endpoint switch
+        {
+            IPEndPoint ip => $"{ip.Address}:{ip.Port}",
+            DnsEndPoint dns => $"{dns.Host}:{dns.Port}",
+            _ => endpoint.ToString() ?? "unknown"
+        };
+    }
+
+    public override readonly string ToString() => _display;
 }
 
 /// <summary>

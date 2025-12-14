@@ -37,8 +37,8 @@ internal sealed partial class MultiNodeCutDetector : ICutDetector
     private int _proposalCount;
     private int _updatesInProgress;
     private readonly Dictionary<Endpoint, Dictionary<int, Endpoint>> _reportsPerHost = new(EndpointAddressComparer.Instance);
-    private readonly SortedSet<Endpoint> _proposal = new(EndpointComparer.Instance);
-    private readonly SortedSet<Endpoint> _preProposal = new(EndpointComparer.Instance);
+    private readonly SortedSet<Endpoint> _proposal = new(ProtobufEndpointComparer.Instance);
+    private readonly SortedSet<Endpoint> _preProposal = new(ProtobufEndpointComparer.Instance);
     private bool _seenLinkDownEvents;
 
     /// <summary>

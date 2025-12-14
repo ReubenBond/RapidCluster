@@ -1,5 +1,5 @@
+using System.Net;
 using Microsoft.Extensions.Options;
-using RapidCluster.Pb;
 
 namespace RapidCluster.Discovery;
 
@@ -28,7 +28,7 @@ public sealed class ConfigurationSeedProvider : ISeedProvider
     }
 
     /// <inheritdoc/>
-    public ValueTask<IReadOnlyList<Endpoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
         var seeds = _optionsMonitor.CurrentValue.SeedAddresses ?? [];
         return ValueTask.FromResult(seeds);

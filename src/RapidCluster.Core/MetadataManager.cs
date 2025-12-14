@@ -5,8 +5,8 @@ namespace RapidCluster;
 internal sealed class MetadataManager
 {
     // Use SortedDictionary for deterministic iteration order (important for simulation tests)
-    // Use EndpointComparer to ignore NodeId when comparing endpoints
-    private readonly SortedDictionary<Endpoint, Metadata> _metadata = new(EndpointComparer.Instance);
+    // Use ProtobufEndpointComparer to ignore NodeId when comparing endpoints
+    private readonly SortedDictionary<Endpoint, Metadata> _metadata = new(ProtobufEndpointComparer.Instance);
     private readonly Lock _lock = new();
 
     public void Add(Endpoint endpoint, Metadata metadata)

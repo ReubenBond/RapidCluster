@@ -9,7 +9,6 @@ public class RankComparerTests
 {
     private static readonly RankComparer Comparer = RankComparer.Instance;
 
-
     [Fact]
     public void EqualsBothNullReturnsTrue() => Assert.True(Comparer.Equals(null, null));
 
@@ -70,8 +69,6 @@ public class RankComparerTests
         Assert.True(Comparer.Equals(rank1, rank2));
     }
 
-
-
     [Fact]
     public void GetHashCodeEqualRanksReturnsSameHashCode()
     {
@@ -100,8 +97,6 @@ public class RankComparerTests
 
         Assert.Equal(hash1, hash2);
     }
-
-
 
     [Fact]
     public void CompareBothNullReturnsZero() => Assert.Equal(0, Comparer.Compare(null, null));
@@ -165,8 +160,6 @@ public class RankComparerTests
         Assert.True(Comparer.Compare(rank1, rank2) < 0);
     }
 
-
-
     [Fact]
     public void DictionaryCanUseRankAsKey()
     {
@@ -195,8 +188,6 @@ public class RankComparerTests
         Assert.Equal(100, dict[key1]);
         Assert.Equal(200, dict[key2]);
     }
-
-
 
     [Fact]
     public void SortOrdersCorrectly()
@@ -237,8 +228,6 @@ public class RankComparerTests
         Assert.Equal(2, ordered[1].Round);
         Assert.Equal(1, ordered[2].Round);
     }
-
-
 
     [Fact]
     public void InstanceReturnsSameInstance()

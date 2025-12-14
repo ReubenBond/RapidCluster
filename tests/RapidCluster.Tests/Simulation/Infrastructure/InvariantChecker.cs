@@ -51,9 +51,9 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
         passed &= CheckMembershipConsistency();
         passed &= CheckNoSplitBrain();
         passed &= CheckConfigurationIdMonotonicity();
-        passed &= CheckMonotonicNodeIdValidity();
-        passed &= CheckMonotonicNodeIdUniqueness();
-        passed &= CheckMaxMonotonicIdConsistency();
+        passed &= CheckNodeIdValidity();
+        passed &= CheckNodeIdUniqueness();
+        passed &= CheckMaxNodeIdConsistency();
 
         return passed;
     }
@@ -161,7 +161,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
     /// <summary>
     /// Checks that all endpoints in each membership view have valid monotonic node IDs (greater than 0).
     /// </summary>
-    public bool CheckMonotonicNodeIdValidity()
+    public bool CheckNodeIdValidity()
     {
         foreach (var node in _harness.Nodes)
         {
@@ -172,11 +172,11 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
 
             foreach (var member in view.Members)
             {
-                if (member.MonotonicNodeId <= 0)
+                if (member.NodeId <= 0)
                 {
                     RecordViolation(
-                        InvariantType.MonotonicNodeIdValidity,
-                        $"Node {RapidClusterUtils.Loggable(node.Address)} has member {RapidClusterUtils.Loggable(member)} with invalid MonotonicNodeId={member.MonotonicNodeId}");
+                        InvariantType.NodeIdValidity,
+                        $"Node {RapidClusterUtils.Loggable(node.Address)} has member {RapidClusterUtils.Loggable(member)} with invalid NodeId={member.NodeId}");
                     return false;
                 }
             }
@@ -188,7 +188,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
     /// <summary>
     /// Checks that monotonic node IDs are unique within each membership view.
     /// </summary>
-    public bool CheckMonotonicNodeIdUniqueness()
+    public bool CheckNodeIdUniqueness()
     {
         foreach (var node in _harness.Nodes)
         {
@@ -197,17 +197,17 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
             var view = node.CurrentView;
             if (view == null) continue;
 
-            var monotonicIds = view.Members.Select(m => m.MonotonicNodeId).ToList();
-            var uniqueIds = monotonicIds.Distinct().ToList();
+            var nodeIds = view.Members.Select(m => m.NodeId).ToList();
+            var uniqueIds = nodeIds.Distinct().ToList();
 
-            if (monotonicIds.Count != uniqueIds.Count)
+            if (nodeIds.Count != uniqueIds.Count)
             {
-                var duplicates = monotonicIds.GroupBy(id => id)
+                var duplicates = nodeIds.GroupBy(id => id)
                     .Where(g => g.Count() > 1)
                     .Select(g => g.Key);
                 RecordViolation(
-                    InvariantType.MonotonicNodeIdUniqueness,
-                    $"Node {RapidClusterUtils.Loggable(node.Address)} has duplicate MonotonicNodeIds: [{string.Join(", ", duplicates)}]");
+                    InvariantType.NodeIdUniqueness,
+                    $"Node {RapidClusterUtils.Loggable(node.Address)} has duplicate NodeIds: [{string.Join(", ", duplicates)}]");
                 return false;
             }
         }
@@ -216,9 +216,9 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
     }
 
     /// <summary>
-    /// Checks that MaxMonotonicId in each view is greater than or equal to the maximum MonotonicNodeId of all members.
+    /// Checks that MaxNodeId in each view is greater than or equal to the maximum NodeId of all members.
     /// </summary>
-    public bool CheckMaxMonotonicIdConsistency()
+    public bool CheckMaxNodeIdConsistency()
     {
         foreach (var node in _harness.Nodes)
         {
@@ -227,13 +227,13 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
             var view = node.CurrentView;
             if (view == null) continue;
 
-            var maxMemberId = view.Members.Length > 0 ? view.Members.Max(m => m.MonotonicNodeId) : 0;
+            var maxMemberId = view.Members.Length > 0 ? view.Members.Max(m => m.NodeId) : 0;
 
-            if (view.MaxMonotonicId < maxMemberId)
+            if (view.MaxNodeId < maxMemberId)
             {
                 RecordViolation(
-                    InvariantType.MaxMonotonicIdConsistency,
-                    $"Node {RapidClusterUtils.Loggable(node.Address)} has MaxMonotonicId={view.MaxMonotonicId} but has member with MonotonicNodeId={maxMemberId}");
+                    InvariantType.MaxNodeIdConsistency,
+                    $"Node {RapidClusterUtils.Loggable(node.Address)} has MaxNodeId={view.MaxNodeId} but has member with NodeId={maxMemberId}");
                 return false;
             }
         }
@@ -318,9 +318,9 @@ internal enum InvariantType
     ConfigurationIdMonotonicity,
     Liveness,
     ConsensusSafety,
-    MonotonicNodeIdValidity,
-    MonotonicNodeIdUniqueness,
-    MaxMonotonicIdConsistency
+    NodeIdValidity,
+    NodeIdUniqueness,
+    MaxNodeIdConsistency
 }
 
 /// <summary>

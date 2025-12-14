@@ -4,6 +4,7 @@ using Grpc.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RapidCluster.Logging;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Messaging;
@@ -20,12 +21,6 @@ internal sealed partial class GrpcClient(IOptions<RapidClusterProtocolOptions> o
     private readonly ConcurrentDictionary<int, Task> _pendingTasks = new();
     private int _taskIdCounter;
     private bool _disposed;
-
-    private readonly struct LoggableEndpoint(Endpoint endpoint)
-    {
-        private readonly Endpoint _endpoint = endpoint;
-        public override readonly string ToString() => RapidClusterUtils.Loggable(_endpoint);
-    }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "RPC failed to {Remote}")]
     private partial void LogRpcFailed(Exception ex, LoggableEndpoint Remote);

@@ -27,7 +27,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     /// <summary>
     /// Tests formation of a cluster using sequential joins.
     /// Each node joins and waits for consensus before the next node joins.
@@ -303,8 +302,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         }
     }
 
-
-
     /// <summary>
     /// Tests that 10 nodes can join sequentially.
     /// </summary>
@@ -372,8 +369,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         Assert.All(_harness.Nodes, n => Assert.Equal(6, n.MembershipSize));
     }
 
-
-
     /// <summary>
     /// Tests that 5 nodes can join an existing 5-node cluster.
     /// </summary>
@@ -419,8 +414,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
 
         Assert.All(_harness.Nodes, n => Assert.Equal(9, n.MembershipSize));
     }
-
-
 
     /// <summary>
     /// Tests that a large cluster can handle single node failure.
@@ -486,8 +479,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
 
         Assert.All(_harness.Nodes, n => Assert.Equal(10, n.MembershipSize));
     }
-
-
 
     /// <summary>
     /// Tests that nodes can leave gracefully from a large cluster.
@@ -567,8 +558,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
             $"Leave batching is not working correctly.");
     }
 
-
-
     /// <summary>
     /// Tests mixed join and leave operations in a large cluster.
     /// </summary>
@@ -621,8 +610,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         Assert.True(configIds.Count > 1,
             $"Expected multiple configuration IDs through cluster lifecycle, got {configIds.Count}");
     }
-
-
 
     /// <summary>
     /// Logs a summary of batching statistics to the test output.
@@ -730,8 +717,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
 
         return transitions;
     }
-
-
 
     /// <summary>
     /// Tests sustained join/leave churn in a cluster.

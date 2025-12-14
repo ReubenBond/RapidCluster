@@ -6,10 +6,10 @@ namespace RapidCluster.Tests.Simulation;
 /// <summary>
 /// Tests for node restart scenarios using the simulation harness.
 /// These tests verify that nodes can be restarted (crashed/left and recreated with the same address)
-/// and that the cluster correctly assigns new MonotonicNodeIds to restarted nodes.
+/// and that the cluster correctly assigns new NodeIds to restarted nodes.
 /// 
 /// This is distinct from NodeRejoinTests which tests nodes joining with different addresses.
-/// Restart tests specifically verify the MonotonicNodeId assignment logic for Paxos correctness.
+/// Restart tests specifically verify the NodeId assignment logic for Paxos correctness.
 /// </summary>
 [SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores", Justification = "Test naming convention")]
 public sealed class NodeRestartTests : IAsyncLifetime
@@ -29,11 +29,11 @@ public sealed class NodeRestartTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tests that a node restarted at the same address gets a new MonotonicNodeId.
+    /// Tests that a node restarted at the same address gets a new NodeId.
     /// This is critical for Paxos correctness - the restarted node must not reuse the old identity.
     /// </summary>
     [Fact]
-    public void RestartedNode_GetsNewMonotonicNodeId()
+    public void RestartedNode_GetsNewNodeId()
     {
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
@@ -42,9 +42,9 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Record the original MonotonicNodeId for joiner1
-        var originalMonotonicId = joiner1.CurrentView.GetMonotonicNodeId(joiner1.Address);
-        Assert.True(originalMonotonicId > 0, "Original node should have a MonotonicNodeId > 0");
+        // Record the original NodeId for joiner1
+        var originalNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
+        Assert.True(originalNodeId > 0, "Original node should have a NodeId > 0");
 
         // Crash joiner1 (simulates process death)
         _harness.CrashNode(joiner1);
@@ -56,21 +56,21 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var restartedNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Verify the restarted node got a NEW (higher) MonotonicNodeId
-        var newMonotonicId = restartedNode.CurrentView.GetMonotonicNodeId(restartedNode.Address);
-        Assert.True(newMonotonicId > originalMonotonicId,
-            $"Restarted node should have a higher MonotonicNodeId. Original: {originalMonotonicId}, New: {newMonotonicId}");
+        // Verify the restarted node got a NEW (higher) NodeId
+        var newNodeId = restartedNode.CurrentView.GetNodeId(restartedNode.Address);
+        Assert.True(newNodeId > originalNodeId,
+            $"Restarted node should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
 
-        // Verify all nodes agree on the new MonotonicNodeId
-        Assert.Equal(newMonotonicId, seedNode.CurrentView.GetMonotonicNodeId(restartedNode.Address));
-        Assert.Equal(newMonotonicId, joiner2.CurrentView.GetMonotonicNodeId(restartedNode.Address));
+        // Verify all nodes agree on the new NodeId
+        Assert.Equal(newNodeId, seedNode.CurrentView.GetNodeId(restartedNode.Address));
+        Assert.Equal(newNodeId, joiner2.CurrentView.GetNodeId(restartedNode.Address));
     }
 
     /// <summary>
-    /// Tests that a node gracefully leaving and restarting at the same address gets a new MonotonicNodeId.
+    /// Tests that a node gracefully leaving and restarting at the same address gets a new NodeId.
     /// </summary>
     [Fact]
-    public void GracefulLeaveAndRestart_GetsNewMonotonicNodeId()
+    public void GracefulLeaveAndRestart_GetsNewNodeId()
     {
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
@@ -79,8 +79,8 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Record the original MonotonicNodeId
-        var originalMonotonicId = joiner1.CurrentView.GetMonotonicNodeId(joiner1.Address);
+        // Record the original NodeId
+        var originalNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
 
         // Graceful leave
         _harness.RemoveNodeGracefully(joiner1);
@@ -90,17 +90,17 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var restartedNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Verify the restarted node got a NEW (higher) MonotonicNodeId
-        var newMonotonicId = restartedNode.CurrentView.GetMonotonicNodeId(restartedNode.Address);
-        Assert.True(newMonotonicId > originalMonotonicId,
-            $"Restarted node should have a higher MonotonicNodeId. Original: {originalMonotonicId}, New: {newMonotonicId}");
+        // Verify the restarted node got a NEW (higher) NodeId
+        var newNodeId = restartedNode.CurrentView.GetNodeId(restartedNode.Address);
+        Assert.True(newNodeId > originalNodeId,
+            $"Restarted node should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
     }
 
     /// <summary>
-    /// Tests that MonotonicNodeIds are monotonically increasing across multiple restarts.
+    /// Tests that NodeIds are monotonically increasing across multiple restarts.
     /// </summary>
     [Fact]
-    public void MultipleRestarts_MonotonicNodeIdsAlwaysIncrease()
+    public void MultipleRestarts_NodeIdsAlwaysIncrease()
     {
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
@@ -109,7 +109,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
 
-        var previousMonotonicId = joiner1.CurrentView.GetMonotonicNodeId(joiner1.Address);
+        var previousNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
         var currentNode = joiner1;
 
         // Restart the same node 3 times
@@ -123,19 +123,19 @@ public sealed class NodeRestartTests : IAsyncLifetime
             currentNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
             _harness.WaitForConvergence(expectedSize: 3);
 
-            // Verify MonotonicNodeId increased
-            var newMonotonicId = currentNode.CurrentView.GetMonotonicNodeId(currentNode.Address);
-            Assert.True(newMonotonicId > previousMonotonicId,
-                $"Restart {i + 1}: MonotonicNodeId should increase. Previous: {previousMonotonicId}, New: {newMonotonicId}");
-            previousMonotonicId = newMonotonicId;
+            // Verify NodeId increased
+            var newNodeId = currentNode.CurrentView.GetNodeId(currentNode.Address);
+            Assert.True(newNodeId > previousNodeId,
+                $"Restart {i + 1}: NodeId should increase. Previous: {previousNodeId}, New: {newNodeId}");
+            previousNodeId = newNodeId;
         }
     }
 
     /// <summary>
-    /// Tests that the seed node can be restarted and gets a new MonotonicNodeId.
+    /// Tests that the seed node can be restarted and gets a new NodeId.
     /// </summary>
     [Fact]
-    public void SeedNodeRestart_GetsNewMonotonicNodeId()
+    public void SeedNodeRestart_GetsNewNodeId()
     {
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
@@ -144,8 +144,8 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Record the original MonotonicNodeId for seed
-        var originalMonotonicId = seedNode.CurrentView.GetMonotonicNodeId(seedNode.Address);
+        // Record the original NodeId for seed
+        var originalNodeId = seedNode.CurrentView.GetNodeId(seedNode.Address);
 
         // Crash the seed node
         _harness.CrashNode(seedNode);
@@ -156,17 +156,17 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var restartedSeed = _harness.CreateJoinerNode(joiner1, nodeId: 0);
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Verify the restarted seed got a NEW (higher) MonotonicNodeId
-        var newMonotonicId = restartedSeed.CurrentView.GetMonotonicNodeId(restartedSeed.Address);
-        Assert.True(newMonotonicId > originalMonotonicId,
-            $"Restarted seed should have a higher MonotonicNodeId. Original: {originalMonotonicId}, New: {newMonotonicId}");
+        // Verify the restarted seed got a NEW (higher) NodeId
+        var newNodeId = restartedSeed.CurrentView.GetNodeId(restartedSeed.Address);
+        Assert.True(newNodeId > originalNodeId,
+            $"Restarted seed should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
     }
 
     /// <summary>
     /// Tests that multiple nodes can be restarted at their original addresses.
     /// </summary>
     [Fact]
-    public void MultipleNodesRestart_AllGetNewMonotonicNodeIds()
+    public void MultipleNodesRestart_AllGetNewNodeIds()
     {
         // Create a 5-node cluster (need 5 so crashing 2 leaves a majority of 3)
         var seedNode = _harness.CreateSeedNode();
@@ -177,9 +177,9 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 5);
 
-        // Record original MonotonicNodeIds
-        var originalId1 = joiner1.CurrentView.GetMonotonicNodeId(joiner1.Address);
-        var originalId2 = joiner2.CurrentView.GetMonotonicNodeId(joiner2.Address);
+        // Record original NodeIds
+        var originalId1 = joiner1.CurrentView.GetNodeId(joiner1.Address);
+        var originalId2 = joiner2.CurrentView.GetNodeId(joiner2.Address);
 
         // Crash both nodes (3 remaining is still a majority)
         _harness.CrashNode(joiner1);
@@ -193,24 +193,24 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var restarted2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         _harness.WaitForConvergence(expectedSize: 5);
 
-        // Verify both got new MonotonicNodeIds
-        var newId1 = restarted1.CurrentView.GetMonotonicNodeId(restarted1.Address);
-        var newId2 = restarted2.CurrentView.GetMonotonicNodeId(restarted2.Address);
+        // Verify both got new NodeIds
+        var newId1 = restarted1.CurrentView.GetNodeId(restarted1.Address);
+        var newId2 = restarted2.CurrentView.GetNodeId(restarted2.Address);
 
         Assert.True(newId1 > originalId1,
-            $"Restarted node 1 should have higher MonotonicNodeId. Original: {originalId1}, New: {newId1}");
+            $"Restarted node 1 should have higher NodeId. Original: {originalId1}, New: {newId1}");
         Assert.True(newId2 > originalId2,
-            $"Restarted node 2 should have higher MonotonicNodeId. Original: {originalId2}, New: {newId2}");
+            $"Restarted node 2 should have higher NodeId. Original: {originalId2}, New: {newId2}");
 
         // Verify they got different IDs from each other
         Assert.NotEqual(newId1, newId2);
     }
 
     /// <summary>
-    /// Tests that MaxMonotonicId in the view is tracked correctly across restarts.
+    /// Tests that MaxNodeId in the view is tracked correctly across restarts.
     /// </summary>
     [Fact]
-    public void MaxMonotonicId_TrackedCorrectlyAcrossRestarts()
+    public void MaxNodeId_TrackedCorrectlyAcrossRestarts()
     {
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
@@ -219,8 +219,8 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Initial MaxMonotonicId should be 3 (seed=1, joiner1=2, joiner2=3)
-        var initialMaxId = seedNode.CurrentView.MaxMonotonicId;
+        // Initial MaxNodeId should be 3 (seed=1, joiner1=2, joiner2=3)
+        var initialMaxId = seedNode.CurrentView.MaxNodeId;
         Assert.Equal(3, initialMaxId);
 
         // Crash and restart joiner1
@@ -230,14 +230,14 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var restarted = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // MaxMonotonicId should have increased
-        var newMaxId = seedNode.CurrentView.MaxMonotonicId;
+        // MaxNodeId should have increased
+        var newMaxId = seedNode.CurrentView.MaxNodeId;
         Assert.True(newMaxId > initialMaxId,
-            $"MaxMonotonicId should increase after restart. Initial: {initialMaxId}, New: {newMaxId}");
+            $"MaxNodeId should increase after restart. Initial: {initialMaxId}, New: {newMaxId}");
 
-        // All nodes should agree on MaxMonotonicId
-        Assert.Equal(newMaxId, joiner2.CurrentView.MaxMonotonicId);
-        Assert.Equal(newMaxId, restarted.CurrentView.MaxMonotonicId);
+        // All nodes should agree on MaxNodeId
+        Assert.Equal(newMaxId, joiner2.CurrentView.MaxNodeId);
+        Assert.Equal(newMaxId, restarted.CurrentView.MaxNodeId);
     }
 
     /// <summary>
@@ -285,7 +285,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         _harness.WaitForConvergence(expectedSize: 3);
 
         var currentNode = joiner1;
-        var previousMaxId = seedNode.CurrentView.MaxMonotonicId;
+        var previousMaxId = seedNode.CurrentView.MaxNodeId;
 
         // Rapid crash/restart cycles
         for (var i = 0; i < 3; i++)
@@ -296,16 +296,16 @@ public sealed class NodeRestartTests : IAsyncLifetime
             currentNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
             _harness.WaitForConvergence(expectedSize: 3);
 
-            // Verify MaxMonotonicId increased
-            var currentMaxId = seedNode.CurrentView.MaxMonotonicId;
+            // Verify MaxNodeId increased
+            var currentMaxId = seedNode.CurrentView.MaxNodeId;
             Assert.True(currentMaxId > previousMaxId,
-                $"Cycle {i + 1}: MaxMonotonicId should increase. Previous: {previousMaxId}, Current: {currentMaxId}");
+                $"Cycle {i + 1}: MaxNodeId should increase. Previous: {previousMaxId}, Current: {currentMaxId}");
             previousMaxId = currentMaxId;
         }
 
         // Verify final consistency
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
-        Assert.All(_harness.Nodes, n => Assert.Equal(previousMaxId, n.CurrentView.MaxMonotonicId));
+        Assert.All(_harness.Nodes, n => Assert.Equal(previousMaxId, n.CurrentView.MaxNodeId));
     }
 
     /// <summary>
@@ -341,7 +341,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tests that nodes with the same address but different MonotonicNodeIds are handled correctly.
+    /// Tests that nodes with the same address but different NodeIds are handled correctly.
     /// This verifies the EndpointAddressComparer is used correctly throughout the system.
     /// </summary>
     [Fact]
@@ -354,8 +354,8 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
 
-        // Get the original MonotonicNodeId from the membership view
-        var originalMonotonicId = joiner1.CurrentView.GetMonotonicNodeId(joiner1.Address);
+        // Get the original NodeId from the membership view
+        var originalNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
         var originalAddress = joiner1.Address;
 
         // Crash and restart
@@ -370,10 +370,10 @@ public sealed class NodeRestartTests : IAsyncLifetime
         Assert.Equal(originalAddress.Hostname, newAddress.Hostname);
         Assert.Equal(originalAddress.Port, newAddress.Port);
 
-        // But a different (higher) MonotonicNodeId from the membership view
-        var newMonotonicId = restarted.CurrentView.GetMonotonicNodeId(restarted.Address);
-        Assert.True(newMonotonicId > originalMonotonicId,
-            $"Restarted node should have higher MonotonicNodeId. Original: {originalMonotonicId}, New: {newMonotonicId}");
+        // But a different (higher) NodeId from the membership view
+        var newNodeId = restarted.CurrentView.GetNodeId(restarted.Address);
+        Assert.True(newNodeId > originalNodeId,
+            $"Restarted node should have higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
 
         // Verify membership operations work correctly
         Assert.True(seedNode.CurrentView.IsHostPresent(newAddress));

@@ -24,7 +24,6 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void SingleNodeClusterInitializes()
     {
@@ -77,8 +76,6 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         // Stop should not throw (degenerates to shutdown for single node)
         _harness.Run(seedNode.StopAsync);
     }
-
-
 
     [Fact]
     public void TwoNodeClusterFormation()
@@ -255,8 +252,6 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         Assert.Contains($"{joiner1.Address.Hostname}:{joiner1.Address.Port}", addresses);
         Assert.Contains($"{joiner2.Address.Hostname}:{joiner2.Address.Port}", addresses);
     }
-
-
 
     [Fact]
     public void NodeCanJoinWithMetadata()

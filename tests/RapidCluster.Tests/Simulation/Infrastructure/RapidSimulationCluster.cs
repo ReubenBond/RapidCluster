@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Clockwork;
 using Microsoft.Extensions.Logging;
+using RapidCluster.Pb;
 using RapidCluster.Tests.Simulation.Infrastructure.Logging;
 
 namespace RapidCluster.Tests.Simulation.Infrastructure;
@@ -107,8 +108,46 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         RapidClusterProtocolOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(seedNode);
+        return CreateJoinerNodeWithMultipleSeeds([seedNode], nodeId, options);
+    }
+
+    /// <summary>
+    /// Creates and joins a new node to the cluster with multiple seed addresses.
+    /// The node will try seeds in round-robin order until join succeeds.
+    /// Drives the simulation to complete the join.
+    /// </summary>
+    public RapidSimulationNode CreateJoinerNodeWithMultipleSeeds(
+        IReadOnlyList<RapidSimulationNode> seedNodes,
+        int nodeId,
+        RapidClusterProtocolOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(seedNodes);
+        if (seedNodes.Count == 0)
+        {
+            throw new ArgumentException("At least one seed node is required", nameof(seedNodes));
+        }
+
+        var seedAddresses = seedNodes.Select(n => n.Address).ToList();
+        return CreateJoinerNodeWithSeedAddresses(seedAddresses, nodeId, options);
+    }
+
+    /// <summary>
+    /// Creates and joins a new node to the cluster with raw seed addresses.
+    /// Useful for testing duplicate seed handling and other edge cases.
+    /// </summary>
+    public RapidSimulationNode CreateJoinerNodeWithSeedAddresses(
+        IList<Endpoint> seedAddresses,
+        int nodeId,
+        RapidClusterProtocolOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(seedAddresses);
+        if (seedAddresses.Count == 0)
+        {
+            throw new ArgumentException("At least one seed address is required", nameof(seedAddresses));
+        }
+
         var address = RapidClusterUtils.HostFromParts("node", nodeId);
-        var node = new RapidSimulationNode(this, address, seedNode.Address, metadata: null, options, LoggerFactory);
+        var node = new RapidSimulationNode(this, address, seedAddresses, metadata: null, options, LoggerFactory);
         RegisterNode(node);
 
         _log.NodeJoining(nodeId);

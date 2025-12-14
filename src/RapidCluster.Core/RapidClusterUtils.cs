@@ -46,18 +46,22 @@ public static class RapidClusterUtils
     }
 
     /// <summary>
-    /// Creates a loggable string representation of an endpoint.
+    /// Returns a loggable string representation of an Endpoint.
     /// </summary>
     public static string Loggable(Endpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        return $"{endpoint.Hostname.ToStringUtf8()}:{endpoint.Port}";
+        return endpoint.GetNetworkAddressString();
     }
 
     /// <summary>
-    /// Creates a loggable string representation of endpoints.
+    /// Returns a loggable string representation of a collection of Endpoints.
     /// </summary>
-    public static string Loggable(IEnumerable<Endpoint> endpoints) => $"[{string.Join(", ", endpoints.Select(Loggable))}]";
+    public static string Loggable(IEnumerable<Endpoint> endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        return $"[{string.Join(", ", endpoints.Select(e => e.GetNetworkAddressString()))}]";
+    }
 }
 
 /// <summary>

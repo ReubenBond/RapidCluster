@@ -26,7 +26,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     /// <summary>
     /// Tests that a basic join succeeds in normal conditions.
     /// </summary>
@@ -82,8 +81,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         Assert.Equal(seedNode.CurrentView.ConfigurationId, joiner.CurrentView.ConfigurationId);
     }
 
-
-
     /// <summary>
     /// Tests that join succeeds despite random message drops.
     /// The join protocol includes retry logic that should handle transient failures.
@@ -137,8 +134,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
 
         _harness.WaitForConvergence(expectedSize: 3);
     }
-
-
 
     /// <summary>
     /// Tests that a new joiner can still join while another join is being processed.
@@ -211,8 +206,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         Assert.True(joiner3.IsInitialized);
     }
 
-
-
     /// <summary>
     /// Tests joining through a non-seed node.
     /// </summary>
@@ -258,8 +251,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         Assert.All(_harness.Nodes, n => Assert.Equal(6, n.MembershipSize));
     }
 
-
-
     /// <summary>
     /// Tests that join fails when consensus is impossible due to node isolation.
     /// In a 2-node cluster where one node is isolated, the remaining node cannot reach
@@ -296,8 +287,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
             _harness.CreateJoinerNode(seedNode, nodeId: 2, limitedRetryOptions);
         });
     }
-
-
 
     /// <summary>
     /// Tests rapid consecutive joins.
@@ -358,8 +347,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
 
         Assert.True(joiner.IsInitialized);
     }
-
-
 
     /// <summary>
     /// Tests that join fails gracefully when the seed is completely partitioned.
@@ -435,8 +422,6 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         // Verify that joiner is part of the cluster
         Assert.True(joiner.MembershipSize >= 2);
     }
-
-
 
     /// <summary>
     /// Tests join immediately after cluster initialization.

@@ -15,8 +15,8 @@ namespace RapidCluster;
 /// only round that is a fast round. A round is identified by a tuple (rnd-number, nodeId), where nodeId is a unique
 /// identifier per node that initiates phase1.
 /// 
-/// NodeIndex is computed from the monotonic_node_id assigned during join. This ensures uniqueness across
-/// node restarts - a restarted node gets a new, higher monotonic ID, preventing Paxos safety violations
+/// NodeIndex is computed from the node_id assigned during join. This ensures uniqueness across
+/// node restarts - a restarted node gets a new, higher node ID, preventing Paxos safety violations
 /// from conflicting promises/votes made by the old incarnation.
 /// </summary>
 internal sealed class Paxos
@@ -69,7 +69,7 @@ internal sealed class Paxos
         _rnd = new Rank { Round = 0, NodeIndex = 0 };
         _vrnd = new Rank { Round = 0, NodeIndex = 0 };
 
-        _log.PaxosInitialized(new PaxosLogger.LoggableEndpoint(myAddr), configurationId, membershipSize);
+        _log.PaxosInitialized(myAddr, configurationId, membershipSize);
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ internal sealed class Paxos
 
         ref var voteCount = ref CollectionsMarshal.GetValueRefOrAddDefault(_fastRoundVotes, proposal, out var _);
         ++voteCount;
-        _log.RegisterFastRoundVote(new PaxosLogger.LoggableEndpoints(proposal.Members.Select(m => m.Endpoint)), voteCount);
+        _log.RegisterFastRoundVote(proposal, voteCount);
     }
 
     /// <summary>
@@ -138,14 +138,14 @@ internal sealed class Paxos
 
     /// <summary>
     /// Computes the NodeIndex for Paxos rank.
-    /// Uses the monotonic_node_id from the current membership view. This ensures uniqueness across
-    /// node restarts - a restarted node gets a new, higher monotonic ID, preventing Paxos safety
+    /// Uses the node_id from the current membership view. This ensures uniqueness across
+    /// node restarts - a restarted node gets a new, higher node ID, preventing Paxos safety
     /// violations from conflicting promises/votes made by the old incarnation.
     /// </summary>
     private int ComputeNodeIndex()
     {
-        var monotonicId = _membershipViewAccessor.CurrentView.GetMonotonicNodeId(_myAddr);
-        return unchecked((int)monotonicId);
+        var nodeId = _membershipViewAccessor.CurrentView.GetNodeId(_myAddr);
+        return unchecked((int)nodeId);
     }
 
     /// <summary>
@@ -155,7 +155,7 @@ internal sealed class Paxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void HandlePhase1aMessage(Phase1aMessage phase1aMessage, CancellationToken cancellationToken = default)
     {
-        _log.HandlePhase1aReceived(new PaxosLogger.LoggableEndpoint(phase1aMessage.Sender), phase1aMessage.Rank, phase1aMessage.ConfigurationId);
+        _log.HandlePhase1aReceived(phase1aMessage.Sender, phase1aMessage.Rank, phase1aMessage.ConfigurationId);
 
         if (phase1aMessage.ConfigurationId != _configurationId)
         {
@@ -176,7 +176,7 @@ internal sealed class Paxos
                 Proposal = _vval
             };
 
-            _log.SendingPhase1b(new PaxosLogger.LoggableEndpoint(phase1aMessage.Sender), _rnd, _vrnd, new PaxosLogger.LoggableEndpoints(_vval?.Members.Select(m => m.Endpoint) ?? []));
+            _log.SendingPhase1b(phase1aMessage.Sender, _rnd, _vrnd, _vval);
 
             var request = phase1b.ToRapidClusterRequest();
             _client.SendOneWayMessage(phase1aMessage.Sender, request, cancellationToken);
@@ -195,7 +195,7 @@ internal sealed class Paxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void HandlePhase1bMessage(Phase1bMessage phase1bMessage, CancellationToken cancellationToken = default)
     {
-        _log.HandlePhase1bReceived(new PaxosLogger.LoggableEndpoint(phase1bMessage.Sender), phase1bMessage.Rnd, phase1bMessage.Vrnd, phase1bMessage.ConfigurationId);
+        _log.HandlePhase1bReceived(phase1bMessage.Sender, phase1bMessage.Rnd, phase1bMessage.Vrnd, phase1bMessage.ConfigurationId);
 
         if (phase1bMessage.ConfigurationId != _configurationId)
         {
@@ -228,7 +228,7 @@ internal sealed class Paxos
             {
                 _cval = chosenValue;
 
-                _log.Phase1bChosenValue(new PaxosLogger.LoggableEndpoints(_cval.Members.Select(m => m.Endpoint)));
+                _log.Phase1bChosenValue(_cval);
 
                 var phase2a = new Phase2aMessage
                 {
@@ -252,7 +252,7 @@ internal sealed class Paxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void HandlePhase2aMessage(Phase2aMessage phase2aMessage, CancellationToken cancellationToken = default)
     {
-        _log.HandlePhase2aReceived(new PaxosLogger.LoggableEndpoint(phase2aMessage.Sender), phase2aMessage.Rnd, new PaxosLogger.LoggableEndpoints(phase2aMessage.Proposal?.Members.Select(m => m.Endpoint) ?? []), phase2aMessage.ConfigurationId);
+        _log.HandlePhase2aReceived(phase2aMessage.Sender, phase2aMessage.Rnd, phase2aMessage.Proposal, phase2aMessage.ConfigurationId);
 
         if (phase2aMessage.ConfigurationId != _configurationId)
         {
@@ -275,7 +275,7 @@ internal sealed class Paxos
                 Proposal = _vval
             };
 
-            _log.SendingPhase2b(new PaxosLogger.LoggableEndpoint(phase2aMessage.Sender), _rnd, new PaxosLogger.LoggableEndpoints(_vval?.Members.Select(m => m.Endpoint) ?? []));
+            _log.SendingPhase2b(phase2aMessage.Sender, _rnd, _vval);
 
             // Broadcast to all nodes so they can independently learn the decision
             // This matches the Java implementation
@@ -296,7 +296,7 @@ internal sealed class Paxos
     /// <param name="phase2bMessage">acceptor's vote</param>
     public void HandlePhase2bMessage(Phase2bMessage phase2bMessage)
     {
-        _log.HandlePhase2bReceived(new PaxosLogger.LoggableEndpoint(phase2bMessage.Sender), phase2bMessage.Rnd, new PaxosLogger.LoggableEndpoints(phase2bMessage.Proposal?.Members.Select(m => m.Endpoint) ?? []), phase2bMessage.ConfigurationId);
+        _log.HandlePhase2bReceived(phase2bMessage.Sender, phase2bMessage.Rnd, phase2bMessage.Proposal, phase2bMessage.ConfigurationId);
 
         if (phase2bMessage.ConfigurationId != _configurationId)
         {
@@ -324,7 +324,7 @@ internal sealed class Paxos
             var proposal = phase2bMessage.Proposal;
             if (proposal != null && _decidedTcs.TrySetResult(new ConsensusResult.Decided(proposal)))
             {
-                _log.DecidedValue(new PaxosLogger.LoggableEndpoints(proposal.Members.Select(m => m.Endpoint)));
+                _log.DecidedValue(proposal);
             }
         }
     }

@@ -51,7 +51,7 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddRapidCluster(options =>
         {
             options.ListenAddress = address;
-            options.SeedAddress = address; // Same as listen = seed node
+            options.SeedAddresses = [address]; // Same as listen = seed node
         });
 
         var app = builder.Build();
@@ -84,7 +84,7 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddRapidCluster(options =>
         {
             options.ListenAddress = address;
-            options.SeedAddress = address;
+            options.SeedAddresses = [address];
             configureOptions(options);
         });
 
@@ -118,7 +118,7 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddRapidCluster(options =>
         {
             options.ListenAddress = address;
-            options.SeedAddress = seedAddress;
+            options.SeedAddresses = [seedAddress];
         });
 
         var app = builder.Build();
@@ -152,7 +152,7 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddRapidCluster(options =>
         {
             options.ListenAddress = address;
-            options.SeedAddress = seedAddress;
+            options.SeedAddresses = [seedAddress];
             configureOptions(options);
         });
 

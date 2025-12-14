@@ -26,7 +26,6 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void MembershipViewNeverEmptyForInitializedNode()
     {
@@ -67,8 +66,6 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         // All addresses in view should be known nodes
         Assert.Subset(viewAddresses, knownAddresses);
     }
-
-
 
     [Fact]
     public void NoSplitBrainWithSingleNode()
@@ -122,8 +119,6 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         Assert.True(result);
     }
 
-
-
     [Fact]
     public void MembershipConsistencyWithNoNodes()
     {
@@ -151,8 +146,6 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         var result = _checker.CheckMembershipConsistency();
         Assert.True(result);
     }
-
-
 
     [Fact]
     public void CheckAllWithEmptyCluster()
@@ -184,8 +177,6 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         Assert.True(result);
         Assert.False(_checker.HasViolations);
     }
-
-
 
     /// <summary>
     /// Verifies that the liveness checker can detect when the system has pending tasks
@@ -290,8 +281,6 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         Assert.Equal(2, seedNode.MembershipSize);
         Assert.Equal(2, joiner.MembershipSize);
     }
-
-
 
     [Fact]
     public void ViolationsClearWorks()

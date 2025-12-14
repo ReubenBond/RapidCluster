@@ -34,8 +34,6 @@ public class ExceptionTests
         Assert.Same(inner, ex.InnerException);
     }
 
-
-
     [Fact]
     public void NodeAlreadyInRingExceptionDefaultConstructorWorks()
     {
@@ -73,8 +71,6 @@ public class ExceptionTests
     [Fact]
     public void NodeAlreadyInRingExceptionNullEndpointThrowsArgumentNull() => Assert.Throws<ArgumentNullException>(() => new NodeAlreadyInRingException((Endpoint)null!));
 
-
-
     [Fact]
     public void NodeNotInRingExceptionDefaultConstructorWorks()
     {
@@ -111,8 +107,6 @@ public class ExceptionTests
 
     [Fact]
     public void NodeNotInRingExceptionNullEndpointThrowsArgumentNull() => Assert.Throws<ArgumentNullException>(() => new NodeNotInRingException((Endpoint)null!));
-
-
 
     [Fact]
     public void UuidAlreadySeenExceptionDefaultConstructorWorks()
@@ -162,8 +156,6 @@ public class ExceptionTests
         Assert.Throws<ArgumentNullException>(() => new UuidAlreadySeenException(endpoint, null!));
     }
 
-
-
     [Fact]
     public void JoinExceptionInheritsFromException()
     {
@@ -191,8 +183,6 @@ public class ExceptionTests
         var ex = new UuidAlreadySeenException("test");
         Assert.IsAssignableFrom<Exception>(ex);
     }
-
-
 
     [Fact]
     public void JoinExceptionCanBeThrownAndCaught()

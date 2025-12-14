@@ -81,10 +81,27 @@ internal sealed class RapidSimulationNode : SimulationNode
     /// </summary>
     internal CancellationToken TeardownCancellationToken => _disposeCts.Token;
 
+    /// <summary>
+    /// Creates a new simulation node with a single seed address.
+    /// </summary>
     internal RapidSimulationNode(
         RapidSimulationCluster harness,
         Endpoint address,
         Endpoint? seedAddress,
+        Metadata? metadata,
+        RapidClusterProtocolOptions? protocolOptions,
+        ILoggerFactory? loggerFactory)
+        : this(harness, address, seedAddress != null ? [seedAddress] : null, metadata, protocolOptions, loggerFactory)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new simulation node with multiple seed addresses for testing seed failover.
+    /// </summary>
+    internal RapidSimulationNode(
+        RapidSimulationCluster harness,
+        Endpoint address,
+        IList<Endpoint>? seedAddresses,
         Metadata? metadata,
         RapidClusterProtocolOptions? protocolOptions,
         ILoggerFactory? loggerFactory)
@@ -156,7 +173,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         var rapidClusterOptions = new RapidClusterOptions
         {
             ListenAddress = address,
-            SeedAddress = seedAddress,
+            SeedAddresses = seedAddresses is not null ? [.. seedAddresses] : null,
             Metadata = metadata ?? new Metadata()
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);

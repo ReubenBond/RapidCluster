@@ -24,7 +24,6 @@ public sealed class MessageDeliveryTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void DelayConfigurationWorks()
     {
@@ -77,8 +76,6 @@ public sealed class MessageDeliveryTests : IAsyncLifetime
         Assert.True(joiner.IsInitialized);
         Assert.Equal(2, joiner.MembershipSize);
     }
-
-
 
     [Fact]
     public void MessageDropRateConfiguration()

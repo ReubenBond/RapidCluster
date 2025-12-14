@@ -25,7 +25,6 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     /// <summary>
     /// Tests that a node can rejoin the cluster after graceful leave.
     /// The rejoining node gets a new node ID but can reuse the same address slot.
@@ -172,8 +171,6 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         Assert.Equal(4, seedNode.MembershipSize);
     }
 
-
-
     /// <summary>
     /// Tests that a new node with a different ID can join while the cluster is
     /// still converging after a node failure.
@@ -263,8 +260,6 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         Assert.Equal(3, joiner3.MembershipSize);
         Assert.Equal(3, joiner4.MembershipSize);
     }
-
-
 
     /// <summary>
     /// Tests that an isolated node can rejoin after the partition heals.

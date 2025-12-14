@@ -101,7 +101,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             membershipViewAccessor,
             paxosLogger);
 
-        _log.Initialized(new ConsensusCoordinatorLogger.LoggableEndpoint(myAddr), configurationId, membershipSize);
+        _log.Initialized(myAddr, configurationId, membershipSize);
     }
 
     /// <summary>
@@ -109,7 +109,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     /// </summary>
     public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
     {
-        _log.Propose(new ConsensusCoordinatorLogger.LoggableEndpoints(proposal.Members.Select(m => m.Endpoint)));
+        _log.Propose(proposal);
 
         // Register our fast round vote in the acceptor state
         _paxos.RegisterFastRoundVote(proposal);
@@ -147,7 +147,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             switch (fastRoundResult)
             {
                 case ConsensusResult.Decided decided:
-                    _log.FastRoundDecided(_configurationId, new ConsensusCoordinatorLogger.LoggableEndpoints(decided.Value.Members.Select(m => m.Endpoint)));
+                    _log.FastRoundDecided(_configurationId, decided.Value);
                     _onDecidedTcs.TrySetResult(decided.Value);
                     return;
 
@@ -184,7 +184,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     var paxosResult = await _paxos.Decided.WaitAsync(cancellationToken).ConfigureAwait(true);
                     if (paxosResult is ConsensusResult.Decided decided)
                     {
-                        _log.ClassicRoundDecided(roundNumber - 1, _configurationId, new ConsensusCoordinatorLogger.LoggableEndpoints(decided.Value.Members.Select(m => m.Endpoint)));
+                        _log.ClassicRoundDecided(roundNumber - 1, _configurationId, decided.Value);
                         _onDecidedTcs.TrySetResult(decided.Value);
                         return;
                     }
@@ -205,7 +205,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     var paxosResult = await _paxos.Decided.ConfigureAwait(true);
                     if (paxosResult is ConsensusResult.Decided decided)
                     {
-                        _log.ClassicRoundDecided(roundNumber, _configurationId, new ConsensusCoordinatorLogger.LoggableEndpoints(decided.Value.Members.Select(m => m.Endpoint)));
+                        _log.ClassicRoundDecided(roundNumber, _configurationId, decided.Value);
                         _onDecidedTcs.TrySetResult(decided.Value);
                         return;
                     }

@@ -49,7 +49,7 @@ internal sealed class FastPaxos
         _broadcaster = broadcaster;
         _log = new FastPaxosLogger(logger);
 
-        _log.FastPaxosInitialized(new FastPaxosLogger.LoggableEndpoint(myAddr), configurationId, membershipSize);
+        _log.FastPaxosInitialized(myAddr, configurationId, membershipSize);
     }
 
     /// <summary>
@@ -75,7 +75,7 @@ internal sealed class FastPaxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
     {
-        _log.Propose(new FastPaxosLogger.LoggableEndpoints(proposal.Members.Select(m => m.Endpoint)));
+        _log.Propose(proposal);
 
         var consensusMessage = new FastRoundPhase2bMessage
         {
@@ -117,7 +117,7 @@ internal sealed class FastPaxos
     /// <param name="proposalMessage">the membership change proposal towards a configuration change.</param>
     public void HandleFastRoundProposal(FastRoundPhase2bMessage proposalMessage)
     {
-        _log.HandleFastRoundProposalReceived(new FastPaxosLogger.LoggableEndpoint(proposalMessage.Sender), new FastPaxosLogger.LoggableEndpoints(proposalMessage.Proposal?.Members.Select(m => m.Endpoint) ?? []), proposalMessage.ConfigurationId);
+        _log.HandleFastRoundProposalReceived(proposalMessage.Sender, proposalMessage.Proposal, proposalMessage.ConfigurationId);
 
         if (proposalMessage.ConfigurationId != _configurationId)
         {
@@ -127,7 +127,7 @@ internal sealed class FastPaxos
 
         if (_votesReceived.Contains(proposalMessage.Sender))
         {
-            _log.DuplicateFastRoundVote(new FastPaxosLogger.LoggableEndpoint(proposalMessage.Sender));
+            _log.DuplicateFastRoundVote(proposalMessage.Sender);
             return;
         }
 
@@ -162,7 +162,7 @@ internal sealed class FastPaxos
         //    (since that would require 2*(N-f) > N votes for N > 0)
         if (count >= threshold)
         {
-            _log.DecidedViewChange(new FastPaxosLogger.LoggableEndpoints(proposal.Members.Select(m => m.Endpoint)));
+            _log.DecidedViewChange(proposal);
 
             // We have a successful proposal. Consume it.
             if (_resultTcs.TrySetResult(new ConsensusResult.Decided(proposal)))

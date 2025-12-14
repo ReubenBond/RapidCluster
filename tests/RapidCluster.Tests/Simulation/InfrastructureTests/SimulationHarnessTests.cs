@@ -116,7 +116,6 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
         Assert.Empty(_harness.Nodes);
     }
 
-
     [Fact]
     public void RunUntilIdleReturnsZeroWhenNoTasks()
     {
@@ -191,8 +190,6 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
 
         Assert.False(_harness.TaskQueue.HasItems);
     }
-
-
 
     [Fact]
     public void SuspendNodePreventsTaskExecution()
@@ -398,7 +395,6 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
 
         Assert.False(joiner2.IsSuspended);
     }
-
 
     [Fact]
     public void NetworkSimulationBasics()

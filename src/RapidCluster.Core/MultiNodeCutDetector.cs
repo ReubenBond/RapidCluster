@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RapidCluster.Logging;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -44,12 +45,6 @@ internal sealed partial class MultiNodeCutDetector : ICutDetector
     /// Number of observers per subject, derived from the membership view's ring count.
     /// </summary>
     private int ObserversPerSubject => _membershipView.RingCount;
-
-    private readonly struct LoggableEndpoint(Endpoint endpoint)
-    {
-        private readonly Endpoint _endpoint = endpoint;
-        public override readonly string ToString() => RapidClusterUtils.Loggable(_endpoint);
-    }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "MultiNodeCutDetector created: K={K}, H={H}, L={L}, membershipSize={MembershipSize}")]
     private partial void LogCreated(int K, int H, int L, int MembershipSize);

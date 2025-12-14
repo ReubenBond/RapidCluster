@@ -24,7 +24,6 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void FullClusterLifecycle()
     {
@@ -112,8 +111,6 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
     }
 
-
-
     [Fact]
     public void RecoveryFromPartitionedState()
     {
@@ -176,8 +173,6 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
         Assert.True(joiner3.IsInitialized);
         _harness.WaitForConvergence(expectedSize: 3);
     }
-
-
 
     [Fact]
     public void ViewAccessorInitiallyHasView()

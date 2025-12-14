@@ -15,7 +15,7 @@ message Endpoint
 {
     bytes hostname = 1;
     int32 port = 2;
-    int64 monotonic_node_id = 3;  // Monotonically increasing ID assigned during join for Paxos correctness
+    int64 node_id = 3;  // Monotonically increasing ID assigned during join for Paxos correctness
 }
 
 
@@ -84,7 +84,7 @@ message JoinResponse
    repeated NodeId identifiers = 5;
    repeated Endpoint metadataKeys = 6;
    repeated Metadata metadataValues = 7;
-   int64 max_monotonic_id = 8;  // Highest monotonic_node_id ever assigned (for Paxos correctness)
+    int64 max_node_id = 8;  // Highest node_id ever assigned (for Paxos correctness)
 }
 
 enum JoinStatusCode {
@@ -142,9 +142,9 @@ message MembershipProposal
     // All NodeIds ever seen (for UUID uniqueness checking)
     repeated NodeId allNodeIds = 4;
 
-    // Highest monotonic_node_id ever assigned (only increments, never decreases)
+    // Highest node_id ever assigned (only increments, never decreases)
     // Used to assign unique IDs to new joiners for Paxos correctness
-    int64 max_monotonic_id = 5;
+    int64 max_node_id = 5;
 }
 
 // Information about a single member in the cluster
@@ -268,5 +268,5 @@ message MembershipViewResponse
     repeated NodeId identifiers = 4;
     repeated Endpoint metadataKeys = 5;
     repeated Metadata metadataValues = 6;
-    int64 max_monotonic_id = 7;  // Highest monotonic_node_id ever assigned (for Paxos correctness)
+    int64 max_node_id = 7;  // Highest node_id ever assigned (for Paxos correctness)
 }

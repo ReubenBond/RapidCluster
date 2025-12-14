@@ -7,39 +7,31 @@ internal sealed partial class FastPaxosLogger(ILogger<FastPaxos> logger)
 {
     private readonly ILogger _logger = logger;
 
-    // Logging helpers
-    internal readonly struct LoggableEndpoints(IEnumerable<Endpoint> endpoints)
-    {
-        private readonly IEnumerable<Endpoint> _endpoints = endpoints;
-        public override readonly string ToString() => string.Join(", ", _endpoints.Select(RapidClusterUtils.Loggable));
-    }
-
-    internal readonly struct LoggableEndpoint(Endpoint endpoint)
-    {
-        private readonly Endpoint _endpoint = endpoint;
-        public override readonly string ToString() => RapidClusterUtils.Loggable(_endpoint);
-    }
-
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandleFastRoundProposal: config mismatch, expected={CurrentConfig}, got={ReceivedConfig}")]
     public partial void ConfigurationMismatch(long currentConfig, long receivedConfig);
 
-    [LoggerMessage(Level = LogLevel.Trace, Message = "Decided on a view change: {Proposal}")]
-    public partial void DecidedViewChange(LoggableEndpoints proposal);
+    [LoggerMessage(EventName = nameof(DecidedViewChange), Level = LogLevel.Trace, Message = "Decided on a view change: {Proposal}")]
+    private partial void DecidedViewChangeCore(LoggableMembershipProposal proposal);
+    public void DecidedViewChange(MembershipProposal? proposal) => DecidedViewChangeCore(new(proposal));
 
     [LoggerMessage(Level = LogLevel.Trace, Message = "Fast round may not succeed for proposal")]
     public partial void FastRoundMayNotSucceed();
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "FastPaxos initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
-    public partial void FastPaxosInitialized(LoggableEndpoint myAddr, long configId, long membershipSize);
+    [LoggerMessage(EventName = nameof(FastPaxosInitialized), Level = LogLevel.Debug, Message = "FastPaxos initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
+    private partial void FastPaxosInitializedCore(LoggableEndpoint myAddr, long configId, long membershipSize);
+    public void FastPaxosInitialized(Endpoint myAddr, long configId, long membershipSize) => FastPaxosInitializedCore(new(myAddr), configId, membershipSize);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Propose: broadcasting fast round proposal={Proposal}")]
-    public partial void Propose(LoggableEndpoints proposal);
+    [LoggerMessage(EventName = nameof(Propose), Level = LogLevel.Debug, Message = "Propose: broadcasting fast round proposal={Proposal}")]
+    private partial void ProposeCore(LoggableMembershipProposal proposal);
+    public void Propose(MembershipProposal? proposal) => ProposeCore(new(proposal));
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "HandleFastRoundProposal: received from {Sender}, endpoints={Endpoints}, configId={ConfigId}")]
-    public partial void HandleFastRoundProposalReceived(LoggableEndpoint sender, LoggableEndpoints endpoints, long configId);
+    [LoggerMessage(EventName = nameof(HandleFastRoundProposalReceived), Level = LogLevel.Debug, Message = "HandleFastRoundProposal: received from {Sender}, endpoints={Endpoints}, configId={ConfigId}")]
+    private partial void HandleFastRoundProposalReceivedCore(LoggableEndpoint sender, LoggableMembershipProposal endpoints, long configId);
+    public void HandleFastRoundProposalReceived(Endpoint sender, MembershipProposal? endpoints, long configId) => HandleFastRoundProposalReceivedCore(new(sender), new(endpoints), configId);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "HandleFastRoundProposal: duplicate vote from {Sender}, ignoring")]
-    public partial void DuplicateFastRoundVote(LoggableEndpoint sender);
+    [LoggerMessage(EventName = nameof(DuplicateFastRoundVote), Level = LogLevel.Debug, Message = "HandleFastRoundProposal: duplicate vote from {Sender}, ignoring")]
+    private partial void DuplicateFastRoundVoteCore(LoggableEndpoint sender);
+    public void DuplicateFastRoundVote(Endpoint sender) => DuplicateFastRoundVoteCore(new(sender));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandleFastRoundProposal: already decided (configId={ConfigId}), ignoring")]
     public partial void FastRoundAlreadyDecided(long configId);

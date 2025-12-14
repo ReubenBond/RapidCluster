@@ -77,7 +77,7 @@ internal sealed partial class Program
         builder.Services.AddRapidCluster(options =>
         {
             options.ListenAddress = listen;
-            options.SeedAddress = seed;
+            options.SeedAddresses = [seed];
         });
 
         // Add background service to monitor cluster

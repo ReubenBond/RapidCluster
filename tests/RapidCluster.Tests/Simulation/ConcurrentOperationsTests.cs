@@ -25,7 +25,6 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     /// <summary>
     /// Tests that multiple nodes can join the cluster in rapid succession.
     /// </summary>
@@ -97,8 +96,6 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
 
         Assert.All(_harness.Nodes, n => Assert.Equal(6, n.MembershipSize));
     }
-
-
 
     /// <summary>
     /// Tests that the cluster handles joins during node failures.
@@ -179,8 +176,6 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
 
-
-
     /// <summary>
     /// Tests that leaves and joins happening close together are handled.
     /// </summary>
@@ -225,8 +220,6 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
 
         Assert.All(_harness.Nodes, n => Assert.Equal(5, n.MembershipSize));
     }
-
-
 
     /// <summary>
     /// Tests that a suspended node doesn't participate in consensus.
@@ -311,8 +304,6 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
 
         Assert.All(_harness.Nodes, n => Assert.Equal(6, n.MembershipSize));
     }
-
-
 
     /// <summary>
     /// Tests that Step executes exactly one task.

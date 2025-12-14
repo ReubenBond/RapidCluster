@@ -89,7 +89,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     private static List<int> CollectViewChangeMembershipSizes(ObservableCollector<ClusterEventNotification> collector)
         => [.. collector.Items.Where(n => n.Event == ClusterEvents.ViewChange).Select(n => n.Change.Membership.Count)];
 
-
     [Fact]
     public void GracefulLeave_SingleNode_RemainingNodesConverge()
     {
@@ -177,8 +176,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.WaitForConvergence(expectedSize: 3);
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
     }
-
-
 
     [Fact]
     public void GracefulLeave_TwoNodesSequentially()
@@ -284,8 +281,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Contains(nodes[2], _harness.Nodes);
         Assert.Contains(nodes[3], _harness.Nodes);
     }
-
-
 
     [Fact]
     public void GracefulLeave_TriggersSubscriptionCallback()
@@ -396,8 +391,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         }
     }
 
-
-
     [Fact]
     public void GracefulLeave_WithMessageDrops()
     {
@@ -491,8 +484,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Leave succeeded
         Assert.Equal(3, _harness.Nodes.Count);
     }
-
-
 
     [Fact]
     public void GracefulLeave_FollowedByJoin()
@@ -599,8 +590,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Equal(3, _harness.Nodes.Count);
     }
 
-
-
     [Fact]
     public void GracefulLeave_MinimumClusterSize()
     {
@@ -694,8 +683,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Single(configIds);
     }
 
-
-
     [Fact]
     public void GracefulLeave_ObservedNodeLeaves_ObserverUpdated()
     {
@@ -758,8 +745,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Equal(3, _harness.Nodes.Count);
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
     }
-
-
 
     [Fact]
     public void GracefulLeave_WithSuspendedNode()

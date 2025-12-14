@@ -7,7 +7,6 @@ public class RapidClusterProtocolOptionsValidatorTests
 {
     private readonly RapidClusterProtocolOptionsValidator _validator = new();
 
-
     [Fact]
     public void ValidateGrpcTimeoutZeroFails()
     {
@@ -41,8 +40,6 @@ public class RapidClusterProtocolOptionsValidatorTests
 
         Assert.True(result.Succeeded);
     }
-
-
 
     [Fact]
     public void ValidateGrpcDefaultRetriesNegativeFails()
@@ -78,8 +75,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
-
-
     [Fact]
     public void ValidateGrpcJoinTimeoutZeroFails()
     {
@@ -102,8 +97,6 @@ public class RapidClusterProtocolOptionsValidatorTests
 
         Assert.True(result.Succeeded);
     }
-
-
 
     [Fact]
     public void ValidateGrpcProbeTimeoutZeroFails()
@@ -128,8 +121,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
-
-
     [Fact]
     public void ValidateFailureDetectorIntervalZeroFails()
     {
@@ -152,8 +143,6 @@ public class RapidClusterProtocolOptionsValidatorTests
 
         Assert.True(result.Succeeded);
     }
-
-
 
     [Fact]
     public void ValidateBatchingWindowZeroFails()
@@ -178,8 +167,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
-
-
     [Fact]
     public void ValidateConsensusFallbackTimeoutBaseDelayZeroFails()
     {
@@ -203,8 +190,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
-
-
     [Fact]
     public void ValidateLeaveMessageTimeoutZeroFails()
     {
@@ -227,8 +212,6 @@ public class RapidClusterProtocolOptionsValidatorTests
 
         Assert.True(result.Succeeded);
     }
-
-
 
     [Fact]
     public void ValidateObserversPerSubjectZeroFails()
@@ -289,8 +272,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
-
-
     [Fact]
     public void ValidateHighWatermarkZeroFails()
     {
@@ -350,8 +331,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.True(result.Failed);
         Assert.Contains("must be less than ObserversPerSubject", result.FailureMessage, StringComparison.Ordinal);
     }
-
-
 
     [Fact]
     public void ValidateLowWatermarkNegativeFails()
@@ -414,8 +393,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.Contains("must be less than HighWatermark", result.FailureMessage, StringComparison.Ordinal);
     }
 
-
-
     [Fact]
     public void ValidateFailureDetectorConsecutiveFailuresZeroFails()
     {
@@ -463,8 +440,6 @@ public class RapidClusterProtocolOptionsValidatorTests
         Assert.Equal(3, options.FailureDetectorConsecutiveFailures);
     }
 
-
-
     [Fact]
     public void ValidateAllDefaultValuesSucceeds()
     {
@@ -504,8 +479,6 @@ public class RapidClusterProtocolOptionsValidatorTests
 
         Assert.True(result.Succeeded);
     }
-
-
 
     [Fact]
     public void GetEffectiveParameters_SingleNodeCluster_ReturnsZeros()
@@ -600,7 +573,6 @@ public class RapidClusterProtocolOptionsValidatorTests
             Assert.True(effectiveL >= 1, $"L >= 1 failed for cluster size {clusterSize}: {effectiveL}");
         }
     }
-
 
     private static RapidClusterProtocolOptions CreateValidOptions() => new();
 }

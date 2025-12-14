@@ -24,7 +24,7 @@ public sealed class MembershipView
     private readonly ImmutableArray<ImmutableArray<Endpoint>> _rings;
     private readonly ImmutableSortedSet<Endpoint> _allNodes;
     private readonly ImmutableSortedSet<NodeId> _identifiersSeen;
-    private readonly ImmutableDictionary<Endpoint, long> _monotonicIdByEndpoint;
+    private readonly ImmutableDictionary<Endpoint, long> _nodeIdByEndpoint;
 
     /// <summary>
     /// Initializes a new immutable MembershipView instance.
@@ -33,8 +33,8 @@ public sealed class MembershipView
     /// <param name="configurationId">The configuration identifier for this view.</param>
     /// <param name="rings">The rings of endpoints (each ring is sorted by its comparator).</param>
     /// <param name="nodeIds">The set of node identifiers seen.</param>
-    /// <param name="maxMonotonicId">The highest monotonic ID ever assigned.</param>
-    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<Endpoint>> rings, ImmutableArray<NodeId> nodeIds, long maxMonotonicId)
+    /// <param name="maxNodeId">The highest node ID ever assigned.</param>
+    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<Endpoint>> rings, ImmutableArray<NodeId> nodeIds, long maxNodeId)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(ringCount);
         ArgumentOutOfRangeException.ThrowIfNotEqual(rings.Length, ringCount, "Number of rings does not match ring count");
@@ -42,21 +42,21 @@ public sealed class MembershipView
         ConfigurationId = configurationId;
         _rings = rings;
         NodeIds = nodeIds;
-        MaxMonotonicId = maxMonotonicId;
-        // Use EndpointComparer to ignore MonotonicNodeId when checking membership
+        MaxNodeId = maxNodeId;
+        // Use EndpointComparer to ignore NodeId when checking membership
         _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(EndpointComparer.Instance) : ImmutableSortedSet<Endpoint>.Empty;
         _identifiersSeen = [.. nodeIds];
 
-        // Build endpoint -> monotonic ID lookup from the first ring (all rings have the same endpoints)
+        // Build endpoint -> node ID lookup from the first ring (all rings have the same endpoints)
         var builder = ImmutableDictionary.CreateBuilder<Endpoint, long>(EndpointAddressComparer.Instance);
         if (rings.Length > 0)
         {
             foreach (var endpoint in rings[0])
             {
-                builder[endpoint] = endpoint.MonotonicNodeId;
+                builder[endpoint] = endpoint.NodeId;
             }
         }
-        _monotonicIdByEndpoint = builder.ToImmutable();
+        _nodeIdByEndpoint = builder.ToImmutable();
     }
 
     /// <summary>
@@ -86,16 +86,16 @@ public sealed class MembershipView
     public ImmutableArray<NodeId> NodeIds { get; }
 
     /// <summary>
-    /// Gets the highest monotonic node ID ever assigned in this cluster.
+    /// Gets the highest node ID ever assigned in this cluster.
     /// This value only ever increases, even when nodes leave.
     /// Used to assign unique IDs to new joiners for Paxos correctness.
     /// </summary>
-    public long MaxMonotonicId { get; }
+    public long MaxNodeId { get; }
 
     /// <summary>
     /// Gets the configuration for this view, which can be used to bootstrap a new MembershipViewBuilder.
     /// </summary>
-    public MembershipViewConfiguration Configuration => new(NodeIds, Members, MaxMonotonicId);
+    public MembershipViewConfiguration Configuration => new(NodeIds, Members, MaxNodeId);
 
     /// <summary>
     /// Checks if a specific endpoint is a member of this view.
@@ -125,14 +125,14 @@ public sealed class MembershipView
     /// <param name="endpoint">The endpoint to look up.</param>
     /// <returns>The monotonic node ID for the endpoint.</returns>
     /// <exception cref="NodeNotInRingException">Thrown if the endpoint is not in the membership.</exception>
-    public long GetMonotonicNodeId(Endpoint endpoint)
+    public long GetNodeId(Endpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        if (!_monotonicIdByEndpoint.TryGetValue(endpoint, out var monotonicId))
+        if (!_nodeIdByEndpoint.TryGetValue(endpoint, out var nodeId))
         {
             throw new NodeNotInRingException(endpoint);
         }
-        return monotonicId;
+        return nodeId;
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public sealed class MembershipView
         var ringIndexes = ImmutableArray.CreateBuilder<int>();
         for (var ringNumber = 0; ringNumber < subjects.Length; ringNumber++)
         {
-            // Use EndpointAddressComparer to ignore MonotonicNodeId when comparing
+            // Use EndpointAddressComparer to ignore NodeId when comparing
             if (EndpointAddressComparer.Instance.Equals(subjects[ringNumber], subject))
             {
                 ringIndexes.Add(ringNumber);
@@ -333,7 +333,7 @@ public sealed class MembershipView
     {
         for (var i = 0; i < ring.Length; i++)
         {
-            // Use EndpointAddressComparer to ignore MonotonicNodeId when comparing
+            // Use EndpointAddressComparer to ignore NodeId when comparing
             if (EndpointAddressComparer.Instance.Equals(ring[i], node))
             {
                 return i;
@@ -375,29 +375,29 @@ public sealed class MembershipView
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class MembershipViewConfiguration
 {
-    public MembershipViewConfiguration(IEnumerable<NodeId> nodeIds, IEnumerable<Endpoint> endpoints, long maxMonotonicId)
+public MembershipViewConfiguration(IEnumerable<NodeId> nodeIds, IEnumerable<Endpoint> endpoints, long maxNodeId)
     {
         ArgumentNullException.ThrowIfNull(nodeIds);
         ArgumentNullException.ThrowIfNull(endpoints);
         NodeIds = [.. nodeIds];
         Endpoints = [.. endpoints];
-        MaxMonotonicId = maxMonotonicId;
+        MaxNodeId = maxNodeId;
     }
 
     public ImmutableArray<NodeId> NodeIds { get; }
     public ImmutableArray<Endpoint> Endpoints { get; }
 
     /// <summary>
-    /// Gets the highest monotonic node ID ever assigned.
+    /// Gets the highest node ID ever assigned.
     /// </summary>
-    public long MaxMonotonicId { get; }
+    public long MaxNodeId { get; }
 
     /// <summary>
     /// Gets the configuration ID for this configuration (version 0).
     /// </summary>
     public ConfigurationId ConfigurationId => new(0);
 
-    private string DebuggerDisplay => $"MembershipViewConfiguration(Endpoints={Endpoints.Length}, NodeIds={NodeIds.Length}, MaxMonotonicId={MaxMonotonicId})";
+    private string DebuggerDisplay => $"MembershipViewConfiguration(Endpoints={Endpoints.Length}, NodeIds={NodeIds.Length}, MaxNodeId={MaxNodeId})";
 }
 
 internal sealed class MembershipViewDebugView(MembershipView view)
@@ -409,3 +409,4 @@ internal sealed class MembershipViewDebugView(MembershipView view)
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
     public Endpoint[] Members => [.. view.Members];
 }
+

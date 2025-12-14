@@ -24,7 +24,6 @@ public sealed class DeterminismTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public async Task SameSeedProducesSameRandomSequence()
     {
@@ -91,12 +90,6 @@ public sealed class DeterminismTests : IAsyncLifetime
         Assert.Equal(initialTime + TimeSpan.FromMinutes(5), newTime);
     }
 
-
-
-
-
-
-
     [Fact]
     public void RunUntilReturnsWhenConditionMet()
     {
@@ -128,8 +121,6 @@ public sealed class DeterminismTests : IAsyncLifetime
 
         Assert.True(result);
     }
-
-
 
     [Fact]
     public void SeedIsAccessible() => Assert.Equal(TestSeed, _harness.Seed);

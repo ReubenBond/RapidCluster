@@ -175,8 +175,7 @@ public class RapidClusterUtilsTests
     {
         var msg = new PreJoinMessage
         {
-            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
-            NodeId = RapidClusterUtils.NodeIdFromUuid(Guid.NewGuid())
+            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234)
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -191,7 +190,6 @@ public class RapidClusterUtilsTests
         var msg = new JoinMessage
         {
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
-            NodeId = RapidClusterUtils.NodeIdFromUuid(Guid.NewGuid()),
             ConfigurationId = 100
         };
 

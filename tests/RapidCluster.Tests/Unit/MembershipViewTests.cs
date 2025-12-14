@@ -357,21 +357,17 @@ public class MembershipViewTests
         var n1 = Utils.HostFromParts("127.0.0.1", 1);
         var n2 = Utils.HostFromParts("127.0.0.1", 2);
         var nodeId1 = Utils.NodeIdFromUuid(Guid.NewGuid());
-        var nodeId2 = Utils.NodeIdFromUuid(Guid.NewGuid());
 
         // Empty view is always safe to join
-        Assert.Equal(JoinStatusCode.SafeToJoin, builder.IsSafeToJoin(n1, nodeId1));
+        Assert.Equal(JoinStatusCode.SafeToJoin, builder.IsSafeToJoin(n1));
 
         builder.RingAdd(n1, nodeId1);
 
-        // Different node and ID should be safe
-        Assert.Equal(JoinStatusCode.SafeToJoin, builder.IsSafeToJoin(n2, nodeId2));
+        // Different node should be safe
+        Assert.Equal(JoinStatusCode.SafeToJoin, builder.IsSafeToJoin(n2));
 
-        // Same node should not be safe
-        Assert.NotEqual(JoinStatusCode.SafeToJoin, builder.IsSafeToJoin(n1, nodeId2));
-
-        // Same UUID should not be safe
-        Assert.NotEqual(JoinStatusCode.SafeToJoin, builder.IsSafeToJoin(n2, nodeId1));
+        // Same node should not be safe (hostname already in ring)
+        Assert.Equal(JoinStatusCode.HostnameAlreadyInRing, builder.IsSafeToJoin(n1));
     }
 
     /// <summary>
@@ -691,7 +687,7 @@ public class MembershipViewTests
         Assert.Throws<InvalidOperationException>(() => builder.GetMembershipSize());
         Assert.Throws<InvalidOperationException>(() => builder.IsHostPresent(n1));
         Assert.Throws<InvalidOperationException>(() => builder.IsIdentifierPresent(Utils.NodeIdFromUuid(Guid.NewGuid())));
-        Assert.Throws<InvalidOperationException>(() => builder.IsSafeToJoin(n1, Utils.NodeIdFromUuid(Guid.NewGuid())));
+        Assert.Throws<InvalidOperationException>(() => builder.IsSafeToJoin(n1));
         Assert.Throws<InvalidOperationException>(builder.Build);
         Assert.Throws<InvalidOperationException>(() => _ = builder.MaxRingCount);
     }
@@ -878,24 +874,6 @@ public class MembershipViewTests
     }
 
     [Fact]
-    public void Property_IsIdentifierPresent_Returns_True_For_All_Added_NodeIds()
-    {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
-            .Sample((k, nodes) =>
-            {
-                var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
-                {
-                    builder.RingAdd(endpoint, nodeId);
-                }
-                var view = builder.Build();
-
-                // All added NodeIds should be present
-                return nodes.All(n => view.IsIdentifierPresent(n.NodeId));
-            });
-    }
-
-    [Fact]
     public void Property_GetSubjectsOf_Returns_RingCount_Subjects()
     {
         Gen.Select(GenK, GenUniqueNodes(3, 20))
@@ -1039,33 +1017,12 @@ public class MembershipViewTests
 
                 // Existing hosts should not be safe to join
                 var existingHost = nodes[0].Endpoint;
-                var newNodeId = new NodeId { High = 999999, Low = 999999 };
-                return view.IsSafeToJoin(existingHost, newNodeId) == JoinStatusCode.HostnameAlreadyInRing;
+                return view.IsSafeToJoin(existingHost) == JoinStatusCode.HostnameAlreadyInRing;
             });
     }
 
     [Fact]
-    public void Property_IsSafeToJoin_Rejects_Existing_NodeIds()
-    {
-        Gen.Select(GenK, GenUniqueNodes(2, 20))
-            .Sample((k, nodes) =>
-            {
-                var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
-                {
-                    builder.RingAdd(endpoint, nodeId);
-                }
-                var view = builder.Build();
-
-                // Existing NodeIds should not be safe to join
-                var newHost = new Endpoint { Hostname = ByteString.CopyFromUtf8("10.0.0.1"), Port = 9999 };
-                var existingNodeId = nodes[0].NodeId;
-                return view.IsSafeToJoin(newHost, existingNodeId) == JoinStatusCode.UuidAlreadyInRing;
-            });
-    }
-
-    [Fact]
-    public void Property_IsSafeToJoin_Allows_New_Host_And_NodeId()
+    public void Property_IsSafeToJoin_Allows_New_Host()
     {
         Gen.Select(GenK, GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
@@ -1077,10 +1034,9 @@ public class MembershipViewTests
                 }
                 var view = builder.Build();
 
-                // New host and NodeId should be safe to join
+                // New host should be safe to join
                 var newHost = new Endpoint { Hostname = ByteString.CopyFromUtf8("10.0.0.1"), Port = 9999 };
-                var newNodeId = new NodeId { High = 999999, Low = 999999 };
-                return view.IsSafeToJoin(newHost, newNodeId) == JoinStatusCode.SafeToJoin;
+                return view.IsSafeToJoin(newHost) == JoinStatusCode.SafeToJoin;
             });
     }
 

@@ -23,7 +23,6 @@ public sealed class MembershipView
 
     private readonly ImmutableArray<ImmutableArray<Endpoint>> _rings;
     private readonly ImmutableSortedSet<Endpoint> _allNodes;
-    private readonly ImmutableSortedSet<NodeId> _identifiersSeen;
     private readonly ImmutableDictionary<Endpoint, long> _nodeIdByEndpoint;
 
     /// <summary>
@@ -45,7 +44,6 @@ public sealed class MembershipView
         MaxNodeId = maxNodeId;
         // Use ProtobufEndpointComparer to ignore NodeId when checking membership
         _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(ProtobufEndpointComparer.Instance) : ImmutableSortedSet<Endpoint>.Empty;
-        _identifiersSeen = [.. nodeIds];
 
         // Build endpoint -> node ID lookup from the first ring (all rings have the same endpoints)
         var builder = ImmutableDictionary.CreateBuilder<Endpoint, long>(EndpointAddressComparer.Instance);
@@ -112,13 +110,6 @@ public sealed class MembershipView
     public bool IsHostPresent(Endpoint address) => _allNodes.Contains(address);
 
     /// <summary>
-    /// Query if an identifier has been used by a node already.
-    /// </summary>
-    /// <param name="identifier">The identifier to query for.</param>
-    /// <returns>True if the identifier has been seen before and false otherwise.</returns>
-    public bool IsIdentifierPresent(NodeId identifier) => _identifiersSeen.Contains(identifier);
-
-    /// <summary>
     /// Gets the monotonic node ID for a specific endpoint.
     /// This ID is used for Paxos rank computation and is unique across node restarts.
     /// </summary>
@@ -136,25 +127,18 @@ public sealed class MembershipView
     }
 
     /// <summary>
-    /// Queries if a host with a logical identifier is safe to add to the network.
+    /// Queries if a host is safe to add to the network.
     /// </summary>
     /// <param name="node">The joining node.</param>
-    /// <param name="uuid">The joining node's identifier.</param>
     /// <returns>
     /// HOSTNAME_ALREADY_IN_RING if the node is already in the ring.
-    /// UUID_ALREADY_IN_RING if the uuid is already seen before.
     /// SAFE_TO_JOIN otherwise.
     /// </returns>
-    public JoinStatusCode IsSafeToJoin(Endpoint node, NodeId uuid)
+    public JoinStatusCode IsSafeToJoin(Endpoint node)
     {
         if (_allNodes.Contains(node))
         {
             return JoinStatusCode.HostnameAlreadyInRing;
-        }
-
-        if (_identifiersSeen.Contains(uuid))
-        {
-            return JoinStatusCode.UuidAlreadyInRing;
         }
 
         return JoinStatusCode.SafeToJoin;

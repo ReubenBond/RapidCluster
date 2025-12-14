@@ -27,7 +27,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly Endpoint _myAddr;
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<Endpoint, Channel<TaskCompletionSource<RapidClusterResponse>>> _joinersToRespondTo = new(EndpointAddressComparer.Instance);
-    private readonly Dictionary<Endpoint, NodeId> _joinerUuid = new(EndpointAddressComparer.Instance);
     private readonly Dictionary<Endpoint, Metadata> _joinerMetadata = new(EndpointAddressComparer.Instance);
     private readonly Dictionary<Endpoint, NodeId> _memberNodeIds = new(EndpointAddressComparer.Instance);  // Maps current members to their NodeIds
     private readonly IMessagingClient _messagingClient;
@@ -385,47 +384,31 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <param name="cancellationToken">Cancellation token.</param>
     private async Task<JoinAttemptResult> TryJoinClusterAsync(Endpoint seedAddress, CancellationToken cancellationToken)
     {
-        var currentIdentifier = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
-
-        // Phase 1: Contact seed for observers (with retry on UUID collision)
-        JoinResponse joinResponse;
-        while (true)
+        // Phase 1: Contact seed for observers
+        var preJoinMessage = new PreJoinMessage
         {
-            var preJoinMessage = new PreJoinMessage
-            {
-                Sender = _myAddr,
-                NodeId = currentIdentifier
-            };
+            Sender = _myAddr
+        };
 
-            RapidClusterResponse preJoinResponse;
-            try
-            {
-                preJoinResponse = await _messagingClient.SendMessageAsync(
-                    seedAddress,
-                    preJoinMessage.ToRapidClusterRequest(),
-                    cancellationToken).ConfigureAwait(true);
-            }
-            catch (TimeoutException)
-            {
-                return JoinAttemptResult.RetryNeeded($"Timeout contacting seed node {seedAddress.Hostname}:{seedAddress.Port}");
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                // Network errors are typically transient
-                return JoinAttemptResult.RetryNeeded($"Network error contacting seed {seedAddress.Hostname}:{seedAddress.Port}: {ex.Message}");
-            }
-
-            joinResponse = preJoinResponse.JoinResponse;
-
-            if (joinResponse.StatusCode == JoinStatusCode.UuidAlreadyInRing)
-            {
-                // UUID collision - generate a new identifier and retry (matches Java behavior)
-                currentIdentifier = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
-                continue;
-            }
-
-            break;
+        RapidClusterResponse preJoinResponse;
+        try
+        {
+            preJoinResponse = await _messagingClient.SendMessageAsync(
+                seedAddress,
+                preJoinMessage.ToRapidClusterRequest(),
+                cancellationToken).ConfigureAwait(true);
         }
+        catch (TimeoutException)
+        {
+            return JoinAttemptResult.RetryNeeded($"Timeout contacting seed node {seedAddress.Hostname}:{seedAddress.Port}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Network errors are typically transient
+            return JoinAttemptResult.RetryNeeded($"Network error contacting seed {seedAddress.Hostname}:{seedAddress.Port}: {ex.Message}");
+        }
+
+        var joinResponse = preJoinResponse.JoinResponse;
 
         if (joinResponse.StatusCode != JoinStatusCode.SafeToJoin &&
             joinResponse.StatusCode != JoinStatusCode.HostnameAlreadyInRing)
@@ -457,7 +440,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var joinMessageForObserver = new JoinMessage
             {
                 Sender = _myAddr,
-                NodeId = currentIdentifier,
                 Metadata = _nodeMetadata,
                 ConfigurationId = joinResponse.ConfigurationId
             };
@@ -516,17 +498,21 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// - Creating new consensus instance
     /// - Publishing the view to the accessor
     /// - Publishing VIEW_CHANGE event
+    /// - Updating _memberNodeIds (either from nodeIdMap if provided, or incrementally)
     /// </summary>
     /// <param name="newView">The new membership view to apply.</param>
     /// <param name="metadataMap">Metadata for nodes in the view. If null, existing metadata is preserved.</param>
     /// <param name="nodeStatusChanges">The status changes to publish. If null, all nodes are treated as Up (initial join).</param>
     /// <param name="addedNodes">Nodes that were added (for notifying waiting joiners). Can be null.</param>
+    /// <param name="nodeIdMap">Complete mapping of endpoints to NodeIds. If provided, replaces _memberNodeIds entirely.
+    /// Used when adopting a view from an external source (rejoin, learner protocol).</param>
     /// <returns>The previous consensus instance that should be disposed by the caller.</returns>
     private ConsensusCoordinator? SetMembershipView(
         MembershipView newView,
         Dictionary<Endpoint, Metadata>? metadataMap,
         List<NodeStatusChange>? nodeStatusChanges,
-        List<Endpoint>? addedNodes)
+        List<Endpoint>? addedNodes,
+        Dictionary<Endpoint, NodeId>? nodeIdMap = null)
     {
         // Must be called under _membershipUpdateLock
         // Always capture the previous consensus instance to ensure it gets disposed.
@@ -542,6 +528,18 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             _metadataManager.Clear();
             _metadataManager.AddMetadata(metadataMap);
+        }
+
+        // Update member NodeId tracking
+        // If nodeIdMap is provided (view replacement from external source), rebuild entirely
+        // Otherwise, the caller is responsible for incremental updates (see DecideViewChange)
+        if (nodeIdMap != null)
+        {
+            _memberNodeIds.Clear();
+            foreach (var kvp in nodeIdMap)
+            {
+                _memberNodeIds[kvp.Key] = kvp.Value;
+            }
         }
 
         // Recreate cut detector for the new cluster size
@@ -639,6 +637,34 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
+    /// Cancels all pending join requests by sending them a ConfigChanged response.
+    /// Called during rejoin when the node was kicked and is adopting a new view.
+    /// </summary>
+    private void CancelAllPendingJoiners()
+    {
+        // Build a ConfigChanged response to tell joiners to retry
+        var response = new JoinResponse
+        {
+            Sender = _myAddr,
+            StatusCode = JoinStatusCode.ConfigChanged,
+            ConfigurationId = _membershipView.ConfigurationId
+        };
+        var configChangedResponse = response.ToRapidClusterResponse();
+
+        foreach (var kvp in _joinersToRespondTo)
+        {
+            var channel = kvp.Value;
+            channel.Writer.TryComplete();
+
+            while (channel.Reader.TryRead(out var tcs))
+            {
+                tcs.TrySetResult(configChangedResponse);
+            }
+        }
+        _joinersToRespondTo.Clear();
+    }
+
+    /// <summary>
     /// Entry point for all messages.
     /// </summary>
     public async Task<RapidClusterResponse> HandleMessageAsync(RapidClusterRequest msg, CancellationToken cancellationToken)
@@ -704,7 +730,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         lock (_membershipUpdateLock)
         {
             var joiningEndpoint = msg.Sender;
-            var statusCode = _membershipView.IsSafeToJoin(joiningEndpoint, msg.NodeId);
+            var statusCode = _membershipView.IsSafeToJoin(joiningEndpoint);
             var builder = new JoinResponse
             {
                 Sender = _myAddr,
@@ -758,7 +784,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     EdgeDst = joinMessage.Sender,
                     EdgeStatus = EdgeStatus.Up,
                     ConfigurationId = currentConfiguration,
-                    NodeId = joinMessage.NodeId,
                     Metadata = joinMessage.Metadata
                 };
                 alertMsg.RingNumber.AddRange(joinMessage.RingNumber);
@@ -781,8 +806,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     MaxNodeId = _membershipView.MaxNodeId
                 };
 
-                if (_membershipView.IsHostPresent(joinMessage.Sender) &&
-                    _membershipView.IsIdentifierPresent(joinMessage.NodeId))
+                if (_membershipView.IsHostPresent(joinMessage.Sender))
                 {
                     // Race condition where a observer already crossed H messages for the joiner and changed
                     // the configuration, but the JoinPhase2 messages show up at the observer
@@ -866,14 +890,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
             else
             {
-                // New joiner - get NodeId from joiner tracking and assign new node ID
-                if (_joinerUuid.TryGetValue(endpoint, out var joinerId))
-                {
-                    nodeId = joinerId;
-                }
-
-                // Assign the next node ID to this joiner
+                // New joiner - create a new NodeId and assign new monotonic node ID
+                // Since we no longer use UUID-based identity, we generate a fresh NodeId
+                // using the monotonic ID as the low bits for uniqueness
                 nextNodeId++;
+                nodeId = new NodeId { High = 0, Low = nextNodeId };
                 endpointWithNodeId = new Endpoint
                 {
                     Hostname = endpoint.Hostname,
@@ -955,9 +976,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                         : MetricNames.ReportTypes.Fail;
                     _metrics.RecordCutDetectorReportReceived(reportType);
 
-                    // For valid UP alerts, extract the joiner details (UUID and metadata) which is going to be needed
+                    // For valid UP alerts, extract the joiner details (metadata) which is going to be needed
                     // when the node is added to the rings
-                    var extractedMessage = ExtractJoinerUuidAndMetadata(msg);
+                    var extractedMessage = ExtractJoinerMetadata(msg);
                     var cutProposals = _cutDetection.AggregateForProposalSingleRing(extractedMessage, ringNumber);
                     _log.CutDetectionProposals(cutProposals.Count);
 
@@ -1254,7 +1275,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _memberNodeIds[endpointWithNodeId] = nodeId;
 
                 // Clean up joiner data (use original node key without node ID)
-                _joinerUuid.Remove(node);
                 _joinerMetadata.Remove(node);
 
                 // Track this node for later notification (use endpoint with node ID)
@@ -1365,12 +1385,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// </summary>
     private static bool FilterAlertMessages(BatchedAlertMessage batchedAlertMessage, long currentConfigurationId) => batchedAlertMessage.Messages.Any(m => m.ConfigurationId == currentConfigurationId);
 
-    private AlertMessage ExtractJoinerUuidAndMetadata(AlertMessage alertMessage)
+    private AlertMessage ExtractJoinerMetadata(AlertMessage alertMessage)
     {
-        if (alertMessage.EdgeStatus == EdgeStatus.Up && alertMessage.NodeId != null)
+        if (alertMessage.EdgeStatus == EdgeStatus.Up)
         {
-            // Both the UUID and Metadata are saved only after the node is done being added.
-            _joinerUuid[alertMessage.EdgeDst] = alertMessage.NodeId;
+            // Metadata is saved only after the node is done being added.
             _joinerMetadata[alertMessage.EdgeDst] = alertMessage.Metadata;
             _log.ExtractJoinerUuidAndMetadata(alertMessage.EdgeDst);
         }
@@ -1543,9 +1562,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         ConsensusCoordinator? oldConsensus;
         lock (_membershipUpdateLock)
         {
-            // Clear pending data before setting new view
-            _joinersToRespondTo.Clear();
-            _joinerUuid.Clear();
+            // Cancel pending join requests - joiners will retry with ConfigChanged response
+            CancelAllPendingJoiners();
             _joinerMetadata.Clear();
             _pendingConsensusMessages.Clear();
 
@@ -1563,15 +1581,16 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 [.. successfulResponse.Endpoints],
                 successfulResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(successfulResponse.ConfigurationId));
 
-            // Update _memberNodeIds for all members in the new view
-            _memberNodeIds.Clear();
+            // Build nodeIdMap for all members in the new view
+            var nodeIdMap = new Dictionary<Endpoint, NodeId>(EndpointAddressComparer.Instance);
             for (var i = 0; i < successfulResponse.Endpoints.Count && i < successfulResponse.Identifiers.Count; i++)
             {
-                _memberNodeIds[successfulResponse.Endpoints[i]] = successfulResponse.Identifiers[i];
+                nodeIdMap[successfulResponse.Endpoints[i]] = successfulResponse.Identifiers[i];
             }
 
             // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
-            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null);
+            // The nodeIdMap parameter ensures _memberNodeIds is rebuilt correctly
+            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null, nodeIdMap);
         }
 
         // Dispose old consensus instance.
@@ -1602,8 +1621,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Phase 1: PreJoin to get observers
         var preJoinMessage = new PreJoinMessage
         {
-            Sender = _myAddr,
-            NodeId = nodeId
+            Sender = _myAddr
         };
 
         var preJoinResponse = await _messagingClient.SendMessageAsync(
@@ -1646,7 +1664,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var joinMessageForObserver = new JoinMessage
             {
                 Sender = _myAddr,
-                NodeId = nodeId,
                 Metadata = metadata,
                 ConfigurationId = joinResponse.ConfigurationId
             };
@@ -1857,15 +1874,15 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     }
                 }
 
-                // Update _memberNodeIds for all members in the new view
-                _memberNodeIds.Clear();
+                // Build nodeIdMap for all members in the new view
+                var nodeIdMap = new Dictionary<Endpoint, NodeId>(EndpointAddressComparer.Instance);
                 for (var i = 0; i < viewResponse.Endpoints.Count && i < viewResponse.Identifiers.Count; i++)
                 {
-                    _memberNodeIds[viewResponse.Endpoints[i]] = viewResponse.Identifiers[i];
+                    nodeIdMap[viewResponse.Endpoints[i]] = viewResponse.Identifiers[i];
                 }
 
-                // Apply the new view
-                oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges, addedNodes: null);
+                // Apply the new view - nodeIdMap ensures _memberNodeIds is rebuilt correctly
+                oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges, addedNodes: null, nodeIdMap);
             }
         }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -72,8 +73,9 @@ public static class RapidClusterServiceCollectionExtensions
             var protocolOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterProtocolOptions>>();
             var client = sp.GetRequiredService<IMessagingClient>();
             var sharedResources = sp.GetRequiredService<SharedResources>();
+            var metrics = sp.GetRequiredService<RapidClusterMetrics>();
             var logger = sp.GetRequiredService<ILogger<PingPongFailureDetector>>();
-            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, logger);
+            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, metrics, logger);
         });
 
         // Register ConsensusCoordinator factory
@@ -85,6 +87,15 @@ public static class RapidClusterServiceCollectionExtensions
         // Register MembershipViewAccessor as singleton (used by both MembershipService and consumers)
         services.AddSingleton<MembershipViewAccessor>();
         services.AddSingleton<IMembershipViewAccessor>(sp => sp.GetRequiredService<MembershipViewAccessor>());
+
+        // Register metrics - AddMetrics() registers IMeterFactory if not already present
+        services.AddMetrics();
+        services.AddSingleton<RapidClusterMetrics>(sp =>
+        {
+            var meterFactory = sp.GetRequiredService<IMeterFactory>();
+            var viewAccessor = sp.GetService<IMembershipViewAccessor>();
+            return new RapidClusterMetrics(meterFactory, viewAccessor);
+        });
 
         // Register MembershipService directly (InitializeAsync is called by RapidClusterService)
         services.AddSingleton<MembershipService>();

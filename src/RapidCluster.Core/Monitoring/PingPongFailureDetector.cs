@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -15,12 +16,14 @@ public sealed partial class PingPongFailureDetectorFactory(
     IMessagingClient client,
     SharedResources sharedResources,
     IOptions<RapidClusterProtocolOptions> protocolOptions,
+    RapidClusterMetrics metrics,
     ILogger<PingPongFailureDetector> logger) : IEdgeFailureDetectorFactory
 {
     private readonly Endpoint _localEndpoint = localEndpoint;
     private readonly IMessagingClient _client = client;
     private readonly SharedResources _sharedResources = sharedResources;
     private readonly RapidClusterProtocolOptions _protocolOptions = protocolOptions.Value;
+    private readonly RapidClusterMetrics _metrics = metrics;
     private readonly ILogger<PingPongFailureDetector> _logger = logger;
 
     /// <summary>
@@ -50,6 +53,7 @@ public sealed partial class PingPongFailureDetectorFactory(
             _protocolOptions.FailureDetectorInterval,
             OnStaleViewDetected,
             GetLocalConfigurationId,
+            _metrics,
             _logger);
 }
 
@@ -70,6 +74,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     private readonly TimeSpan _probeInterval;
     private readonly Action<Endpoint, long, long>? _onStaleViewDetected;
     private readonly Func<long>? _getLocalConfigurationId;
+    private readonly RapidClusterMetrics _metrics;
     private readonly ILogger<PingPongFailureDetector> _logger;
     private readonly CancellationTokenSource _cts = new();
     private int _disposed;
@@ -88,6 +93,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     /// <param name="probeInterval">Interval between failure detector probes.</param>
     /// <param name="onStaleViewDetected">Optional callback when stale view is detected (learner role).</param>
     /// <param name="getLocalConfigurationId">Optional function to get local configuration ID.</param>
+    /// <param name="metrics">Metrics for recording probe statistics.</param>
     /// <param name="logger">Optional logger.</param>
     public PingPongFailureDetector(
         Endpoint subject,
@@ -99,6 +105,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         TimeSpan probeInterval = default,
         Action<Endpoint, long, long>? onStaleViewDetected = null,
         Func<long>? getLocalConfigurationId = null,
+        RapidClusterMetrics? metrics = null,
         ILogger<PingPongFailureDetector>? logger = null)
     {
         _subject = subject;
@@ -110,6 +117,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         _probeInterval = probeInterval == default ? TimeSpan.FromSeconds(1) : probeInterval;
         _onStaleViewDetected = onStaleViewDetected;
         _getLocalConfigurationId = getLocalConfigurationId;
+        _metrics = metrics!;
         _logger = logger ?? NullLogger<PingPongFailureDetector>.Instance;
     }
 
@@ -150,17 +158,25 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             return;
         }
+
+        // Record that we're sending a probe
+        _metrics.RecordProbeSent();
+        var stopwatch = Stopwatch.StartNew();
+
 #pragma warning disable CA1031
         try
         {
             var localConfigId = _getLocalConfigurationId?.Invoke() ?? 0;
             var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId }.ToRapidClusterRequest();
             var response = await _client.SendMessageAsync(_subject, request, _cts.Token).ConfigureAwait(true);
+            stopwatch.Stop();
 
             if (response.ProbeResponse == null)
             {
                 _consecutiveFailures++;
                 LogProbeFailed(new LoggableEndpoint(_subject), _consecutiveFailures, _consecutiveFailuresThreshold);
+                _metrics.RecordProbeFailure(MetricNames.ErrorTypes.Rejected);
+                _metrics.RecordProbeLatency(MetricNames.Results.Failed, stopwatch);
                 CheckAndNotifyFailure();
             }
             else
@@ -170,6 +186,8 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
                     LogProbeSucceeded(new LoggableEndpoint(_subject));
                 }
                 _consecutiveFailures = 0;
+                _metrics.RecordProbeSuccess();
+                _metrics.RecordProbeLatency(MetricNames.Results.Success, stopwatch);
 
                 // Check if we've been kicked or have a stale view
                 CheckForStaleView(response.ProbeResponse);
@@ -177,8 +195,19 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             _consecutiveFailures++;
             LogProbeException(ex, new LoggableEndpoint(_subject), _consecutiveFailures, _consecutiveFailuresThreshold);
+
+            // Determine failure reason from exception type
+            var reason = ex switch
+            {
+                OperationCanceledException => MetricNames.ErrorTypes.Timeout,
+                TimeoutException => MetricNames.ErrorTypes.Timeout,
+                _ => MetricNames.ErrorTypes.Network
+            };
+            _metrics.RecordProbeFailure(reason);
+            _metrics.RecordProbeLatency(MetricNames.Results.Failed, stopwatch);
             CheckAndNotifyFailure();
         }
 #pragma warning restore CA1031

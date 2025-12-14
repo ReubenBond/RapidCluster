@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RapidCluster.Messaging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -34,6 +35,7 @@ internal sealed class ConsensusCoordinatorFactory(
     IMembershipViewAccessor membershipViewAccessor,
     IOptions<RapidClusterProtocolOptions> protocolOptions,
     SharedResources sharedResources,
+    RapidClusterMetrics metrics,
     ILogger<ConsensusCoordinator> coordinatorLogger,
     ILogger<FastPaxos> fastPaxosLogger,
     ILogger<Paxos> paxosLogger) : IConsensusCoordinatorFactory
@@ -53,6 +55,7 @@ internal sealed class ConsensusCoordinatorFactory(
             membershipViewAccessor,
             protocolOptions,
             sharedResources,
+            metrics,
             coordinatorLogger,
             fastPaxosLogger,
             paxosLogger);

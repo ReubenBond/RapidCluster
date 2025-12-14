@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 
 using RapidCluster.Logging;
 using RapidCluster.Messaging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -22,6 +23,7 @@ namespace RapidCluster;
 internal sealed class Paxos
 {
     private readonly PaxosLogger _log;
+    private readonly RapidClusterMetrics _metrics;
     private readonly IBroadcaster _broadcaster;
     private readonly IMessagingClient _client;
     private readonly IMembershipViewAccessor _membershipViewAccessor;
@@ -55,6 +57,7 @@ internal sealed class Paxos
         IMessagingClient client,
         IBroadcaster broadcaster,
         IMembershipViewAccessor membershipViewAccessor,
+        RapidClusterMetrics metrics,
         ILogger<Paxos> logger)
     {
         _myAddr = myAddr;
@@ -63,6 +66,7 @@ internal sealed class Paxos
         _broadcaster = broadcaster;
         _client = client;
         _membershipViewAccessor = membershipViewAccessor;
+        _metrics = metrics;
         _log = new PaxosLogger(logger);
 
         _crnd = new Rank { Round = 0, NodeIndex = 0 };
@@ -177,6 +181,7 @@ internal sealed class Paxos
             };
 
             _log.SendingPhase1b(phase1aMessage.Sender, _rnd, _vrnd, _vval);
+            _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.Phase1b);
 
             var request = phase1b.ToRapidClusterRequest();
             _client.SendOneWayMessage(phase1aMessage.Sender, request, cancellationToken);
@@ -209,6 +214,8 @@ internal sealed class Paxos
             return;
         }
 
+        // Record the Phase1b vote received
+        _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.Phase1b);
         _phase1bMessages.Add(phase1bMessage);
 
         // Classic Paxos uses majority quorum (N/2 + 1), not Fast Paxos threshold
@@ -276,6 +283,7 @@ internal sealed class Paxos
             };
 
             _log.SendingPhase2b(phase2aMessage.Sender, _rnd, _vval);
+            _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.Phase2b);
 
             // Broadcast to all nodes so they can independently learn the decision
             // This matches the Java implementation
@@ -303,6 +311,9 @@ internal sealed class Paxos
             _log.Phase2bConfigMismatch(_configurationId, phase2bMessage.ConfigurationId);
             return;
         }
+
+        // Record the Phase2b vote received
+        _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.Phase2b);
 
         // Store by the message's round (not our crnd) so all acceptors can learn the decision
         // This matches the Java implementation where all nodes collect phase2b messages

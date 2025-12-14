@@ -453,4 +453,84 @@ From Microsoft docs:
 
 ## Implementation Notes
 
-(To be updated during implementation)
+### Completed Implementation (December 2024)
+
+#### Infrastructure Created
+
+1. **`RapidCluster.Core/Monitoring/MetricNames.cs`** - Constants for all metric names, tag names, and tag values:
+   - Metric name constants (e.g., `MetricNames.ConsensusProposals`, `MetricNames.ProbesSent`)
+   - Tag name constants (e.g., `MetricNames.Tags.Protocol`, `MetricNames.Tags.Result`)
+   - Tag value constants organized in inner classes:
+     - `MetricNames.Protocols` - `FastPaxos`, `ClassicPaxos`
+     - `MetricNames.Results` - `Success`, `Timeout`, `Conflict`, `Failed`, `Aborted`
+     - `MetricNames.VoteTypes` - `FastVote`, `Phase1b`, `Phase2b`
+     - `MetricNames.ReportTypes` - `Join`, `Fail`, `Leave`
+     - `MetricNames.ErrorTypes` - `Network`, `Timeout`, `Rejected`, `Unknown`
+     - `MetricNames.MessageTypes` - All protocol message types
+
+2. **`RapidCluster.Core/Monitoring/RapidClusterMetrics.cs`** - Main metrics class with:
+   - Constructor accepting `IMeterFactory` for DI-aware meter creation
+   - Counters, histograms, and observable gauges for all metric categories
+   - Strongly-typed recording methods for each metric
+   - Proper histogram bucket boundaries for different latency ranges
+
+#### Components Instrumented
+
+| Component | File | Metrics Added |
+|-----------|------|---------------|
+| `ConsensusCoordinator` | `ConsensusCoordinator.cs` | Proposals, round starts/completions, latency, conflicts |
+| `FastPaxos` | `FastPaxos.cs` | Votes sent/received (`fast_vote` type) |
+| `Paxos` | `Paxos.cs` | Votes sent/received (`phase1b`, `phase2b` types) |
+| `MembershipService` | `MembershipService.cs` | Cut detector reports, cuts detected, messages received |
+| `PingPongFailureDetector` | `PingPongFailureDetector.cs` | Probes sent, success/failure, latency |
+| `GrpcClient` | `GrpcClient.cs` | gRPC calls started/completed, duration, connection errors |
+
+#### DI Registration
+
+- `RapidClusterServiceCollectionExtensions.cs` updated to:
+  - Register `RapidClusterMetrics` as a singleton
+  - Pass metrics to `PingPongFailureDetectorFactory`
+  - Ensure `AddMetrics()` is called for `IMeterFactory` availability
+
+#### Test Infrastructure
+
+- `RapidSimulationNode.cs` - Added `TestMeterFactory` inner class for simulation tests
+- `FastPaxosTests.cs` - Fixed CA2000 disposal warning with class-level meter factory management
+
+#### Metrics Available
+
+**Consensus Metrics:**
+- `rapidcluster.consensus.proposals` - Counter with protocol tag
+- `rapidcluster.consensus.rounds_started` - Counter with protocol tag
+- `rapidcluster.consensus.rounds_completed` - Counter with protocol and result tags
+- `rapidcluster.consensus.conflicts` - Counter
+- `rapidcluster.consensus.votes_sent` - Counter with vote_type tag
+- `rapidcluster.consensus.votes_received` - Counter with vote_type tag
+- `rapidcluster.consensus.latency` - Histogram with protocol and result tags
+
+**Failure Detection Metrics:**
+- `rapidcluster.failure_detection.probes_sent` - Counter
+- `rapidcluster.failure_detection.probe_successes` - Counter
+- `rapidcluster.failure_detection.probe_failures` - Counter with reason tag
+- `rapidcluster.probe.latency` - Histogram with result tag
+
+**Cut Detector Metrics:**
+- `rapidcluster.cut_detector.reports_received` - Counter with report_type tag
+- `rapidcluster.cut_detector.cuts_detected` - Counter
+
+**gRPC Metrics:**
+- `rapidcluster.grpc.calls_started` - Counter with method tag
+- `rapidcluster.grpc.calls_completed` - Counter with method and status tags
+- `rapidcluster.grpc.connection_errors` - Counter with error_type tag
+- `rapidcluster.grpc.call_duration` - Histogram with method and status tags
+
+**Message Metrics:**
+- `rapidcluster.messages.received` - Counter with message_type tag
+
+### Future Enhancements (Optional)
+
+1. Add `RecordMessageSent()` calls in broadcasting code paths
+2. Add membership view change metrics (`RecordMembershipViewChange()`, `RecordNodesAdded()`, `RecordNodesRemoved()`)
+3. Add join latency tracking
+4. Add observable gauges for cluster state (cluster size, configuration ID)
+5. Add documentation with OpenTelemetry/Prometheus integration examples

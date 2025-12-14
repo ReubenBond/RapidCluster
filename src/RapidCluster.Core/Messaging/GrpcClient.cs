@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Grpc.Core;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RapidCluster.Logging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Messaging;
@@ -13,14 +15,20 @@ namespace RapidCluster.Messaging;
 /// gRPC-based messaging client for Rapid.
 /// Implements IHostedService to ensure proper shutdown ordering.
 /// </summary>
-internal sealed partial class GrpcClient(IOptions<RapidClusterProtocolOptions> options, ILogger<GrpcClient> logger) : IMessagingClient, IHostedService
+internal sealed partial class GrpcClient(
+    IOptions<RapidClusterProtocolOptions> options,
+    RapidClusterMetrics metrics,
+    ILogger<GrpcClient> logger) : IMessagingClient, IHostedService
 {
     private readonly RapidClusterProtocolOptions _options = options.Value;
+    private readonly RapidClusterMetrics _metrics = metrics;
     private readonly ILogger<GrpcClient> _logger = logger;
     private readonly ConcurrentDictionary<string, Pb.MembershipService.MembershipServiceClient> _clients = new();
     private readonly ConcurrentDictionary<int, Task> _pendingTasks = new();
     private int _taskIdCounter;
     private bool _disposed;
+
+    private const string SendRequestMethod = "SendRequest";
 
     [LoggerMessage(Level = LogLevel.Error, Message = "RPC failed to {Remote}")]
     private partial void LogRpcFailed(Exception ex, LoggableEndpoint Remote);
@@ -64,6 +72,8 @@ internal sealed partial class GrpcClient(IOptions<RapidClusterProtocolOptions> o
         CancellationToken cancellationToken)
     {
         var client = GetOrCreateClient(remote);
+        var stopwatch = Stopwatch.StartNew();
+        _metrics.RecordGrpcCallStarted(SendRequestMethod);
 
         try
         {
@@ -71,11 +81,18 @@ internal sealed partial class GrpcClient(IOptions<RapidClusterProtocolOptions> o
             cts.CancelAfter(_options.GrpcTimeout);
 
             var response = await client.SendRequestAsync(request, cancellationToken: cts.Token);
+            stopwatch.Stop();
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, "OK");
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, "OK", stopwatch);
             return response;
         }
         catch (RpcException ex)
         {
+            stopwatch.Stop();
             LogRpcFailed(ex, new LoggableEndpoint(remote));
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, ex.StatusCode.ToString());
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, ex.StatusCode.ToString(), stopwatch);
+            _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Network);
             throw;
         }
     }
@@ -94,29 +111,49 @@ internal sealed partial class GrpcClient(IOptions<RapidClusterProtocolOptions> o
         cts.CancelAfter(_options.GrpcTimeout);
 
         var client = GetOrCreateClient(remote);
+        var stopwatch = Stopwatch.StartNew();
+        _metrics.RecordGrpcCallStarted(SendRequestMethod);
 
         try
         {
             await client.SendRequestAsync(request, cancellationToken: cts.Token);
+            stopwatch.Stop();
             LogOneWayDeliverySucceeded(new LoggableEndpoint(remote));
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, "OK");
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, "OK", stopwatch);
         }
         catch (RpcException ex)
         {
+            stopwatch.Stop();
             LogOneWayDeliveryFailedRpc(new LoggableEndpoint(remote), ex.StatusCode, ex.Message);
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, ex.StatusCode.ToString());
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, ex.StatusCode.ToString(), stopwatch);
+            _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Network);
             onDeliveryFailure?.Invoke(remote);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
+            stopwatch.Stop();
             LogOneWayDeliveryFailedTimeout(new LoggableEndpoint(remote), _options.GrpcTimeout);
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, "DeadlineExceeded");
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, "DeadlineExceeded", stopwatch);
+            _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Timeout);
             onDeliveryFailure?.Invoke(remote);
         }
         catch (OperationCanceledException)
         {
-            // User cancellation - don't invoke callback
+            stopwatch.Stop();
+            // User cancellation - don't invoke callback but still record metrics
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, "Cancelled");
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, "Cancelled", stopwatch);
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             LogOneWayDeliveryFailedUnexpected(new LoggableEndpoint(remote), ex.Message);
+            _metrics.RecordGrpcCallCompleted(SendRequestMethod, "Unknown");
+            _metrics.RecordGrpcCallDuration(SendRequestMethod, "Unknown", stopwatch);
+            _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Unknown);
             onDeliveryFailure?.Invoke(remote);
         }
         finally

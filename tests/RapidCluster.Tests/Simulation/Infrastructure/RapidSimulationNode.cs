@@ -187,7 +187,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             Metadata = metadata ?? new Metadata()
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
-        var seedProvider = new StaticSeedProvider(seedAddresses is not null ? [.. seedAddresses] : []);
+        var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterOptions>(rapidClusterOptions));
         _membershipService = new MembershipService(
             Options.Create(rapidClusterOptions),
             Options.Create(_protocolOptions),
@@ -301,5 +301,15 @@ internal sealed class RapidSimulationNode : SimulationNode
             }
             _meters.Clear();
         }
+    }
+
+    /// <summary>
+    /// Simple options monitor for tests that returns a fixed value.
+    /// </summary>
+    private sealed class TestOptionsMonitor<T>(T value) : IOptionsMonitor<T>
+    {
+        public T CurrentValue => value;
+        public T Get(string? name) => value;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 }

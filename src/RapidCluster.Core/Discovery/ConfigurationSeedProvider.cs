@@ -1,93 +1,36 @@
-using Google.Protobuf;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Discovery;
 
 /// <summary>
-/// A seed provider that reads seed addresses from <see cref="IConfiguration"/>.
-/// Seeds are re-read on each call, allowing for runtime configuration changes.
+/// A seed provider that reads seed addresses from <see cref="RapidClusterOptions.SeedAddresses"/>.
+/// Seeds are re-read on each call via <see cref="IOptionsMonitor{TOptions}"/>, allowing for
+/// runtime configuration changes when using reloadable configuration sources.
 /// </summary>
 /// <remarks>
-/// The configuration section should contain an array of endpoint strings in the format "hostname:port".
-/// <example>
-/// Example appsettings.json:
-/// <code>
-/// {
-///   "RapidCluster": {
-///     "Seeds": [
-///       "192.168.1.10:5000",
-///       "192.168.1.11:5000",
-///       "192.168.1.12:5000"
-///     ]
-///   }
-/// }
-/// </code>
-/// </example>
+/// This is the default <see cref="ISeedProvider"/> implementation. It reads from the
+/// <see cref="RapidClusterOptions.SeedAddresses"/> property which can be configured
+/// via dependency injection options or bound to configuration sections.
 /// </remarks>
 public sealed class ConfigurationSeedProvider : ISeedProvider
 {
-    private readonly IConfiguration _configuration;
-    private readonly string _sectionName;
+    private readonly IOptionsMonitor<RapidClusterOptions> _optionsMonitor;
 
     /// <summary>
     /// Creates a new ConfigurationSeedProvider.
     /// </summary>
-    /// <param name="configuration">The configuration to read seeds from.</param>
-    /// <param name="sectionName">The configuration section name containing the seed list. Default is "RapidCluster:Seeds".</param>
-    public ConfigurationSeedProvider(IConfiguration configuration, string sectionName = "RapidCluster:Seeds")
+    /// <param name="optionsMonitor">The options monitor to read seed addresses from.</param>
+    public ConfigurationSeedProvider(IOptionsMonitor<RapidClusterOptions> optionsMonitor)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
-        _configuration = configuration;
-        _sectionName = sectionName;
+        ArgumentNullException.ThrowIfNull(optionsMonitor);
+        _optionsMonitor = optionsMonitor;
     }
 
     /// <inheritdoc/>
     public ValueTask<IReadOnlyList<Endpoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
-        var section = _configuration.GetSection(_sectionName);
-        var seedStrings = section.Get<List<string>>() ?? [];
-
-        var seeds = new List<Endpoint>(seedStrings.Count);
-        foreach (var seedString in seedStrings)
-        {
-            if (string.IsNullOrWhiteSpace(seedString))
-            {
-                continue;
-            }
-
-            var endpoint = ParseEndpoint(seedString);
-            if (endpoint != null)
-            {
-                seeds.Add(endpoint);
-            }
-        }
-
-        return ValueTask.FromResult<IReadOnlyList<Endpoint>>(seeds);
-    }
-
-    /// <summary>
-    /// Parses an endpoint string in the format "hostname:port".
-    /// </summary>
-    private static Endpoint? ParseEndpoint(string endpointString)
-    {
-        var trimmed = endpointString.Trim();
-        var lastColon = trimmed.LastIndexOf(':');
-
-        if (lastColon <= 0 || lastColon >= trimmed.Length - 1)
-        {
-            return null;
-        }
-
-        var hostname = trimmed[..lastColon];
-        var portString = trimmed[(lastColon + 1)..];
-
-        if (!int.TryParse(portString, out var port) || port <= 0 || port > 65535)
-        {
-            return null;
-        }
-
-        return new Endpoint { Hostname = ByteString.CopyFromUtf8(hostname), Port = port };
+        var seeds = _optionsMonitor.CurrentValue.SeedAddresses ?? [];
+        return ValueTask.FromResult(seeds);
     }
 }

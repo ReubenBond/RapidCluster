@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 
 using RapidCluster.Logging;
 using RapidCluster.Messaging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -21,6 +22,7 @@ namespace RapidCluster;
 internal sealed class FastPaxos
 {
     private readonly FastPaxosLogger _log;
+    private readonly RapidClusterMetrics _metrics;
     private readonly Endpoint _myAddr;
     private readonly long _configurationId;
     private readonly long _membershipSize;
@@ -41,12 +43,14 @@ internal sealed class FastPaxos
             long configurationId,
             int membershipSize,
             IBroadcaster broadcaster,
+            RapidClusterMetrics metrics,
             ILogger<FastPaxos> logger)
     {
         _myAddr = myAddr;
         _configurationId = configurationId;
         _membershipSize = membershipSize;
         _broadcaster = broadcaster;
+        _metrics = metrics;
         _log = new FastPaxosLogger(logger);
 
         _log.FastPaxosInitialized(myAddr, configurationId, membershipSize);
@@ -76,6 +80,7 @@ internal sealed class FastPaxos
     public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
     {
         _log.Propose(proposal);
+        _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.FastVote);
 
         var consensusMessage = new FastRoundPhase2bMessage
         {
@@ -137,6 +142,8 @@ internal sealed class FastPaxos
             return;
         }
 
+        // Record the vote received
+        _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.FastVote);
         _votesReceived.Add(proposalMessage.Sender);
 
         var proposal = proposalMessage.Proposal;

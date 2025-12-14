@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
@@ -65,6 +66,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // View change accessor for publishing updates
     private readonly MembershipViewAccessor _viewAccessor;
 
+    // Metrics
+    private readonly RapidClusterMetrics _metrics;
+
     // Flag to track if a rejoin is in progress
     private bool _isRejoining;
 
@@ -123,6 +127,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         ICutDetectorFactory cutDetectorFactory,
         MembershipViewAccessor viewAccessor,
         SharedResources sharedResources,
+        RapidClusterMetrics metrics,
         ILogger<MembershipService> logger)
     {
         var opts = RapidClusterOptions.Value;
@@ -152,6 +157,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _fdFactory = edgeFailureDetector;
         _consensusCoordinatorFactory = consensusCoordinatorFactory;
         _viewAccessor = viewAccessor;
+        _metrics = metrics;
         _log = new MembershipServiceLogger(logger);
         _sendQueue = Channel.CreateUnbounded<AlertMessage>();
         _eventChannel = new BroadcastChannel<ClusterEventNotification>();
@@ -232,6 +238,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         _log.JoiningClusterWithSeeds(_seedAddresses.Count, _myAddr);
 
+        var joinStopwatch = Stopwatch.StartNew();
         var maxRetries = _options.MaxJoinRetries;
         var retryDelay = _options.JoinRetryBaseDelay;
         JoinResponse? successfulResponse = null;
@@ -247,6 +254,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             if (_membershipView.IsHostPresent(_myAddr))
             {
                 _log.JoinCompletedViaLearnerProtocol(_myAddr, _membershipView);
+                _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
                 return;
             }
 
@@ -305,6 +313,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         if (successfulResponse == null)
         {
             _log.JoinFailed(maxRetries + 1);
+            _metrics.RecordJoinLatency(MetricNames.Results.Failed, joinStopwatch);
             throw new JoinException(lastFailureReason ?? $"Failed to join cluster after {maxRetries + 1} attempts");
         }
 
@@ -334,6 +343,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         FinalizeInitialization();
+        _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
     }
 
     /// <summary>
@@ -536,6 +546,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Publish the new view to the accessor
         _viewAccessor.PublishView(_membershipView);
 
+        // Record metrics for the view change
+        _metrics.RecordMembershipViewChange();
+
         // Publish VIEW_CHANGE event
         var statusChanges = nodeStatusChanges ?? GetInitialViewChange();
         var currentMembership = _membershipView.Members;
@@ -601,6 +614,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         ArgumentNullException.ThrowIfNull(msg);
 
+        // Record incoming message metrics
+        var messageType = GetMessageType(msg.ContentCase);
+        _metrics.RecordMessageReceived(messageType);
+
         if (IsTraceMessage(msg.ContentCase))
         {
             _log.HandleMessageReceivedTrace(msg.ContentCase);
@@ -628,6 +645,22 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         static bool IsTraceMessage(RapidClusterRequest.ContentOneofCase contentCase)
             => contentCase == RapidClusterRequest.ContentOneofCase.ProbeMessage;
+
+        static string GetMessageType(RapidClusterRequest.ContentOneofCase contentCase) => contentCase switch
+        {
+            RapidClusterRequest.ContentOneofCase.PreJoinMessage => MetricNames.MessageTypes.PreJoinMessage,
+            RapidClusterRequest.ContentOneofCase.JoinMessage => MetricNames.MessageTypes.JoinRequest,
+            RapidClusterRequest.ContentOneofCase.BatchedAlertMessage => MetricNames.MessageTypes.BatchedAlert,
+            RapidClusterRequest.ContentOneofCase.ProbeMessage => MetricNames.MessageTypes.ProbeRequest,
+            RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage => MetricNames.MessageTypes.FastRoundPhase2b,
+            RapidClusterRequest.ContentOneofCase.Phase1AMessage => MetricNames.MessageTypes.Phase1a,
+            RapidClusterRequest.ContentOneofCase.Phase1BMessage => MetricNames.MessageTypes.Phase1b,
+            RapidClusterRequest.ContentOneofCase.Phase2AMessage => MetricNames.MessageTypes.Phase2a,
+            RapidClusterRequest.ContentOneofCase.Phase2BMessage => MetricNames.MessageTypes.Phase2b,
+            RapidClusterRequest.ContentOneofCase.LeaveMessage => MetricNames.MessageTypes.LeaveMessage,
+            RapidClusterRequest.ContentOneofCase.MembershipViewRequest => MetricNames.MessageTypes.MembershipViewRequest,
+            _ => "unknown"
+        };
     }
 
     /// <summary>
@@ -673,6 +706,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private async Task<RapidClusterResponse> HandleJoinMessageAsync(JoinMessage joinMessage, CancellationToken cancellationToken)
     {
         _log.HandleJoinMessage(joinMessage.Sender, joinMessage.ConfigurationId);
+        _metrics.RecordJoinRequest(MetricNames.Results.Success);
 
         Task<RapidClusterResponse> resultTask;
         lock (_membershipUpdateLock)
@@ -883,11 +917,25 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     }
 
                     _log.ProcessingAlert(msg.EdgeSrc, msg.EdgeDst, msg.EdgeStatus);
+
+                    // Record metrics for cut detector report received
+                    var reportType = msg.EdgeStatus == EdgeStatus.Up
+                        ? MetricNames.ReportTypes.Join
+                        : MetricNames.ReportTypes.Fail;
+                    _metrics.RecordCutDetectorReportReceived(reportType);
+
                     // For valid UP alerts, extract the joiner details (UUID and metadata) which is going to be needed
                     // when the node is added to the rings
                     var extractedMessage = ExtractJoinerUuidAndMetadata(msg);
                     var cutProposals = _cutDetection.AggregateForProposalSingleRing(extractedMessage, ringNumber);
                     _log.CutDetectionProposals(cutProposals.Count);
+
+                    // Record cut detected if there are proposals
+                    if (cutProposals.Count > 0)
+                    {
+                        _metrics.RecordCutDetected();
+                    }
+
                     foreach (var proposal in cutProposals)
                     {
                         proposals.Add(proposal);
@@ -898,6 +946,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // Lastly, we apply implicit detections
             var implicitProposals = _cutDetection.InvalidateFailingEdges();
             _log.ImplicitEdgeInvalidation(implicitProposals.Count);
+
+            // Record cut detected for implicit proposals
+            if (implicitProposals.Count > 0)
+            {
+                _metrics.RecordCutDetected();
+            }
+
             foreach (var proposal in implicitProposals)
             {
                 proposals.Add(proposal);
@@ -1124,6 +1179,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var currentMembers = new HashSet<Endpoint>(_membershipView.Members, EndpointAddressComparer.Instance);
             var proposedMembers = new HashSet<Endpoint>(proposal.Members.Select(m => m.Endpoint), EndpointAddressComparer.Instance);
 
+            // Track counts for metrics
+            var removedCount = 0;
+
             // Nodes to remove: in current but not in proposed
             foreach (var node in currentMembers.Except(proposedMembers, EndpointAddressComparer.Instance))
             {
@@ -1133,6 +1191,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
                 // Remove from memberNodeIds tracking
                 _memberNodeIds.Remove(node);
+                removedCount++;
+            }
+
+            // Record metrics for removed nodes
+            if (removedCount > 0)
+            {
+                _metrics.RecordNodesRemoved(removedCount, MetricNames.RemovalReasons.FailureDetected);
             }
 
             // Nodes to add: in proposed but not in current
@@ -1163,6 +1228,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
                 // Track this node for later notification (use endpoint with node ID)
                 addedNodes.Add(endpointWithNodeId);
+            }
+
+            // Record metrics for added nodes
+            if (addedNodes.Count > 0)
+            {
+                _metrics.RecordNodesAdded(addedNodes.Count);
             }
 
             // Build the new immutable view with incremented version

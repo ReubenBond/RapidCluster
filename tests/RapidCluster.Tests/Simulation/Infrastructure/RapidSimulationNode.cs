@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Metrics;
 using Clockwork;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -33,6 +34,8 @@ internal sealed class RapidSimulationNode : SimulationNode
     private readonly MembershipViewAccessor _viewAccessor;
     private readonly ILogger<MembershipService> _membershipServiceLogger;
     private readonly CancellationTokenSource _disposeCts = new();
+    private readonly TestMeterFactory _meterFactory;
+    private readonly RapidClusterMetrics _metrics;
     private bool _disposed;
     private bool _isInitialized;
 
@@ -142,6 +145,10 @@ internal sealed class RapidSimulationNode : SimulationNode
         // Create view accessor
         _viewAccessor = new MembershipViewAccessor();
 
+        // Create metrics for observability
+        _meterFactory = new TestMeterFactory();
+        _metrics = new RapidClusterMetrics(_meterFactory, _viewAccessor);
+
         // Create failure detector factory
         var failureDetectorLogger = _loggerFactory.CreateLogger<PingPongFailureDetector>();
         _failureDetectorFactory = new PingPongFailureDetectorFactory(
@@ -149,6 +156,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             MessagingClient,
             _sharedResources,
             Options.Create(_protocolOptions),
+            _metrics,
             failureDetectorLogger);
 
         // Create consensus coordinator factory
@@ -160,6 +168,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             _viewAccessor,
             Options.Create(_protocolOptions),
             _sharedResources,
+            _metrics,
             consensusCoordinatorLogger,
             fastPaxosLogger,
             paxosLogger);
@@ -187,6 +196,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             _cutDetectorFactory,
             _viewAccessor,
             _sharedResources,
+            _metrics,
             _membershipServiceLogger);
     }
 
@@ -252,6 +262,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         await _membershipService.DisposeAsync().ConfigureAwait(true);
         await MessagingClient.DisposeAsync().ConfigureAwait(true);
 
+        _meterFactory.Dispose();
         _disposeCts.Dispose();
     }
 
@@ -263,5 +274,29 @@ internal sealed class RapidSimulationNode : SimulationNode
     private sealed class UnicastToAllBroadcasterFactory(IMessagingClient messagingClient) : IBroadcasterFactory
     {
         public IBroadcaster Create() => new UnicastToAllBroadcaster(messagingClient);
+    }
+
+    /// <summary>
+    /// Simple meter factory for test metrics collection.
+    /// </summary>
+    private sealed class TestMeterFactory : IMeterFactory
+    {
+        private readonly List<Meter> _meters = [];
+
+        public Meter Create(MeterOptions options)
+        {
+            var meter = new Meter(options);
+            _meters.Add(meter);
+            return meter;
+        }
+
+        public void Dispose()
+        {
+            foreach (var meter in _meters)
+            {
+                meter.Dispose();
+            }
+            _meters.Clear();
+        }
     }
 }

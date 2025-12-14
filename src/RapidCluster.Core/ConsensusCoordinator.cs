@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RapidCluster.Logging;
 using RapidCluster.Messaging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -22,6 +24,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private readonly ConsensusCoordinatorLogger _log;
     private readonly ILogger<FastPaxos> _fastPaxosLogger;
     private readonly ILogger<Paxos> _paxosLogger;
+    private readonly RapidClusterMetrics _metrics;
     private readonly double _jitterRate;
     private readonly Endpoint _myAddr;
     private readonly long _configurationId;
@@ -64,6 +67,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         IMembershipViewAccessor membershipViewAccessor,
         IOptions<RapidClusterProtocolOptions> options,
         SharedResources sharedResources,
+        RapidClusterMetrics metrics,
         ILogger<ConsensusCoordinator> logger,
         ILogger<FastPaxos> fastPaxosLogger,
         ILogger<Paxos> paxosLogger)
@@ -76,6 +80,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _membershipViewAccessor = membershipViewAccessor;
         _options = options.Value;
         _sharedResources = sharedResources;
+        _metrics = metrics;
         _log = new ConsensusCoordinatorLogger(logger);
         _fastPaxosLogger = fastPaxosLogger;
         _paxosLogger = paxosLogger;
@@ -90,6 +95,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             configurationId,
             membershipSize,
             broadcaster,
+            metrics,
             fastPaxosLogger);
 
         _paxos = new Paxos(
@@ -99,6 +105,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             client,
             broadcaster,
             membershipViewAccessor,
+            metrics,
             paxosLogger);
 
         _log.Initialized(myAddr, configurationId, membershipSize);
@@ -123,10 +130,15 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     /// </summary>
     private async Task RunConsensusLoopAsync(MembershipProposal proposal, CancellationToken cancellationToken)
     {
+        // Track overall consensus latency
+        var consensusStopwatch = Stopwatch.StartNew();
+
         try
         {
             // Phase 1: Fast round
             _log.StartingFastRound();
+            _metrics.RecordConsensusProposal(MetricNames.Protocols.FastPaxos);
+            _metrics.RecordConsensusRoundStarted(MetricNames.Protocols.FastPaxos);
 
             var fastRoundTimeout = GetRandomDelay();
 
@@ -148,11 +160,15 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             {
                 case ConsensusResult.Decided decided:
                     _log.FastRoundDecided(_configurationId, decided.Value);
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success);
+                    _metrics.RecordConsensusLatency(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success, consensusStopwatch);
                     _onDecidedTcs.TrySetResult(decided.Value);
                     return;
 
                 case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
                     _log.FastRoundFailedEarly();
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Conflict);
+                    _metrics.RecordConsensusConflict();
                     // Fall through to classic rounds
                     break;
 
@@ -160,15 +176,20 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     if (cancellationToken.IsCancellationRequested)
                     {
                         _log.ConsensusCancelled();
+                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Aborted);
                         _onDecidedTcs.TrySetCanceled(cancellationToken);
                         return;
                     }
                     // Otherwise it was a timeout - fall through to classic rounds
                     _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
+                    _metrics.RecordConsensusConflict();
                     break;
 
                 case ConsensusResult.Timeout:
                     _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
+                    _metrics.RecordConsensusConflict();
                     break;
             }
 
@@ -185,6 +206,8 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     if (paxosResult is ConsensusResult.Decided decided)
                     {
                         _log.ClassicRoundDecided(roundNumber - 1, _configurationId, decided.Value);
+                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
+                        _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
                         _onDecidedTcs.TrySetResult(decided.Value);
                         return;
                     }
@@ -192,6 +215,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
                 var delay = GetRetryDelay(roundNumber);
                 _log.StartingClassicRound(roundNumber, delay);
+                _metrics.RecordConsensusRoundStarted(MetricNames.Protocols.ClassicPaxos);
 
                 // Start the classic round
                 _paxos.StartPhase1a(roundNumber, cancellationToken);
@@ -206,12 +230,15 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     if (paxosResult is ConsensusResult.Decided decided)
                     {
                         _log.ClassicRoundDecided(roundNumber, _configurationId, decided.Value);
+                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
+                        _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
                         _onDecidedTcs.TrySetResult(decided.Value);
                         return;
                     }
                     else if (paxosResult is ConsensusResult.Cancelled && cancellationToken.IsCancellationRequested)
                     {
                         _log.ConsensusCancelled();
+                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted);
                         _onDecidedTcs.TrySetCanceled(cancellationToken);
                         return;
                     }
@@ -219,6 +246,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
                 // Round timed out, try next round
                 _log.ClassicRoundTimeout(roundNumber, delay);
+                _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Timeout);
                 roundNumber++;
             }
 
@@ -226,6 +254,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             if (cancellationToken.IsCancellationRequested)
             {
                 _log.ConsensusCancelled();
+                _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted, consensusStopwatch);
                 _onDecidedTcs.TrySetCanceled(cancellationToken);
             }
             else
@@ -234,6 +263,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                 // network partitions where this node can't communicate with enough peers.
                 // Signal failure so MembershipService can handle appropriately.
                 _log.ConsensusExhausted(maxRounds);
+                _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Failed, consensusStopwatch);
                 _onDecidedTcs.TrySetException(new InvalidOperationException(
                     $"Consensus failed: exhausted all {maxRounds} rounds without reaching decision for configId={_configurationId}"));
             }
@@ -241,6 +271,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         catch (OperationCanceledException)
         {
             _log.ConsensusCancelled();
+            _metrics.RecordConsensusLatency(MetricNames.Protocols.FastPaxos, MetricNames.Results.Aborted, consensusStopwatch);
             _onDecidedTcs.TrySetCanceled(cancellationToken);
         }
     }

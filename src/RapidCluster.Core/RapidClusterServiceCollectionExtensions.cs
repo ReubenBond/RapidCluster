@@ -1,10 +1,6 @@
-using System.Diagnostics.Metrics;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using RapidCluster.Discovery;
 using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 
@@ -76,9 +72,8 @@ public static class RapidClusterServiceCollectionExtensions
             var protocolOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterProtocolOptions>>();
             var client = sp.GetRequiredService<IMessagingClient>();
             var sharedResources = sp.GetRequiredService<SharedResources>();
-            var metrics = sp.GetRequiredService<RapidClusterMetrics>();
             var logger = sp.GetRequiredService<ILogger<PingPongFailureDetector>>();
-            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, metrics, logger);
+            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, logger);
         });
 
         // Register ConsensusCoordinator factory
@@ -91,19 +86,6 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddSingleton<MembershipViewAccessor>();
         services.AddSingleton<IMembershipViewAccessor>(sp => sp.GetRequiredService<MembershipViewAccessor>());
 
-        // Register metrics - AddMetrics() registers IMeterFactory if not already present
-        services.AddMetrics();
-        services.AddSingleton<RapidClusterMetrics>(sp =>
-        {
-            var meterFactory = sp.GetRequiredService<IMeterFactory>();
-            var viewAccessor = sp.GetService<IMembershipViewAccessor>();
-            return new RapidClusterMetrics(meterFactory, viewAccessor);
-        });
-
-        // Register default seed provider if none is registered
-        // Uses TryAdd so custom providers can be registered before calling AddRapidCluster
-        services.TryAddSingleton<ISeedProvider, StaticSeedProvider>();
-
         // Register MembershipService directly (InitializeAsync is called by RapidClusterService)
         services.AddSingleton<MembershipService>();
 
@@ -114,8 +96,8 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddSingleton<MembershipServiceImpl>();
 
         // Register the cluster service as a hosted service
-        services.AddSingleton<RapidClusterService>();
-        services.AddHostedService(sp => sp.GetRequiredService<RapidClusterService>());
+        services.AddSingleton<RapidClusterHostedService>();
+        services.AddHostedService(sp => sp.GetRequiredService<RapidClusterHostedService>());
 
         // Register the cluster interface for application access
         services.AddSingleton<IRapidCluster, RapidCluster>();
@@ -131,80 +113,6 @@ public static class RapidClusterServiceCollectionExtensions
     public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services)
     {
         services.AddGrpc();
-        return services;
-    }
-
-    /// <summary>
-    /// Registers a custom seed provider for RapidCluster.
-    /// Must be called before <see cref="AddRapidCluster"/>.
-    /// </summary>
-    /// <typeparam name="T">The seed provider type.</typeparam>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterSeedProvider<T>(this IServiceCollection services)
-        where T : class, ISeedProvider
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
-        // Remove any existing ISeedProvider registration
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ISeedProvider));
-        if (descriptor != null)
-        {
-            services.Remove(descriptor);
-        }
-
-        services.AddSingleton<ISeedProvider, T>();
-        return services;
-    }
-
-    /// <summary>
-    /// Registers a seed provider instance for RapidCluster.
-    /// Must be called before <see cref="AddRapidCluster"/>.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="seedProvider">The seed provider instance.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterSeedProvider(this IServiceCollection services, ISeedProvider seedProvider)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(seedProvider);
-
-        // Remove any existing ISeedProvider registration
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ISeedProvider));
-        if (descriptor != null)
-        {
-            services.Remove(descriptor);
-        }
-
-        services.AddSingleton(seedProvider);
-        return services;
-    }
-
-    /// <summary>
-    /// Registers a configuration-based seed provider for RapidCluster.
-    /// Seeds are read from the specified configuration section.
-    /// Must be called before <see cref="AddRapidCluster"/>.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="sectionName">The configuration section name containing the seed list. Default is "RapidCluster:Seeds".</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterConfigurationSeeds(this IServiceCollection services, string sectionName = "RapidCluster:Seeds")
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
-
-        // Remove any existing ISeedProvider registration
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ISeedProvider));
-        if (descriptor != null)
-        {
-            services.Remove(descriptor);
-        }
-
-        services.AddSingleton<ISeedProvider>(sp =>
-        {
-            var configuration = sp.GetRequiredService<IConfiguration>();
-            return new ConfigurationSeedProvider(configuration, sectionName);
-        });
         return services;
     }
 }

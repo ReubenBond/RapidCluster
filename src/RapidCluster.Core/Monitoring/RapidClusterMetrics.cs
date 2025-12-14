@@ -215,7 +215,7 @@ public sealed class RapidClusterMetrics
         // Initialize Histograms
         // ========================================
 
-        _consensusLatency = _meter.CreateHistogram<double>(
+        _consensusLatency = _meter.CreateHistogram(
             name: MetricNames.ConsensusLatency,
             unit: "s",
             description: "Time to reach consensus",
@@ -224,7 +224,7 @@ public sealed class RapidClusterMetrics
                 HistogramBucketBoundaries = MediumOperationBuckets
             });
 
-        _joinLatency = _meter.CreateHistogram<double>(
+        _joinLatency = _meter.CreateHistogram(
             name: MetricNames.JoinLatency,
             unit: "s",
             description: "Time for a node to complete join",
@@ -233,7 +233,7 @@ public sealed class RapidClusterMetrics
                 HistogramBucketBoundaries = SlowOperationBuckets
             });
 
-        _probeLatency = _meter.CreateHistogram<double>(
+        _probeLatency = _meter.CreateHistogram(
             name: MetricNames.ProbeLatency,
             unit: "s",
             description: "Failure detection probe round-trip time",
@@ -242,7 +242,7 @@ public sealed class RapidClusterMetrics
                 HistogramBucketBoundaries = FastOperationBuckets
             });
 
-        _grpcCallDuration = _meter.CreateHistogram<double>(
+        _grpcCallDuration = _meter.CreateHistogram(
             name: MetricNames.GrpcCallDuration,
             unit: "s",
             description: "gRPC call duration",
@@ -380,7 +380,6 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordConsensusLatency(string protocol, string result, Stopwatch stopwatch)
     {
-        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordConsensusLatency(protocol, result, stopwatch.Elapsed.TotalSeconds);
     }
 
@@ -433,7 +432,6 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordJoinLatency(string result, Stopwatch stopwatch)
     {
-        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordJoinLatency(result, stopwatch.Elapsed.TotalSeconds);
     }
 
@@ -486,7 +484,6 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordProbeLatency(string result, Stopwatch stopwatch)
     {
-        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordProbeLatency(result, stopwatch.Elapsed.TotalSeconds);
     }
 
@@ -555,7 +552,6 @@ public sealed class RapidClusterMetrics
     /// </summary>
     public void RecordGrpcCallDuration(string method, string status, Stopwatch stopwatch)
     {
-        ArgumentNullException.ThrowIfNull(stopwatch);
         RecordGrpcCallDuration(method, status, stopwatch.Elapsed.TotalSeconds);
     }
 }

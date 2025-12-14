@@ -21,12 +21,11 @@ public interface IRapidCluster
     /// <summary>
     /// Returns cluster metadata.
     /// </summary>
-    Dictionary<Endpoint, Metadata> GetClusterMetadata();
+    IReadOnlyDictionary<Endpoint, Metadata> GetClusterMetadata();
 
     /// <summary>
     /// Gets the async enumerable for subscribing to cluster events.
     /// Each subscriber receives all events published after they start iterating.
-    /// Uses the Orleans-style TaskCompletionSource chaining pattern for efficient broadcast.
     /// </summary>
     IAsyncEnumerable<ClusterEventNotification> EventStream { get; }
 
@@ -72,7 +71,7 @@ internal sealed class RapidCluster(MembershipService membershipService, IMembers
 
     public int GetMembershipSize() => viewAccessor.CurrentView.Size;
 
-    public Dictionary<Endpoint, Metadata> GetClusterMetadata() => membershipService.GetMetadata();
+    public IReadOnlyDictionary<Endpoint, Metadata> GetClusterMetadata() => membershipService.GetMetadata();
 
     public IAsyncEnumerable<ClusterEventNotification> EventStream => membershipService.Events;
 

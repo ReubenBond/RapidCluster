@@ -278,4 +278,11 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Waiting for {Count} background tasks to complete")]
     public partial void WaitingForBackgroundTasks(int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Refreshed {Count} seeds from seed provider")]
+    public partial void SeedsRefreshed(int count);
+
+    [LoggerMessage(EventName = nameof(RefreshingSeedsForRejoin), Level = LogLevel.Information, Message = "Node {MyAddr} refreshing seeds from provider before retry")]
+    private partial void RefreshingSeedsForRejoinCore(LoggableEndpoint myAddr);
+    public void RefreshingSeedsForRejoin(Endpoint myAddr) => RefreshingSeedsForRejoinCore(new(myAddr));
 }

@@ -199,4 +199,84 @@ public class RapidClusterOptionsTests
         Assert.Equal(2, options.Metadata.Metadata_.Count);
     }
 
+    #region BootstrapExpect Tests
+
+    [Fact]
+    public void BootstrapExpectDefaultIsZero()
+    {
+        var options = new RapidClusterOptions();
+
+        Assert.Equal(0, options.BootstrapExpect);
+    }
+
+    [Fact]
+    public void BootstrapExpectCanBeSet()
+    {
+        var options = new RapidClusterOptions { BootstrapExpect = 3 };
+
+        Assert.Equal(3, options.BootstrapExpect);
+    }
+
+    [Fact]
+    public void BootstrapExpectCanBeSetToLargeValue()
+    {
+        var options = new RapidClusterOptions { BootstrapExpect = 100 };
+
+        Assert.Equal(100, options.BootstrapExpect);
+    }
+
+    [Fact]
+    public void BootstrapExpectCanBeSetToOne()
+    {
+        var options = new RapidClusterOptions { BootstrapExpect = 1 };
+
+        Assert.Equal(1, options.BootstrapExpect);
+    }
+
+    #endregion
+
+    #region BootstrapTimeout Tests
+
+    [Fact]
+    public void BootstrapTimeoutDefaultIsFiveMinutes()
+    {
+        var options = new RapidClusterOptions();
+
+        Assert.Equal(TimeSpan.FromMinutes(5), options.BootstrapTimeout);
+    }
+
+    [Fact]
+    public void BootstrapTimeoutCanBeSet()
+    {
+        var options = new RapidClusterOptions { BootstrapTimeout = TimeSpan.FromSeconds(30) };
+
+        Assert.Equal(TimeSpan.FromSeconds(30), options.BootstrapTimeout);
+    }
+
+    [Fact]
+    public void BootstrapTimeoutCanBeSetToZero()
+    {
+        var options = new RapidClusterOptions { BootstrapTimeout = TimeSpan.Zero };
+
+        Assert.Equal(TimeSpan.Zero, options.BootstrapTimeout);
+    }
+
+    [Fact]
+    public void BootstrapTimeoutCanBeSetToLargeValue()
+    {
+        var options = new RapidClusterOptions { BootstrapTimeout = TimeSpan.FromHours(1) };
+
+        Assert.Equal(TimeSpan.FromHours(1), options.BootstrapTimeout);
+    }
+
+    [Fact]
+    public void BootstrapTimeoutCanBeSetToInfinite()
+    {
+        var options = new RapidClusterOptions { BootstrapTimeout = Timeout.InfiniteTimeSpan };
+
+        Assert.Equal(Timeout.InfiniteTimeSpan, options.BootstrapTimeout);
+    }
+
+    #endregion
+
 }

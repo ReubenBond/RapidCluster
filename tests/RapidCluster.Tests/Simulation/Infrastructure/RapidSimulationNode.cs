@@ -5,6 +5,7 @@ using Clockwork;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using RapidCluster.Discovery;
 using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 using RapidCluster.Pb;
@@ -186,6 +187,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             Metadata = metadata ?? new Metadata()
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
+        var seedProvider = new StaticSeedProvider(seedAddresses is not null ? [.. seedAddresses] : []);
         _membershipService = new MembershipService(
             Options.Create(rapidClusterOptions),
             Options.Create(_protocolOptions),
@@ -197,6 +199,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             _viewAccessor,
             _sharedResources,
             _metrics,
+            seedProvider,
             _membershipServiceLogger);
     }
 

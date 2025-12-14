@@ -282,4 +282,70 @@ services.AddRapidCluster()
 
 ## Implementation Notes
 
-(To be updated during implementation)
+### Completed Implementation (Phases 1, 2, 3, 5)
+
+#### Phase 1: ISeedProvider Abstraction
+- Created `ISeedProvider` interface in `src/RapidCluster.Core/Discovery/ISeedProvider.cs`
+- Created `StaticSeedProvider` in `src/RapidCluster.Core/Discovery/StaticSeedProvider.cs`
+  - Default provider for backward compatibility
+  - Reads from `RapidClusterOptions.SeedAddresses`
+  - Two constructors: one with explicit seed list, one with `IOptions<RapidClusterOptions>`
+
+#### Phase 2: ConfigurationSeedProvider
+- Created `ConfigurationSeedProvider` in `src/RapidCluster.Core/Discovery/ConfigurationSeedProvider.cs`
+  - Reads seeds from `IConfiguration` (e.g., appsettings.json)
+  - Parses endpoint strings in format "hostname:port"
+  - Uses `ByteString.CopyFromUtf8(hostname)` for Endpoint.Hostname (protobuf bytes type)
+
+#### Phase 3: BootstrapExpect
+- Added `BootstrapExpect` property to `RapidClusterOptions` (int, default 0)
+- Added `BootstrapTimeout` property to `RapidClusterOptions` (TimeSpan, default 5 minutes)
+- Added XML documentation explaining the feature
+- Note: Actual wait-for-N-nodes logic not yet implemented in MembershipService
+
+#### Phase 5: MembershipService Updates
+- Updated `MembershipService` constructor to accept `ISeedProvider seedProvider` parameter
+- Added `RefreshSeedsAsync()` method to fetch seeds from provider
+- Updated `InitializeAsync()` to call `RefreshSeedsAsync()` before join
+- Refactored `RejoinClusterAsync()` to:
+  - Extract `TryRejoinWithCurrentSeedsAsync()` helper method
+  - Call `RefreshSeedsAsync()` and retry if initial rejoin fails
+- Added log messages: `SeedsRefreshed`, `RefreshingSeedsForRejoin`
+
+#### DI Registration
+- Updated `RapidClusterServiceCollectionExtensions.cs`:
+  - Default registration: `services.TryAddSingleton<ISeedProvider, StaticSeedProvider>()`
+  - `AddRapidClusterSeedProvider<T>()` - register custom provider type
+  - `AddRapidClusterSeedProvider(ISeedProvider)` - register provider instance
+  - `AddRapidClusterConfigurationSeeds(string sectionName)` - register ConfigurationSeedProvider
+
+#### Test Infrastructure
+- Updated `RapidSimulationNode.cs` to create `StaticSeedProvider` for simulation tests
+
+### Not Implemented (Deferred)
+
+#### Phase 4: Service Discovery Integration
+- `RapidCluster.ServiceDiscovery` package not created
+- `ServiceDiscoverySeedProvider` not implemented
+- Can be added later as a separate NuGet package
+
+#### BootstrapExpect Wait Logic
+- `BootstrapExpect` and `BootstrapTimeout` options are defined but the actual wait-for-N-nodes logic is not yet implemented in `MembershipService.InitializeAsync()`
+- This can be added in a future iteration if needed
+
+### Usage Examples
+
+```csharp
+// Default (backward compatible) - uses SeedAddresses from options
+services.AddRapidCluster(options => {
+    options.SeedAddresses = [...];
+});
+
+// Configuration-based seeds from appsettings.json
+services.AddRapidCluster()
+    .AddRapidClusterConfigurationSeeds("RapidCluster:Seeds");
+
+// Custom seed provider
+services.AddRapidCluster()
+    .AddRapidClusterSeedProvider<MyCustomSeedProvider>();
+```

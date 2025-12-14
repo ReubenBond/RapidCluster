@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 using Microsoft.Extensions.Options;
+using RapidCluster.Discovery;
 using RapidCluster.Exceptions;
 using RapidCluster.Logging;
 using RapidCluster.Messaging;
@@ -56,8 +57,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private bool _initialized;
 
     // Configuration for join - stored from RapidClusterOptions
-    private readonly List<Endpoint> _seedAddresses;
+    private List<Endpoint> _seedAddresses;
     private readonly Metadata _nodeMetadata;
+    private readonly ISeedProvider _seedProvider;
 
     // Buffer for consensus messages from future configurations
     // Key: configurationId, Value: list of messages waiting for that config
@@ -128,15 +130,17 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         MembershipViewAccessor viewAccessor,
         SharedResources sharedResources,
         RapidClusterMetrics metrics,
+        ISeedProvider seedProvider,
         ILogger<MembershipService> logger)
     {
         var opts = RapidClusterOptions.Value;
         _myAddr = opts.ListenAddress;
         _nodeMetadata = opts.Metadata;
         _options = protocolOptions.Value;
+        _seedProvider = seedProvider;
 
-        // Process seed addresses: filter out self and duplicates while preserving order
-        // Order preservation is important for deterministic behavior across nodes with same config
+        // Seed addresses will be fetched asynchronously during InitializeAsync
+        // For now, use the static list from options as a fallback
         var configuredSeeds = opts.SeedAddresses ?? [];
         var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
         _seedAddresses = [];
@@ -184,6 +188,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             throw new InvalidOperationException("MembershipService is already initialized");
         }
 
+        // Fetch seeds from the provider
+        await RefreshSeedsAsync(cancellationToken).ConfigureAwait(true);
+
         if (_seedAddresses.Count == 0)
         {
             // No valid seed addresses (empty list or all were self) - start a new cluster
@@ -200,6 +207,27 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         TrackBackgroundTask(alertBatcherTask);
 
         _initialized = true;
+    }
+
+    /// <summary>
+    /// Refreshes the seed addresses from the seed provider.
+    /// Filters out self and duplicates while preserving order.
+    /// </summary>
+    private async Task RefreshSeedsAsync(CancellationToken cancellationToken)
+    {
+        var seeds = await _seedProvider.GetSeedsAsync(cancellationToken).ConfigureAwait(true);
+
+        var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
+        _seedAddresses = [];
+        foreach (var seed in seeds)
+        {
+            if (seed != null && !EndpointAddressComparer.Instance.Equals(seed, _myAddr) && seen.Add(seed))
+            {
+                _seedAddresses.Add(seed);
+            }
+        }
+
+        _log.SeedsRefreshed(_seedAddresses.Count);
     }
 
     /// <summary>
@@ -1397,6 +1425,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// Attempts to rejoin the cluster after being kicked.
     /// Combines configured seed nodes with members from the last known view,
     /// trying configured seeds first, then last known members.
+    /// If all attempts fail, refreshes seeds from the provider and retries.
     /// </summary>
     private async Task RejoinClusterAsync(CancellationToken cancellationToken)
     {
@@ -1411,88 +1440,113 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             _log.StartingRejoin(_myAddr);
 
-            // Build combined seed list: configured seeds first, then last known members
-            // This ensures we try explicitly configured seeds before falling back to
-            // potentially stale membership view members
-            var candidateSeeds = new List<Endpoint>();
-            var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
-
-            // Add configured seeds first (excluding self)
-            foreach (var seed in _seedAddresses)
+            // Try rejoining with current seeds first
+            var result = await TryRejoinWithCurrentSeedsAsync(cancellationToken).ConfigureAwait(true);
+            if (result.HasValue)
             {
-                if (!EndpointAddressComparer.Instance.Equals(seed, _myAddr) && seen.Add(seed))
-                {
-                    candidateSeeds.Add(seed);
-                }
+                return; // Successfully rejoined
             }
 
-            // Then add members from last known view (excluding self and already-added seeds)
-            foreach (var member in _membershipView.Members)
-            {
-                if (!EndpointAddressComparer.Instance.Equals(member, _myAddr) && seen.Add(member))
-                {
-                    candidateSeeds.Add(member);
-                }
-            }
+            // If all attempts failed, refresh seeds from the provider and retry
+            _log.RefreshingSeedsForRejoin(_myAddr);
+            await RefreshSeedsAsync(cancellationToken).ConfigureAwait(true);
 
-            if (candidateSeeds.Count == 0)
+            // Retry with fresh seeds
+            result = await TryRejoinWithCurrentSeedsAsync(cancellationToken).ConfigureAwait(true);
+            if (!result.HasValue)
             {
                 _log.RejoinFailedNoSeeds(_myAddr);
-                return;
             }
-
-            _log.RejoinWithCandidateSeeds(candidateSeeds.Count, _seedAddresses.Count);
-
-            var metadata = _metadataManager.Get(_myAddr) ?? new Metadata();
-
-            JoinResponse? successfulResponse = null;
-            NodeId? successfulNodeId = null;
-
-            foreach (var seed in candidateSeeds)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                try
-                {
-                    // Generate a new node ID for each attempt - this avoids UUID collision issues
-                    // where our old UUID might still be in the cluster's identifiers-seen set
-                    var nodeId = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
-
-                    successfulResponse = await TryRejoinThroughSeedAsync(seed, nodeId, metadata, cancellationToken).ConfigureAwait(true);
-                    if (successfulResponse != null)
-                    {
-                        successfulNodeId = nodeId;
-                        break;
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _log.RejoinFailedThroughSeed(_myAddr, seed, ex.Message);
-                    // Try next seed
-                }
-            }
-
-            if (successfulResponse == null || successfulNodeId == null)
-            {
-                _log.RejoinFailedNoSeeds(_myAddr);
-                return;
-            }
-
-            // Reset internal state with new membership
-            ResetStateAfterRejoin(successfulResponse, successfulNodeId);
-
-            _log.RejoinSuccessful(
-                _myAddr,
-                successfulResponse.Endpoints.Count,
-                successfulResponse.ConfigurationId);
         }
         finally
         {
             _isRejoining = false;
         }
+    }
+
+    /// <summary>
+    /// Attempts to rejoin the cluster using the current seed addresses and last known members.
+    /// </summary>
+    /// <returns>True if rejoin succeeded, false if all attempts failed.</returns>
+    private async Task<bool?> TryRejoinWithCurrentSeedsAsync(CancellationToken cancellationToken)
+    {
+        // Build combined seed list: configured seeds first, then last known members
+        // This ensures we try explicitly configured seeds before falling back to
+        // potentially stale membership view members
+        var candidateSeeds = new List<Endpoint>();
+        var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
+
+        // Add configured seeds first (excluding self)
+        foreach (var seed in _seedAddresses)
+        {
+            if (!EndpointAddressComparer.Instance.Equals(seed, _myAddr) && seen.Add(seed))
+            {
+                candidateSeeds.Add(seed);
+            }
+        }
+
+        // Then add members from last known view (excluding self and already-added seeds)
+        foreach (var member in _membershipView.Members)
+        {
+            if (!EndpointAddressComparer.Instance.Equals(member, _myAddr) && seen.Add(member))
+            {
+                candidateSeeds.Add(member);
+            }
+        }
+
+        if (candidateSeeds.Count == 0)
+        {
+            return null; // No seeds available
+        }
+
+        _log.RejoinWithCandidateSeeds(candidateSeeds.Count, _seedAddresses.Count);
+
+        var metadata = _metadataManager.Get(_myAddr) ?? new Metadata();
+
+        JoinResponse? successfulResponse = null;
+        NodeId? successfulNodeId = null;
+
+        foreach (var seed in candidateSeeds)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            try
+            {
+                // Generate a new node ID for each attempt - this avoids UUID collision issues
+                // where our old UUID might still be in the cluster's identifiers-seen set
+                var nodeId = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
+
+                successfulResponse = await TryRejoinThroughSeedAsync(seed, nodeId, metadata, cancellationToken).ConfigureAwait(true);
+                if (successfulResponse != null)
+                {
+                    successfulNodeId = nodeId;
+                    break;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.RejoinFailedThroughSeed(_myAddr, seed, ex.Message);
+                // Try next seed
+            }
+        }
+
+        if (successfulResponse == null || successfulNodeId == null)
+        {
+            return null; // All attempts failed
+        }
+
+        // Reset internal state with new membership
+        ResetStateAfterRejoin(successfulResponse, successfulNodeId);
+
+        _log.RejoinSuccessful(
+            _myAddr,
+            successfulResponse.Endpoints.Count,
+            successfulResponse.ConfigurationId);
+
+        return true;
     }
 
     /// <summary>

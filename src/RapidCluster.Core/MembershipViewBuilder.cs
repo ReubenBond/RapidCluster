@@ -194,27 +194,20 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
-    /// Queries if a host with a logical identifier is safe to add to the network.
+    /// Queries if a host is safe to add to the network.
     /// </summary>
     /// <param name="node">The joining node.</param>
-    /// <param name="uuid">The joining node's identifier.</param>
     /// <returns>
     /// HOSTNAME_ALREADY_IN_RING if the node is already in the ring.
-    /// UUID_ALREADY_IN_RING if the uuid is already seen before.
     /// SAFE_TO_JOIN otherwise.
     /// </returns>
-    public JoinStatusCode IsSafeToJoin(Endpoint node, NodeId uuid)
+    public JoinStatusCode IsSafeToJoin(Endpoint node)
     {
         ThrowIfSealed();
 
         if (_allNodes.Contains(node))
         {
             return JoinStatusCode.HostnameAlreadyInRing;
-        }
-
-        if (_identifiersSeen.Contains(uuid))
-        {
-            return JoinStatusCode.UuidAlreadyInRing;
         }
 
         return JoinStatusCode.SafeToJoin;

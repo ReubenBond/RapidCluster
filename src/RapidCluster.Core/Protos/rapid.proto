@@ -51,25 +51,29 @@ message RapidClusterResponse
 
 // ******* Join protocol messages *******
 
+// NodeId is a 128-bit UUID used historically for node identity.
+// With monotonic node IDs now embedded in Endpoint.node_id, this is only
+// kept for backward compatibility in consensus proposals and view responses.
 message NodeId
 {
    int64 high = 1;
    int64 low = 2;
 }
 
-// TODO: JoinMessage and JoinResponse are overloaded because they are being used for phase 1 and 2 of the bootstrap.
+// Phase 1 of join protocol: joiner contacts a seed to get observers
 message PreJoinMessage
 {
    Endpoint sender = 1;
-   NodeId nodeId = 2;
+   // Field 2 (nodeId) removed - node IDs are now assigned by the cluster
    repeated int32 ringNumber = 3;
    int64 configurationId = 4;
 }
 
+// Phase 2 of join protocol: joiner contacts observers to announce intent to join
 message JoinMessage
 {
    Endpoint sender = 1;
-   NodeId nodeId = 2;
+   // Field 2 (nodeId) removed - node IDs are now assigned by the cluster
    repeated int32 ringNumber = 3;
    int64 configurationId = 4;
    Metadata metadata = 5;
@@ -89,7 +93,7 @@ message JoinResponse
 
 enum JoinStatusCode {
     HOSTNAME_ALREADY_IN_RING = 0;
-    UUID_ALREADY_IN_RING = 1;
+    // Value 1 was UUID_ALREADY_IN_RING - removed since node IDs are now assigned by the cluster
     SAFE_TO_JOIN = 2;
     CONFIG_CHANGED = 3;
     MEMBERSHIP_REJECTED = 4;
@@ -110,7 +114,7 @@ message AlertMessage
     EdgeStatus edgeStatus = 3;
     int64 configurationId = 4;
     repeated int32 ringNumber = 5;
-    NodeId nodeId = 6;                      // Required only for join protocol
+    // Field 6 (nodeId) removed - node IDs are now assigned by the cluster during consensus
     Metadata metadata = 7;                // Required only for join protocol
 }
 

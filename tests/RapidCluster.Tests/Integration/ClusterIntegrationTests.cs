@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
+using System.Net;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
-using RapidCluster.Tests.Simulation.Infrastructure;
 
 namespace RapidCluster.Tests.Integration;
 
@@ -11,39 +11,49 @@ namespace RapidCluster.Tests.Integration;
 public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IAsyncDisposable
 {
     private readonly TestCluster _cluster = new(outputHelper);
-    private readonly List<ObservableCollector<ClusterEventNotification>> _collectors = [];
+    private readonly List<CancellationTokenSource> _subscriptionCts = [];
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var collector in _collectors)
+        // Cancel all subscriptions
+        foreach (var cts in _subscriptionCts)
         {
-            collector.Dispose();
+            cts.SafeCancel();
+            cts.Dispose();
         }
-        _collectors.Clear();
+        _subscriptionCts.Clear();
 
         await _cluster.DisposeAsync().ConfigureAwait(true);
         GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// Creates an event collector for the cluster's ClusterEvents observable.
+    /// Helper to create an IPEndPoint from port.
     /// </summary>
-    private ObservableCollector<ClusterEventNotification> CreateEventCollector(IRapidCluster cluster)
-    {
-        var collector = new ObservableCollector<ClusterEventNotification>(cluster.Events);
-        _collectors.Add(collector);
-        return collector;
-    }
+    private static IPEndPoint CreateAddress(int port) => new(IPAddress.Parse("127.0.0.1"), port);
 
     /// <summary>
-    /// Collects matching events from the collector into the bag.
+    /// Starts consuming view updates from a cluster's ViewUpdates channel and adds them to a bag.
     /// </summary>
-    private static void CollectEvents(ObservableCollector<ClusterEventNotification> collector, ClusterEvents eventType, ConcurrentBag<ClusterStatusChange> bag)
+    private void StartViewUpdateConsumer(IRapidCluster cluster, ConcurrentBag<ClusterMembershipView> bag)
     {
-        foreach (var notification in collector.Items.Where(n => n.Event == eventType))
+        var cts = new CancellationTokenSource();
+        _subscriptionCts.Add(cts);
+
+        _ = Task.Run(async () =>
         {
-            bag.Add(notification.Change);
-        }
+            try
+            {
+                await foreach (var view in cluster.ViewUpdates.WithCancellation(cts.Token))
+                {
+                    bag.Add(view);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during cleanup
+            }
+        }, cts.Token);
     }
 
     /// <summary>
@@ -52,14 +62,14 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     [Fact]
     public async Task SingleSeedNodeStarts()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
 
         var (app, cluster) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         // Give it a moment to initialize
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, cluster.GetMembershipSize());
+        Assert.Single(cluster.CurrentView.Members);
     }
 
     /// <summary>
@@ -68,12 +78,12 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     [Fact]
     public async Task SingleNodeJoinsThroughSeed()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, seed.GetMembershipSize());
+        Assert.Single(seed.CurrentView.Members);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
@@ -81,8 +91,8 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        Assert.Equal(2, seed.GetMembershipSize());
-        Assert.Equal(2, joiner.GetMembershipSize());
+        Assert.Equal(2, seed.CurrentView.Members.Count);
+        Assert.Equal(2, joiner.CurrentView.Members.Count);
     }
 
     /// <summary>
@@ -91,9 +101,9 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     [Fact]
     public async Task ThreeNodesFormCluster()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner1Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner2Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joiner1Address = CreateAddress(_cluster.GetNextPort());
+        var joiner2Address = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
@@ -104,36 +114,36 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        Assert.Equal(3, seed.GetMembershipSize());
-        Assert.Equal(3, joiner1.GetMembershipSize());
-        Assert.Equal(3, joiner2.GetMembershipSize());
+        Assert.Equal(3, seed.CurrentView.Members.Count);
+        Assert.Equal(3, joiner1.CurrentView.Members.Count);
+        Assert.Equal(3, joiner2.CurrentView.Members.Count);
     }
 
     /// <summary>
-    /// Test that view change events are fired when nodes join
+    /// Test that view updates are received when nodes join
     /// </summary>
     [Fact]
-    public async Task ViewChangeEventsFireOnJoin()
+    public async Task ViewUpdatesReceivedOnJoin()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
-        var viewChanges = new ConcurrentBag<ClusterStatusChange>();
+        var viewUpdates = new ConcurrentBag<ClusterMembershipView>();
 
-        // Create seed and start collecting events
+        // Create seed and start collecting view updates
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var collector = CreateEventCollector(seed);
+        StartViewUpdateConsumer(seed, viewUpdates);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         // Wait for cluster convergence
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        // Collect view changes
-        CollectEvents(collector, ClusterEvents.ViewChange, viewChanges);
+        // Give some time for events to be collected
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        // Should have received at least one view change event
-        Assert.True(viewChanges.Count > 0);
+        // Should have received at least one view update
+        Assert.True(viewUpdates.Count > 0, $"Expected at least 1 view update, got {viewUpdates.Count}");
     }
 
     /// <summary>
@@ -142,76 +152,41 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     [Fact]
     public async Task MetadataIsPropagated()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-
-        var seedMetadataDict = new Dictionary<string, Google.Protobuf.ByteString>
-        {
-            ["role"] = Google.Protobuf.ByteString.CopyFromUtf8("seed"),
-            ["datacenter"] = Google.Protobuf.ByteString.CopyFromUtf8("us-west")
-        };
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         // Create seed with metadata
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, options =>
         {
-            options.SetMetadata(seedMetadataDict);
+            options.Metadata["role"] = Encoding.UTF8.GetBytes("seed");
+            options.Metadata["datacenter"] = Encoding.UTF8.GetBytes("us-west");
         }, TestContext.Current.CancellationToken);
-
-        var joinerMetadataDict = new Dictionary<string, Google.Protobuf.ByteString>
-        {
-            ["role"] = Google.Protobuf.ByteString.CopyFromUtf8("worker"),
-            ["datacenter"] = Google.Protobuf.ByteString.CopyFromUtf8("us-east")
-        };
 
         // Create joiner with metadata
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, options =>
         {
-            options.SetMetadata(joinerMetadataDict);
+            options.Metadata["role"] = Encoding.UTF8.GetBytes("worker");
+            options.Metadata["datacenter"] = Encoding.UTF8.GetBytes("us-east");
         }, TestContext.Current.CancellationToken);
 
         // Wait for cluster convergence
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
         // Verify metadata is available
-        var allMetadata = seed.GetClusterMetadata();
-        Assert.True(allMetadata.ContainsKey(seedAddress));
-        Assert.True(allMetadata.ContainsKey(joinerAddress));
+        var seedMetadata = seed.CurrentView.Metadata;
+        Assert.Equal(2, seedMetadata.Count);
 
-        Assert.Equal("seed", allMetadata[seedAddress].Metadata_["role"].ToStringUtf8());
-        Assert.Equal("worker", allMetadata[joinerAddress].Metadata_["role"].ToStringUtf8());
+        // Verify both endpoints are in the metadata
+        Assert.True(seedMetadata.ContainsKey(seedAddress));
+        Assert.True(seedMetadata.ContainsKey(joinerAddress));
+
+        // Verify metadata values
+        Assert.Equal("seed", Encoding.UTF8.GetString(seedMetadata[seedAddress]["role"].Span));
+        Assert.Equal("worker", Encoding.UTF8.GetString(seedMetadata[joinerAddress]["role"].Span));
     }
 
-    /// <summary>
-    /// Test graceful leave - uses 3 nodes to ensure monitoring relationships exist
-    /// </summary>
-    [Fact]
-    public async Task NodeCanLeaveGracefully()
-    {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner1Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner2Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
-        var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
-
-        // Wait for cluster convergence
-        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-
-        Assert.Equal(3, seed.GetMembershipSize());
-
-        // Joiner2 leaves gracefully
-        await joiner2.LeaveGracefullyAsync(TestContext.Current.CancellationToken).ConfigureAwait(true);
-
-        // Wait for remaining nodes to detect the leave - use WaitForClusterSizeExactAsync since we're waiting for size to decrease
-        await TestCluster.WaitForClusterSizeExactAsync(seed, 2, TimeSpan.FromSeconds(20)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeExactAsync(joiner1, 2, TimeSpan.FromSeconds(20)).ConfigureAwait(true);
-
-        Assert.Equal(2, seed.GetMembershipSize());
-        Assert.Equal(2, joiner1.GetMembershipSize());
-    }
+    // TODO: NodeCanLeaveGracefully test removed - LeaveGracefullyAsync is no longer on public API
+    // Graceful leave can be achieved by stopping the hosted service
 
     /// <summary>
     /// Test that multiple nodes can join concurrently
@@ -220,7 +195,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     [Fact]
     public async Task MultipleNodesConcurrentJoin()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
@@ -229,7 +204,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         for (var i = 0; i < numJoiners; i++)
         {
-            var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+            var joinerAddress = CreateAddress(_cluster.GetNextPort());
             joinTasks.Add(_cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken));
         }
 
@@ -238,53 +213,26 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         // Wait for cluster convergence - increased timeout for concurrent joins
         await TestCluster.WaitForClusterSizeAsync(seed, numJoiners + 1, TimeSpan.FromSeconds(30)).ConfigureAwait(true);
 
-        Assert.Equal(numJoiners + 1, seed.GetMembershipSize());
+        Assert.Equal(numJoiners + 1, seed.CurrentView.Members.Count);
 
         foreach (var (app, joiner) in joiners)
         {
             await TestCluster.WaitForClusterSizeAsync(joiner, numJoiners + 1, TimeSpan.FromSeconds(30)).ConfigureAwait(true);
-            Assert.Equal(numJoiners + 1, joiner.GetMembershipSize());
+            Assert.Equal(numJoiners + 1, joiner.CurrentView.Members.Count);
         }
-    }
-
-    /// <summary>
-    /// Test view change proposal events
-    /// </summary>
-    [Fact]
-    public async Task ViewChangeProposalEventsFire()
-    {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-
-        var proposals = new ConcurrentBag<ClusterStatusChange>();
-
-        // Create seed and start collecting proposal events
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var collector = CreateEventCollector(seed);
-
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
-
-        // Wait for cluster convergence
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-
-        // Collect proposals
-        CollectEvents(collector, ClusterEvents.ViewChangeProposal, proposals);
-
-        // Should have received proposal events
-        Assert.True(proposals.Count > 0);
     }
 
     [Fact]
     public async Task SequentialJoinsFiveNodesAllConverge()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         var nodes = new List<IRapidCluster> { seed };
         for (var i = 0; i < 4; i++)
         {
-            var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+            var joinerAddress = CreateAddress(_cluster.GetNextPort());
             var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
             await TestCluster.WaitForClusterSizeAsync(joiner, nodes.Count + 1, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
             nodes.Add(joiner);
@@ -293,16 +241,16 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         foreach (var node in nodes)
         {
             await TestCluster.WaitForClusterSizeAsync(node, 5, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-            Assert.Equal(5, node.GetMembershipSize());
+            Assert.Equal(5, node.CurrentView.Members.Count);
         }
     }
 
     [Fact]
     public async Task JoinThroughNonSeedNodeWorks()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner1Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner2Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joiner1Address = CreateAddress(_cluster.GetNextPort());
+        var joiner2Address = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
@@ -315,35 +263,35 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        Assert.Equal(3, seed.GetMembershipSize());
-        Assert.Equal(3, joiner1.GetMembershipSize());
-        Assert.Equal(3, joiner2.GetMembershipSize());
+        Assert.Equal(3, seed.CurrentView.Members.Count);
+        Assert.Equal(3, joiner1.CurrentView.Members.Count);
+        Assert.Equal(3, joiner2.CurrentView.Members.Count);
     }
 
     [Fact]
-    public async Task GetMemberlistReturnsAllMembers()
+    public async Task GetMembersReturnsAllMembers()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner1Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joiner1Address = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var memberlist = seed.GetMemberlist();
+        var members = seed.CurrentView.Members;
 
-        Assert.Equal(2, memberlist.Count);
-        Assert.Contains(memberlist, e => e.Port == seedAddress.Port);
-        Assert.Contains(memberlist, e => e.Port == joiner1Address.Port);
+        Assert.Equal(2, members.Count);
+        Assert.Contains(members, e => ((IPEndPoint)e).Port == seedAddress.Port);
+        Assert.Contains(members, e => ((IPEndPoint)e).Port == joiner1Address.Port);
     }
 
     [Fact]
-    public async Task GetMemberlistAllNodesConsistent()
+    public async Task GetMembersAllNodesConsistent()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner1Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner2Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joiner1Address = CreateAddress(_cluster.GetNextPort());
+        var joiner2Address = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
@@ -353,66 +301,60 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var seedList = seed.GetMemberlist().OrderBy(e => e.Port).ToList();
-        var joiner1List = joiner1.GetMemberlist().OrderBy(e => e.Port).ToList();
-        var joiner2List = joiner2.GetMemberlist().OrderBy(e => e.Port).ToList();
+        var seedList = seed.CurrentView.Members.Select(e => ((IPEndPoint)e).Port).OrderBy(p => p).ToList();
+        var joiner1List = joiner1.CurrentView.Members.Select(e => ((IPEndPoint)e).Port).OrderBy(p => p).ToList();
+        var joiner2List = joiner2.CurrentView.Members.Select(e => ((IPEndPoint)e).Port).OrderBy(p => p).ToList();
 
         Assert.Equal(seedList.Count, joiner1List.Count);
         Assert.Equal(seedList.Count, joiner2List.Count);
 
         for (var i = 0; i < seedList.Count; i++)
         {
-            Assert.Equal(seedList[i].Port, joiner1List[i].Port);
-            Assert.Equal(seedList[i].Port, joiner2List[i].Port);
+            Assert.Equal(seedList[i], joiner1List[i]);
+            Assert.Equal(seedList[i], joiner2List[i]);
         }
     }
 
     [Fact]
     public async Task ComplexMetadataPropagatedCorrectly()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, options =>
         {
-            options.SetMetadata(new Dictionary<string, Google.Protobuf.ByteString>
-            {
-                ["role"] = Google.Protobuf.ByteString.CopyFromUtf8("seed"),
-                ["region"] = Google.Protobuf.ByteString.CopyFromUtf8("us-west-2"),
-                ["zone"] = Google.Protobuf.ByteString.CopyFromUtf8("a"),
-                ["instance_type"] = Google.Protobuf.ByteString.CopyFromUtf8("m5.large"),
-                ["version"] = Google.Protobuf.ByteString.CopyFromUtf8("1.0.0")
-            });
+            options.Metadata["role"] = Encoding.UTF8.GetBytes("seed");
+            options.Metadata["region"] = Encoding.UTF8.GetBytes("us-west-2");
+            options.Metadata["zone"] = Encoding.UTF8.GetBytes("a");
+            options.Metadata["instance_type"] = Encoding.UTF8.GetBytes("m5.large");
+            options.Metadata["version"] = Encoding.UTF8.GetBytes("1.0.0");
         }, TestContext.Current.CancellationToken);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, options =>
         {
-            options.SetMetadata(new Dictionary<string, Google.Protobuf.ByteString>
-            {
-                ["role"] = Google.Protobuf.ByteString.CopyFromUtf8("worker"),
-                ["region"] = Google.Protobuf.ByteString.CopyFromUtf8("us-east-1"),
-                ["zone"] = Google.Protobuf.ByteString.CopyFromUtf8("b"),
-                ["instance_type"] = Google.Protobuf.ByteString.CopyFromUtf8("c5.xlarge"),
-                ["version"] = Google.Protobuf.ByteString.CopyFromUtf8("1.0.0")
-            });
+            options.Metadata["role"] = Encoding.UTF8.GetBytes("worker");
+            options.Metadata["region"] = Encoding.UTF8.GetBytes("us-east-1");
+            options.Metadata["zone"] = Encoding.UTF8.GetBytes("b");
+            options.Metadata["instance_type"] = Encoding.UTF8.GetBytes("c5.xlarge");
+            options.Metadata["version"] = Encoding.UTF8.GetBytes("1.0.0");
         }, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var allMetadata = seed.GetClusterMetadata();
+        var allMetadata = seed.CurrentView.Metadata;
 
         Assert.Equal(2, allMetadata.Count);
-        Assert.Equal("seed", allMetadata[seedAddress].Metadata_["role"].ToStringUtf8());
-        Assert.Equal("worker", allMetadata[joinerAddress].Metadata_["role"].ToStringUtf8());
-        Assert.Equal("us-west-2", allMetadata[seedAddress].Metadata_["region"].ToStringUtf8());
-        Assert.Equal("us-east-1", allMetadata[joinerAddress].Metadata_["region"].ToStringUtf8());
+        Assert.Equal("seed", Encoding.UTF8.GetString(allMetadata[seedAddress]["role"].Span));
+        Assert.Equal("worker", Encoding.UTF8.GetString(allMetadata[joinerAddress]["role"].Span));
+        Assert.Equal("us-west-2", Encoding.UTF8.GetString(allMetadata[seedAddress]["region"].Span));
+        Assert.Equal("us-east-1", Encoding.UTF8.GetString(allMetadata[joinerAddress]["region"].Span));
     }
 
     [Fact]
     public async Task EmptyMetadataHandledCorrectly()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
@@ -420,82 +362,85 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var allMetadata = seed.GetClusterMetadata();
+        var allMetadata = seed.CurrentView.Metadata;
 
         Assert.Equal(2, allMetadata.Count);
-        Assert.Empty(allMetadata[seedAddress].Metadata_);
-        Assert.Empty(allMetadata[joinerAddress].Metadata_);
+        Assert.Empty(allMetadata[seedAddress]);
+        Assert.Empty(allMetadata[joinerAddress]);
     }
 
     [Fact]
-    public async Task MultipleSubscriptionsAllReceiveEvents()
+    public async Task MultipleSubscriptionsAllReceiveViewUpdates()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
-        // Start three separate collectors
-        var collector1 = CreateEventCollector(seed);
-        var collector2 = CreateEventCollector(seed);
-        var collector3 = CreateEventCollector(seed);
+        // Start three separate view update consumers
+        var bag1 = new ConcurrentBag<ClusterMembershipView>();
+        var bag2 = new ConcurrentBag<ClusterMembershipView>();
+        var bag3 = new ConcurrentBag<ClusterMembershipView>();
+        StartViewUpdateConsumer(seed, bag1);
+        StartViewUpdateConsumer(seed, bag2);
+        StartViewUpdateConsumer(seed, bag3);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        // Count events from all collectors
-        var count1 = collector1.Items.Count(n => n.Event == ClusterEvents.ViewChange);
-        var count2 = collector2.Items.Count(n => n.Event == ClusterEvents.ViewChange);
-        var count3 = collector3.Items.Count(n => n.Event == ClusterEvents.ViewChange);
+        // Give some time for events to be collected
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        Assert.True(count1 > 0);
-        Assert.True(count2 > 0);
-        Assert.True(count3 > 0);
+        // All three consumers should have received view updates
+        Assert.True(bag1.Count > 0);
+        Assert.True(bag2.Count > 0);
+        Assert.True(bag3.Count > 0);
     }
 
     [Fact]
-    public async Task SubscriptionReceivesCorrectMembership()
+    public async Task ViewUpdateContainsCorrectMembership()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var collector = CreateEventCollector(seed);
+
+        var viewUpdates = new ConcurrentBag<ClusterMembershipView>();
+        StartViewUpdateConsumer(seed, viewUpdates);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        // Find view changes
-        var viewChanges = collector.Items
-            .Where(n => n.Event == ClusterEvents.ViewChange)
-            .Select(n => n.Change)
-            .ToList();
+        // Give some time for events to be collected
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        Assert.NotEmpty(viewChanges);
-        var lastChange = viewChanges.Last();
-        Assert.True(lastChange.Membership.Count >= 2);
+        Assert.NotEmpty(viewUpdates);
+        var lastView = viewUpdates.OrderByDescending(v => v.ConfigurationId).First();
+        Assert.True(lastView.Members.Count >= 2);
     }
 
     [Fact]
     public async Task ConfigurationIdChangesOnJoin()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var collector = CreateEventCollector(seed);
+
+        var viewUpdates = new ConcurrentBag<ClusterMembershipView>();
+        StartViewUpdateConsumer(seed, viewUpdates);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        // Collect config IDs from view changes
-        var configIds = collector.Items
-            .Where(n => n.Event == ClusterEvents.ViewChange)
-            .Select(n => n.Change.ConfigurationId)
-            .ToList();
+        // Give some time for events to be collected
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        // Collect config IDs from view updates
+        var configIds = viewUpdates.Select(v => v.ConfigurationId).ToList();
 
         Assert.NotEmpty(configIds);
     }
@@ -503,10 +448,10 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     [Fact]
     public async Task FourNodesFormCluster()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner1Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner2Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joiner3Address = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joiner1Address = CreateAddress(_cluster.GetNextPort());
+        var joiner2Address = CreateAddress(_cluster.GetNextPort());
+        var joiner3Address = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
@@ -518,29 +463,31 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner2, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner3, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
 
-        Assert.Equal(4, seed.GetMembershipSize());
-        Assert.Equal(4, joiner1.GetMembershipSize());
-        Assert.Equal(4, joiner2.GetMembershipSize());
-        Assert.Equal(4, joiner3.GetMembershipSize());
+        Assert.Equal(4, seed.CurrentView.Members.Count);
+        Assert.Equal(4, joiner1.CurrentView.Members.Count);
+        Assert.Equal(4, joiner2.CurrentView.Members.Count);
+        Assert.Equal(4, joiner3.CurrentView.Members.Count);
     }
 
     [Fact]
-    public async Task NodeStatusChangesTracked()
+    public async Task ViewUpdatesTracked()
     {
-        var seedAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
-        var joinerAddress = Utils.HostFromParts("127.0.0.1", _cluster.GetNextPort());
+        var seedAddress = CreateAddress(_cluster.GetNextPort());
+        var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var collector = CreateEventCollector(seed);
+
+        var viewUpdates = new ConcurrentBag<ClusterMembershipView>();
+        StartViewUpdateConsumer(seed, viewUpdates);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        // Count view changes
-        var viewChangeCount = collector.Items.Count(n => n.Event == ClusterEvents.ViewChange);
+        // Give some time for events to be collected
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        Assert.True(viewChangeCount > 0);
+        // Count view updates
+        Assert.True(viewUpdates.Count > 0);
     }
-
 }

@@ -79,7 +79,7 @@ public static class RapidClusterServiceCollectionExtensions
             var sharedResources = sp.GetRequiredService<SharedResources>();
             var metrics = sp.GetRequiredService<RapidClusterMetrics>();
             var logger = sp.GetRequiredService<ILogger<PingPongFailureDetector>>();
-            return new PingPongFailureDetectorFactory(options.ListenAddress, client, sharedResources, protocolOptions, metrics, logger);
+            return new PingPongFailureDetectorFactory(options.ListenAddress.ToProtobuf(), client, sharedResources, protocolOptions, metrics, logger);
         });
 
         // Register ConsensusCoordinator factory
@@ -95,6 +95,9 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddSingleton<MembershipViewAccessor>();
         services.AddSingleton<IMembershipViewAccessor>(sp => sp.GetRequiredService<MembershipViewAccessor>());
 
+        // Register MetadataManager as singleton (shared between MembershipService and RapidClusterImpl)
+        services.AddSingleton<MetadataManager>();
+
         // Register MembershipService directly (InitializeAsync is called by RapidClusterService)
         services.AddSingleton<MembershipService>();
 
@@ -109,7 +112,7 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddHostedService(sp => sp.GetRequiredService<RapidClusterHostedService>());
 
         // Register the cluster interface for application access
-        services.AddSingleton<IRapidCluster, RapidCluster>();
+        services.AddSingleton<IRapidCluster, RapidClusterImpl>();
 
         return services;
     }

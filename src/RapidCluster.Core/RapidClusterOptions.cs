@@ -1,5 +1,5 @@
-using Google.Protobuf;
-using RapidCluster.Pb;
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
 
 namespace RapidCluster;
 
@@ -10,8 +10,9 @@ public sealed class RapidClusterOptions
 {
     /// <summary>
     /// The endpoint this node listens on.
+    /// Use <see cref="IPEndPoint"/> for IP addresses or <see cref="DnsEndPoint"/> for hostnames.
     /// </summary>
-    public Endpoint ListenAddress { get; set; } = null!;
+    public EndPoint ListenAddress { get; set; } = null!;
 
     /// <summary>
     /// The seed node endpoints to join. If null/empty or all entries equal ListenAddress, starts a new cluster.
@@ -21,12 +22,13 @@ public sealed class RapidClusterOptions
     /// This property provides backward compatibility. For more advanced seed discovery,
     /// register an <see cref="Discovery.ISeedProvider"/> implementation in the DI container.
     /// </remarks>
-    public IReadOnlyList<Endpoint>? SeedAddresses { get; set; }
+    public IReadOnlyList<EndPoint>? SeedAddresses { get; set; }
 
     /// <summary>
     /// Metadata for this node.
     /// </summary>
-    public Metadata Metadata { get; set; } = new();
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Options class needs settable properties for configuration binding")]
+    public Dictionary<string, byte[]> Metadata { get; set; } = [];
 
     /// <summary>
     /// Number of nodes expected to form the initial cluster.
@@ -49,17 +51,4 @@ public sealed class RapidClusterOptions
     /// Default: 5 minutes.
     /// </summary>
     public TimeSpan BootstrapTimeout { get; set; } = TimeSpan.FromMinutes(5);
-
-    /// <summary>
-    /// Sets metadata from a dictionary.
-    /// </summary>
-    public void SetMetadata(Dictionary<string, ByteString> metadata)
-    {
-        ArgumentNullException.ThrowIfNull(metadata);
-        Metadata = new Metadata();
-        foreach (var kvp in metadata)
-        {
-            Metadata.Metadata_.Add(kvp.Key, kvp.Value);
-        }
-    }
 }

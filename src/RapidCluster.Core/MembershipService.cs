@@ -131,11 +131,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         SharedResources sharedResources,
         RapidClusterMetrics metrics,
         ISeedProvider seedProvider,
+        MetadataManager metadataManager,
         ILogger<MembershipService> logger)
     {
         var opts = RapidClusterOptions.Value;
-        _myAddr = opts.ListenAddress;
-        _nodeMetadata = opts.Metadata;
+        _myAddr = opts.ListenAddress.ToProtobuf();
+        _nodeMetadata = opts.Metadata.ToProtobuf();
         _options = protocolOptions.Value;
         _seedProvider = seedProvider;
 
@@ -146,16 +147,17 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _seedAddresses = [];
         foreach (var seed in configuredSeeds)
         {
-            if (seed != null && !EndpointAddressComparer.Instance.Equals(seed, _myAddr) && seen.Add(seed))
+            var pbSeed = seed.ToProtobuf();
+            if (!EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr) && seen.Add(pbSeed))
             {
-                _seedAddresses.Add(seed);
+                _seedAddresses.Add(pbSeed);
             }
         }
 
         _membershipView = MembershipView.Empty;
         _cutDetectorFactory = cutDetectorFactory;
         _sharedResources = sharedResources;
-        _metadataManager = new MetadataManager();
+        _metadataManager = metadataManager;
         _messagingClient = messagingClient;
         _broadcaster = broadcasterFactory.Create();
         _fdFactory = edgeFailureDetector;
@@ -221,9 +223,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _seedAddresses = [];
         foreach (var seed in seeds)
         {
-            if (seed != null && !EndpointAddressComparer.Instance.Equals(seed, _myAddr) && seen.Add(seed))
+            var pbSeed = seed.ToProtobuf();
+            if (!EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr) && seen.Add(pbSeed))
             {
-                _seedAddresses.Add(seed);
+                _seedAddresses.Add(pbSeed);
             }
         }
 
@@ -924,7 +927,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             // Use SortedSet for deduplication and consistent ordering across all nodes.
             // This ensures all nodes propose the same set in the same order.
-            var proposals = new SortedSet<Endpoint>(EndpointComparer.Instance);
+            var proposals = new SortedSet<Endpoint>(ProtobufEndpointComparer.Instance);
 
             // Process alerts by ring number to enable proper batching.
             // This ensures multiple nodes can accumulate in the preProposal set
@@ -1504,7 +1507,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var metadata = _metadataManager.Get(_myAddr) ?? new Metadata();
 
         JoinResponse? successfulResponse = null;
-        NodeId? successfulNodeId = null;
+        NodeId? nodeId = null;
 
         foreach (var seed in candidateSeeds)
         {
@@ -1517,12 +1520,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             {
                 // Generate a new node ID for each attempt - this avoids UUID collision issues
                 // where our old UUID might still be in the cluster's identifiers-seen set
-                var nodeId = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
-
+                nodeId = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
                 successfulResponse = await TryRejoinThroughSeedAsync(seed, nodeId, metadata, cancellationToken).ConfigureAwait(true);
                 if (successfulResponse != null)
                 {
-                    successfulNodeId = nodeId;
                     break;
                 }
             }
@@ -1533,13 +1534,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
         }
 
-        if (successfulResponse == null || successfulNodeId == null)
+        if (successfulResponse == null || nodeId == null)
         {
             return null; // All attempts failed
         }
 
         // Reset internal state with new membership
-        ResetStateAfterRejoin(successfulResponse, successfulNodeId);
+        ResetStateAfterRejoin(successfulResponse);
 
         _log.RejoinSuccessful(
             _myAddr,
@@ -1626,7 +1627,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <summary>
     /// Resets the internal state after a successful rejoin.
     /// </summary>
-    private void ResetStateAfterRejoin(JoinResponse response, NodeId nodeId)
+    private void ResetStateAfterRejoin(JoinResponse response)
     {
         ConsensusCoordinator? oldConsensus;
         lock (_membershipUpdateLock)

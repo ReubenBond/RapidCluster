@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using RapidCluster.Discovery;
 using RapidCluster.Pb;
 using RapidCluster.Tests.Simulation.Infrastructure;
@@ -208,10 +209,10 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
     [Fact]
     public async Task ConfigurationSeedProvider_ReturnsConsistentSeeds()
     {
-        var seeds = new List<Endpoint>
+        var seeds = new List<EndPoint>
         {
-            RapidClusterUtils.HostFromParts("host1", 5000),
-            RapidClusterUtils.HostFromParts("host2", 5000)
+            new DnsEndPoint("host1", 5000),
+            new DnsEndPoint("host2", 5000)
         };
 
         var options = new RapidClusterOptions { SeedAddresses = seeds };

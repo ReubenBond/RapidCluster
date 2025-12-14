@@ -10,7 +10,7 @@ namespace RapidCluster;
 /// An immutable snapshot of the cluster membership at a point in time.
 /// Hosts K permutations of the memberlist that represent the monitoring relationship between nodes;
 /// every node (an observer) observes its successor (a subject) on each ring.
-/// Instances are obtained through <see cref="IRapidCluster.ViewAccessor"/>, or via <see cref="MembershipViewBuilder"/>.
+/// This is an internal type; consumers should use <see cref="ClusterMembershipView"/> via <see cref="IRapidCluster"/>.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 [DebuggerTypeProxy(typeof(MembershipViewDebugView))]
@@ -43,8 +43,8 @@ public sealed class MembershipView
         _rings = rings;
         NodeIds = nodeIds;
         MaxNodeId = maxNodeId;
-        // Use EndpointComparer to ignore NodeId when checking membership
-        _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(EndpointComparer.Instance) : ImmutableSortedSet<Endpoint>.Empty;
+        // Use ProtobufEndpointComparer to ignore NodeId when checking membership
+        _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(ProtobufEndpointComparer.Instance) : ImmutableSortedSet<Endpoint>.Empty;
         _identifiersSeen = [.. nodeIds];
 
         // Build endpoint -> node ID lookup from the first ring (all rings have the same endpoints)

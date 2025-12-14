@@ -381,12 +381,12 @@ public class RapidClusterUtilsTests
     [Fact]
     public void ToRapidClusterResponseProbeResponseWrapsCorrectly()
     {
-        var msg = new ProbeResponse { Status = NodeStatus.Ok };
+        var msg = new ProbeResponse { Status = Pb.NodeStatus.Ok };
 
         var response = msg.ToRapidClusterResponse();
 
         Assert.NotNull(response.ProbeResponse);
-        Assert.Equal(NodeStatus.Ok, response.ProbeResponse.Status);
+        Assert.Equal(Pb.NodeStatus.Ok, response.ProbeResponse.Status);
     }
 
 }

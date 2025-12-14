@@ -88,7 +88,6 @@ public class SimulationTimeProviderTests
         public void RunUntilIdle() => TaskQueue.RunUntilIdle();
     }
 
-
     [Fact]
     public void ConstructorDefaultInitializationSetsExpectedValues()
     {
@@ -134,8 +133,6 @@ public class SimulationTimeProviderTests
         Assert.Equal(customTime, p.Start);
     }
 
-
-
     [Fact]
     public void GetTimestampWithoutAdvanceDoesNotChange()
     {
@@ -170,8 +167,6 @@ public class SimulationTimeProviderTests
 
         Assert.Equal(TimeSpan.FromSeconds(1), elapsed);
     }
-
-
 
     [Fact]
     public void AdvanceForwardAdvancesByProperAmount()
@@ -231,8 +226,6 @@ public class SimulationTimeProviderTests
         Assert.Equal(1000, elapsed.TotalMilliseconds);
     }
 
-
-
     [Fact]
     public void SetUtcNowForwardAdvancesByProperAmount()
     {
@@ -276,8 +269,6 @@ public class SimulationTimeProviderTests
 
         Assert.Equal(currentTime, p.GetUtcNow());
     }
-
-
 
     [Fact]
     public void CreateTimerWithDueTimeCreatesWaiter()
@@ -426,8 +417,6 @@ public class SimulationTimeProviderTests
         Assert.Equal(0, callCount);
     }
 
-
-
     [Fact]
     public void MultipleTimersFireInOrder()
     {
@@ -499,8 +488,6 @@ public class SimulationTimeProviderTests
         Assert.Equal("Test exception", ex.Message);
     }
 
-
-
     [Fact]
     public void AdvanceToNextTimerWithPendingTimer()
     {
@@ -549,8 +536,6 @@ public class SimulationTimeProviderTests
         Assert.Equal([1, 2, 3], firedTimers);
     }
 
-
-
     [Fact]
     public void TimeUntilNextTimerNoPendingTimersReturnsNull()
     {
@@ -597,8 +582,6 @@ public class SimulationTimeProviderTests
         Assert.Equal(TimeSpan.FromSeconds(10), p.TimeUntilNextTimer);
     }
 
-
-
     [Fact]
     public void GetPendingTimersNoPendingReturnsEmpty()
     {
@@ -637,8 +620,6 @@ public class SimulationTimeProviderTests
         Assert.True(timers[0].DueTime < timers[1].DueTime);
         Assert.True(timers[1].DueTime < timers[2].DueTime);
     }
-
-
 
     [Fact]
     public async Task DelayZeroDelayCompletesImmediately()
@@ -762,8 +743,6 @@ public class SimulationTimeProviderTests
         Assert.Equal([2, 3, 1], completionOrder);
     }
 
-
-
     [Fact]
     public void ToStringDefaultReturnsProperFormat()
     {
@@ -792,8 +771,6 @@ public class SimulationTimeProviderTests
 
         Assert.Equal("2000-01-01T01:30:00.000", p.TimeProvider.ToString());
     }
-
-
 
     [Fact]
     public void PendingTimerCountNoTimersReturnsZero()
@@ -863,8 +840,6 @@ public class SimulationTimeProviderTests
         Assert.Equal(1, p.PendingTimerCount);
     }
 
-
-
     [Fact]
     public void TimerDisposeRemovesFromPending()
     {
@@ -910,8 +885,6 @@ public class SimulationTimeProviderTests
         var result = timer.Change(TimeSpan.FromSeconds(1), TimeSpan.Zero);
         Assert.False(result);
     }
-
-
 
     [Fact]
     public void ConcurrentAccessThrowsInvalidOperationException()
@@ -970,8 +943,6 @@ public class SimulationTimeProviderTests
         Assert.NotNull(caughtException);
         Assert.Contains("single-threaded", caughtException.Message, StringComparison.OrdinalIgnoreCase);
     }
-
-
 
     [Fact]
     public void StartReturnsInitialTime()

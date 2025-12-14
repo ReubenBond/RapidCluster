@@ -14,9 +14,12 @@ public sealed class RapidClusterOptions
     public Endpoint ListenAddress { get; set; } = null!;
 
     /// <summary>
-    /// The seed node endpoint to join. If null or equal to ListenAddress, starts a new cluster.
+    /// The seed node endpoints to join. If null/empty or all entries equal ListenAddress, starts a new cluster.
+    /// Nodes are tried in round-robin order until join succeeds.
     /// </summary>
-    public Endpoint? SeedAddress { get; set; }
+#pragma warning disable CA2227 // Collection properties should be read only - Options classes need settable collections
+    public IReadOnlyList<Endpoint>? SeedAddresses { get; set; }
+#pragma warning restore CA2227
 
     /// <summary>
     /// Metadata for this node.

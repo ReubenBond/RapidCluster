@@ -90,8 +90,6 @@ public class RankTests
         Assert.True(rank1.CompareTo(rank2) > 0);
     }
 
-
-
     [Fact]
     public void EqualityOperatorEqualRanksReturnsTrue()
     {
@@ -152,8 +150,6 @@ public class RankTests
 #pragma warning restore CA1508
     }
 
-
-
     [Fact]
     public void InequalityOperatorEqualRanksReturnsFalse()
     {
@@ -171,8 +167,6 @@ public class RankTests
 
         Assert.True(rank1 != rank2);
     }
-
-
 
     [Fact]
     public void LessThanOperatorSmallerRankReturnsTrue()
@@ -228,8 +222,6 @@ public class RankTests
         Assert.False(rank1 < rank2);
     }
 
-
-
     [Fact]
     public void GreaterThanOperatorLargerRankReturnsTrue()
     {
@@ -257,8 +249,6 @@ public class RankTests
         Assert.False(rank1 > rank2);
     }
 
-
-
     [Fact]
     public void LessThanOrEqualOperatorSmallerRankReturnsTrue()
     {
@@ -277,8 +267,6 @@ public class RankTests
         Assert.True(rank1 <= rank2);
     }
 
-
-
     [Fact]
     public void GreaterThanOrEqualOperatorLargerRankReturnsTrue()
     {
@@ -296,8 +284,6 @@ public class RankTests
 
         Assert.True(rank1 >= rank2);
     }
-
-
 
     [Fact]
     public void RankRoundDifferenceOverridesNodeIndex()

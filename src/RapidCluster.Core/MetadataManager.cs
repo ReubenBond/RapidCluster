@@ -5,7 +5,7 @@ namespace RapidCluster;
 internal sealed class MetadataManager
 {
     // Use SortedDictionary for deterministic iteration order (important for simulation tests)
-    // Use EndpointComparer to ignore MonotonicNodeId when comparing endpoints
+    // Use EndpointComparer to ignore NodeId when comparing endpoints
     private readonly SortedDictionary<Endpoint, Metadata> _metadata = new(EndpointComparer.Instance);
     private readonly Lock _lock = new();
 
@@ -56,7 +56,7 @@ internal sealed class MetadataManager
     {
         lock (_lock)
         {
-            // Use EndpointAddressComparer to ignore MonotonicNodeId when comparing endpoints
+            // Use EndpointAddressComparer to ignore NodeId when comparing endpoints
             return new Dictionary<Endpoint, Metadata>(_metadata, EndpointAddressComparer.Instance);
         }
     }

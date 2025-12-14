@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RapidCluster.Logging;
 
 namespace RapidCluster;
 
@@ -17,7 +18,7 @@ internal sealed partial class RapidClusterService(
     private int _disposed;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Starting RapidCluster service on {ListenAddress}")]
-    private partial void LogStarting(string ListenAddress);
+    private partial void LogStarting(LoggableEndpoint ListenAddress);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "RapidCluster service started successfully")]
     private partial void LogStarted();
@@ -34,8 +35,7 @@ internal sealed partial class RapidClusterService(
     {
         try
         {
-            var loggableAddress = RapidClusterUtils.Loggable(_options.ListenAddress);
-            LogStarting(loggableAddress);
+            LogStarting(new LoggableEndpoint(_options.ListenAddress));
 
             // Initialize the membership service (start new cluster or join existing)
             await MembershipService.InitializeAsync(stoppingToken).ConfigureAwait(true);

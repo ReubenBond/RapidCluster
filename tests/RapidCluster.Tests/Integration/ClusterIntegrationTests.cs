@@ -274,7 +274,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         Assert.True(proposals.Count > 0);
     }
 
-
     [Fact]
     public async Task SequentialJoinsFiveNodesAllConverge()
     {
@@ -320,8 +319,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         Assert.Equal(3, joiner1.GetMembershipSize());
         Assert.Equal(3, joiner2.GetMembershipSize());
     }
-
-
 
     [Fact]
     public async Task GetMemberlistReturnsAllMembers()
@@ -369,8 +366,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
             Assert.Equal(seedList[i].Port, joiner2List[i].Port);
         }
     }
-
-
 
     [Fact]
     public async Task ComplexMetadataPropagatedCorrectly()
@@ -432,8 +427,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         Assert.Empty(allMetadata[joinerAddress].Metadata_);
     }
 
-
-
     [Fact]
     public async Task MultipleSubscriptionsAllReceiveEvents()
     {
@@ -485,8 +478,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         Assert.True(lastChange.Membership.Count >= 2);
     }
 
-
-
     [Fact]
     public async Task ConfigurationIdChangesOnJoin()
     {
@@ -508,8 +499,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         Assert.NotEmpty(configIds);
     }
-
-
 
     [Fact]
     public async Task FourNodesFormCluster()
@@ -534,8 +523,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         Assert.Equal(4, joiner2.GetMembershipSize());
         Assert.Equal(4, joiner3.GetMembershipSize());
     }
-
-
 
     [Fact]
     public async Task NodeStatusChangesTracked()

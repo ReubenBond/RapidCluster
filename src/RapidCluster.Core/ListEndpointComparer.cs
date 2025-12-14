@@ -23,7 +23,7 @@ internal sealed class EndpointComparer : IComparer<Endpoint>
 
 /// <summary>
 /// Compares Endpoint instances by address (hostname and port) only.
-/// Ignores MonotonicNodeId, which is used for Paxos rank computation but not for node identity.
+/// Ignores NodeId, which is used for Paxos rank computation but not for node identity.
 /// Used with HashSet and Dictionary to ensure proper equality checking by network address.
 /// </summary>
 internal sealed class EndpointAddressComparer : IEqualityComparer<Endpoint>
@@ -156,5 +156,4 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         return 0;
     }
 }
-
 

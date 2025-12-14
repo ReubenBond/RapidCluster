@@ -23,7 +23,6 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void ZeroBatchingWindowWorks()
     {
@@ -75,8 +74,6 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         Assert.True(seedNode.IsInitialized);
     }
 
-
-
     [Fact]
     public void BackToBackJoinsSucceed()
     {
@@ -111,8 +108,6 @@ public sealed class EdgeCaseTests : IAsyncLifetime
 
         Assert.DoesNotContain(joiner, _harness.Nodes);
     }
-
-
 
     [Fact]
     public void DoubleCrashIsSafe()
@@ -149,8 +144,6 @@ public sealed class EdgeCaseTests : IAsyncLifetime
             _harness.CreateJoinerNode(null!, nodeId: 1);
         });
     }
-
-
 
     [Fact]
     public void UninitializedNodeThrowsOnHandleRequest()
@@ -196,8 +189,6 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         Assert.True(joiner.IsInitialized);
     }
 
-
-
     /// <summary>
     /// Tests that the cluster can scale to a large size (20 nodes) and maintain
     /// consistency across all members. Verifies that the consensus protocol and
@@ -229,8 +220,6 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         Assert.Equal(10, nodes.Count);
         Assert.All(nodes, n => Assert.True(n.IsInitialized));
     }
-
-
 
     [Fact]
     public void SimulationRandomForkProducesDifferentSequences()
@@ -307,5 +296,4 @@ public sealed class EdgeCaseTests : IAsyncLifetime
     }
 
 }
-
 

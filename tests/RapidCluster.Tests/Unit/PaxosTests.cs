@@ -102,7 +102,6 @@ public class PaxosTests
         return r1.NodeIndex.CompareTo(r2.NodeIndex);
     }
 
-
     [Fact]
     public void Phase1aMessageCreationSetsAllFields()
     {
@@ -152,8 +151,6 @@ public class PaxosTests
         clone.ConfigurationId = 200;
         Assert.Equal(100, original.ConfigurationId);
     }
-
-
 
     [Fact]
     public void Phase1bMessageCreationSetsAllFields()
@@ -214,8 +211,6 @@ public class PaxosTests
         Assert.Equal(3, msg.Proposal.Members.Count);
     }
 
-
-
     [Fact]
     public void Phase2aMessageCreationSetsAllFields()
     {
@@ -252,8 +247,6 @@ public class PaxosTests
 
         Assert.Equal(3, msg.Proposal.Members.Count);
     }
-
-
 
     [Fact]
     public void Phase2bMessageCreationSetsAllFields()
@@ -298,8 +291,6 @@ public class PaxosTests
 
         Assert.Equal(10, msg.Proposal.Members.Count);
     }
-
-
 
     [Fact]
     public void FastRoundPhase2bMessageCreationSetsAllFields()
@@ -352,8 +343,6 @@ public class PaxosTests
 
         Assert.Equal(100, msg.Proposal.Members.Count);
     }
-
-
 
     [Fact]
     public void RankFastRoundIsRound1()
@@ -408,8 +397,6 @@ public class PaxosTests
         Assert.Equal(16, n - f);
     }
 
-
-
     [Fact]
     public void ConsensusResponseDefaultFields()
     {
@@ -417,8 +404,6 @@ public class PaxosTests
 
         Assert.NotNull(response);
     }
-
-
 
     [Fact]
     public void Phase1aMessageSerializeDeserializeRoundtrips()
@@ -458,8 +443,6 @@ public class PaxosTests
         Assert.Equal("10.0.0.1", deserialized.Proposal.Members[0].Endpoint.Hostname.ToStringUtf8());
         Assert.Equal(5001, deserialized.Proposal.Members[0].Endpoint.Port);
     }
-
-
 
     [Fact]
     public void RankZeroValuesCompareCorrectly()
@@ -509,7 +492,6 @@ public class PaxosTests
 
         Assert.Equal(long.MaxValue, msg.ConfigurationId);
     }
-
 
     /// <summary>
     /// Helper to create a MembershipProposal with specified endpoints

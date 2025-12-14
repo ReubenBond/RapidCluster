@@ -12,30 +12,20 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     /// </summary>
     public ILogger Logger => _logger;
 
-    // Logging helpers
-    internal readonly struct LoggableEndpoints(IEnumerable<Endpoint> endpoints)
-    {
-        private readonly IEnumerable<Endpoint> _endpoints = endpoints;
-        public override readonly string ToString() => string.Join(", ", _endpoints.Select(RapidClusterUtils.Loggable));
-    }
+    [LoggerMessage(EventName = nameof(Initialized), Level = LogLevel.Debug, Message = "ConsensusCoordinator initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
+    private partial void InitializedCore(LoggableEndpoint myAddr, long configId, int membershipSize);
+    public void Initialized(Endpoint myAddr, long configId, int membershipSize) => InitializedCore(new(myAddr), configId, membershipSize);
 
-    internal readonly struct LoggableEndpoint(Endpoint endpoint)
-    {
-        private readonly Endpoint _endpoint = endpoint;
-        public override readonly string ToString() => RapidClusterUtils.Loggable(_endpoint);
-    }
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ConsensusCoordinator initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
-    public partial void Initialized(LoggableEndpoint myAddr, long configId, int membershipSize);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Propose: starting consensus loop with proposal={Proposal}")]
-    public partial void Propose(LoggableEndpoints proposal);
+    [LoggerMessage(EventName = nameof(Propose), Level = LogLevel.Debug, Message = "Propose: starting consensus loop with proposal={Proposal}")]
+    private partial void ProposeCore(LoggableMembershipProposal proposal);
+    public void Propose(MembershipProposal? proposal) => ProposeCore(new(proposal));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting fast round (round 1)")]
     public partial void StartingFastRound();
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Fast round decided (configId={ConfigId}): {Decision}")]
-    public partial void FastRoundDecided(long configId, LoggableEndpoints decision);
+    [LoggerMessage(EventName = nameof(FastRoundDecided), Level = LogLevel.Debug, Message = "Fast round decided (configId={ConfigId}): {Decision}")]
+    private partial void FastRoundDecidedCore(long configId, LoggableMembershipProposal decision);
+    public void FastRoundDecided(long configId, MembershipProposal? decision) => FastRoundDecidedCore(configId, new(decision));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fast round timed out or cancelled (configId={ConfigId}) after {Timeout}, falling back to classic Paxos")]
     public partial void FastRoundTimeout(long configId, TimeSpan timeout);
@@ -49,8 +39,9 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting classic round {Round} with delay {Delay}")]
     public partial void StartingClassicRound(int round, TimeSpan delay);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Classic round {Round} decided (configId={ConfigId}): {Decision}")]
-    public partial void ClassicRoundDecided(int round, long configId, LoggableEndpoints decision);
+    [LoggerMessage(EventName = nameof(ClassicRoundDecided), Level = LogLevel.Debug, Message = "Classic round {Round} decided (configId={ConfigId}): {Decision}")]
+    private partial void ClassicRoundDecidedCore(int round, long configId, LoggableMembershipProposal decision);
+    public void ClassicRoundDecided(int round, long configId, MembershipProposal? decision) => ClassicRoundDecidedCore(round, configId, new(decision));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Consensus loop cancelled")]
     public partial void ConsensusCancelled();

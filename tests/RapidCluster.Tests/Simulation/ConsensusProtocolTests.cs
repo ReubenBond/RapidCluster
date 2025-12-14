@@ -24,7 +24,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void SingleProposalAcceptedInTwoNodeCluster()
     {
@@ -92,8 +91,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         Assert.Equal(seedMembers, joiner1Members);
         Assert.Equal(seedMembers, joiner2Members);
     }
-
-
 
     [Fact]
     public void ConsensusSucceedsWithMinorityFailure()
@@ -172,8 +169,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
 
-
-
     [Fact]
     public void ConfigurationIdChangesWithEachMembershipChange()
     {
@@ -227,8 +222,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
             n => Assert.Equal(configId, n.CurrentView.ConfigurationId));
     }
 
-
-
     [Fact]
     public void ConsensusWithMessageDelaysCompletesCorrectly()
     {
@@ -263,8 +256,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         Assert.Equal(2, seedNode.MembershipSize);
         Assert.Equal(2, joiner.MembershipSize);
     }
-
-
 
     [Fact]
     public void ClassicPaxosFallback_SucceedsWhenFastPaxosFails()
@@ -422,8 +413,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         Assert.NotEqual(configAfterFirstRemoval, configAfterSecondRemoval);
         Assert.Equal(configAfterSecondRemoval, nodes[1].CurrentView.ConfigurationId);
     }
-
-
 
     [Fact]
     public void ConsensusNotRepeated_AfterDecision()

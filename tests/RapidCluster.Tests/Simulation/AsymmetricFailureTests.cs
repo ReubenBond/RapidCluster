@@ -26,7 +26,6 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void OneWayPartition_SourceCannotReachTarget()
     {
@@ -150,8 +149,6 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         Assert.Equal(DeliveryStatus.Success, _harness.Network.CheckDelivery(addrD, addrC));
     }
 
-
-
     [Fact]
     public void AsymmetricPartition_ObserverCannotReachMonitoredNode()
     {
@@ -263,8 +260,6 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         // Cluster should remain intact
         Assert.Equal(4, _harness.Nodes.Count);
     }
-
-
 
     [Fact]
     public void AsymmetricPartition_ChainedOneWayFailures()
@@ -443,8 +438,6 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         Assert.True(_harness.Nodes.Count >= 3, "Cluster should maintain quorum");
     }
 
-
-
     [Fact]
     public void AsymmetricPartition_DuringJoin()
     {
@@ -520,8 +513,6 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         Assert.True(newNode1.IsInitialized, "First new node should join");
         Assert.True(newNode2.IsInitialized, "Second new node should join");
     }
-
-
 
     [Fact]
     public void AsymmetricPartition_SingleNodeCannotSendToAnyone()

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RapidCluster.Logging;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -39,12 +40,6 @@ internal sealed partial class SimpleCutDetector : ICutDetector
     /// For ObserversPerSubject=2: require 2 votes (both observers must agree)
     /// </summary>
     private int RequiredVotes => ObserversPerSubject;
-
-    private readonly struct LoggableEndpoint(Endpoint endpoint)
-    {
-        private readonly Endpoint _endpoint = endpoint;
-        public override readonly string ToString() => RapidClusterUtils.Loggable(_endpoint);
-    }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "SimpleCutDetector created: requiredVotes={RequiredVotes}, membershipSize={MembershipSize}")]
     private partial void LogCreated(int RequiredVotes, int MembershipSize);

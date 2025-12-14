@@ -39,7 +39,6 @@ public class SimpleCutDetectorTests
         return builder.Build();
     }
 
-
     [Fact]
     public void Constructor_K1_Succeeds()
     {
@@ -76,8 +75,6 @@ public class SimpleCutDetectorTests
     {
         Assert.Throws<ArgumentNullException>(() => new SimpleCutDetector(null!));
     }
-
-
 
     [Fact]
     public void K1_SingleVoteTriggersProposal()
@@ -126,8 +123,6 @@ public class SimpleCutDetectorTests
         Assert.Single(result2);
         Assert.Equal(2, detector.GetNumProposals());
     }
-
-
 
     [Fact]
     public void K2_SingleVoteDoesNotTriggerProposal()
@@ -202,8 +197,6 @@ public class SimpleCutDetectorTests
         Assert.Equal(1, detector.GetNumProposals());
     }
 
-
-
     [Fact]
     public void NewDetector_StartsWithZeroProposals()
     {
@@ -242,8 +235,6 @@ public class SimpleCutDetectorTests
         Assert.Equal(1, detector2.GetNumProposals());
     }
 
-
-
     [Fact]
     public void EdgeStatus_UpAndDownBothWork()
     {
@@ -260,8 +251,6 @@ public class SimpleCutDetectorTests
         Assert.Single(resultDown);
         Assert.Equal(2, detector.GetNumProposals());
     }
-
-
 
     [Fact]
     public void MultipleRingNumbers_K1_TriggersOnFirst()
@@ -286,8 +275,6 @@ public class SimpleCutDetectorTests
         Assert.Single(result);
         Assert.Equal(1, detector.GetNumProposals());
     }
-
-
 
     [Fact]
     public void RingNumber_LargerThanK_Throws()
@@ -343,8 +330,6 @@ public class SimpleCutDetectorTests
         Assert.Single(result2); // Second vote triggers proposal
     }
 
-
-
     [Fact]
     public void AggregateForProposal_NullMessage_Throws()
     {
@@ -353,8 +338,6 @@ public class SimpleCutDetectorTests
 
         Assert.Throws<ArgumentNullException>(() => detector.AggregateForProposal(null!));
     }
-
-
 
     [Fact]
     public void InvalidateFailingEdges_NoDownEvents_ReturnsEmpty()

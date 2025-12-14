@@ -47,7 +47,7 @@ builder.ConfigureRapidClusterKestrel(port: 5000);
 builder.Services.AddRapidCluster(options =>
 {
     options.ListenAddress = RapidClusterUtils.HostFromString("127.0.0.1:5000");
-    options.SeedAddress = RapidClusterUtils.HostFromString("127.0.0.1:5000"); // Same as listen for first node
+    options.SeedAddresses = [RapidClusterUtils.HostFromString("127.0.0.1:5000")]; // Same as listen for first node
 });
 
 var app = builder.Build();
@@ -121,7 +121,7 @@ await cluster.LeaveGracefullyAsync();
 | Property | Type | Description |
 |----------|------|-------------|
 | `ListenAddress` | `Endpoint` | The endpoint this node listens on |
-| `SeedAddress` | `Endpoint?` | The seed node to join. If null or equal to `ListenAddress`, starts a new cluster |
+| `SeedAddresses` | `List<Endpoint>?` | The seed nodes to join. If null/empty or contains only `ListenAddress`, starts a new cluster. Nodes are tried in round-robin order until join succeeds. |
 | `Metadata` | `Metadata` | Optional metadata for this node |
 
 ### RapidClusterProtocolOptions

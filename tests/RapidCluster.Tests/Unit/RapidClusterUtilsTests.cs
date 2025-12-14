@@ -50,8 +50,6 @@ public class RapidClusterUtilsTests
         Assert.Equal(0, nodeId.Low);
     }
 
-
-
     [Fact]
     public void HostFromStringValidInputParsesCorrectly()
     {
@@ -94,8 +92,6 @@ public class RapidClusterUtilsTests
     [Fact]
     public void HostFromStringInvalidFormatMultipleColonsThrows() => Assert.Throws<ArgumentException>(() => RapidClusterUtils.HostFromString("127.0.0.1:8080:extra"));
 
-
-
     [Fact]
     public void HostFromPartsValidInputCreatesEndpoint()
     {
@@ -122,8 +118,6 @@ public class RapidClusterUtilsTests
 
         Assert.Equal(-1, endpoint.Port);
     }
-
-
 
     [Fact]
     public void LoggableSingleEndpointFormatsCorrectly()
@@ -175,8 +169,6 @@ public class RapidClusterUtilsTests
 
         Assert.Equal("[127.0.0.1:1234]", result);
     }
-
-
 
     [Fact]
     public void ToRapidClusterRequestPreJoinMessageWrapsCorrectly()
@@ -359,8 +351,6 @@ public class RapidClusterUtilsTests
         Assert.NotNull(request.LeaveMessage);
         Assert.Equal(msg.Sender, request.LeaveMessage.Sender);
     }
-
-
 
     [Fact]
     public void ToRapidClusterResponseJoinResponseWrapsCorrectly()

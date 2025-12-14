@@ -68,5 +68,10 @@ public partial class Endpoint : IComparable<Endpoint>
         return left.CompareTo(right) >= 0;
     }
 
-    private string DebuggerDisplay => $"{Hostname.ToStringUtf8()}:{Port}";
+    /// <summary>
+    /// Returns the network address as a string in "hostname:port" format.
+    /// </summary>
+    public string GetNetworkAddressString() => $"{Hostname.ToStringUtf8()}:{Port}";
+
+    private string DebuggerDisplay => $"{GetNetworkAddressString()} (id={NodeId})";
 }

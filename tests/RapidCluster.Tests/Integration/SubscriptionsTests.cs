@@ -363,7 +363,6 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
             _notificationLog.Add(clusterStatusChange);
     }
 
-
     /// <summary>
     /// Two node cluster using IObservable subscriptions.
     /// Observable subscribers receive events synchronously when published, making them more

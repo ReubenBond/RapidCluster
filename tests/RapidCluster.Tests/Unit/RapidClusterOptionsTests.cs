@@ -29,42 +29,39 @@ public class RapidClusterOptionsTests
         Assert.Equal(1234, options.ListenAddress.Port);
     }
 
-
-
     [Fact]
-    public void SeedAddressDefaultIsNull()
+    public void SeedAddressesDefaultIsNull()
     {
         var options = new RapidClusterOptions();
-        Assert.Null(options.SeedAddress);
+        Assert.Null(options.SeedAddresses);
     }
 
     [Fact]
-    public void SeedAddressCanBeSet()
+    public void SeedAddressesCanBeSet()
     {
         var options = new RapidClusterOptions
         {
-            SeedAddress = Utils.HostFromParts("192.168.1.1", 9000)
+            SeedAddresses = [Utils.HostFromParts("192.168.1.1", 9000)]
         };
 
-        Assert.NotNull(options.SeedAddress);
-        Assert.Equal("192.168.1.1", options.SeedAddress.Hostname.ToStringUtf8());
-        Assert.Equal(9000, options.SeedAddress.Port);
+        Assert.NotNull(options.SeedAddresses);
+        Assert.Single(options.SeedAddresses);
+        Assert.Equal("192.168.1.1", options.SeedAddresses[0].Hostname.ToStringUtf8());
+        Assert.Equal(9000, options.SeedAddresses[0].Port);
     }
 
     [Fact]
-    public void SeedAddressCanBeSameAsListenAddressForSeedNode()
+    public void SeedAddressesCanContainListenAddressForSeedNode()
     {
         var address = Utils.HostFromParts("127.0.0.1", 1234);
         var options = new RapidClusterOptions
         {
             ListenAddress = address,
-            SeedAddress = address
+            SeedAddresses = [address]
         };
 
-        Assert.Equal(options.ListenAddress, options.SeedAddress);
+        Assert.Equal(options.ListenAddress, options.SeedAddresses![0]);
     }
-
-
 
     [Fact]
     public void MetadataDefaultIsEmptyMetadata()
@@ -86,8 +83,6 @@ public class RapidClusterOptionsTests
         Assert.Single(options.Metadata.Metadata_);
         Assert.Equal("value", options.Metadata.Metadata_["key"].ToStringUtf8());
     }
-
-
 
     [Fact]
     public void SetMetadataSetsMetadataFromDictionary()
@@ -181,8 +176,6 @@ public class RapidClusterOptionsTests
         Assert.Equal(binaryData, stored);
     }
 
-
-
     [Fact]
     public void FullConfigurationAllPropertiesSet()
     {
@@ -192,7 +185,7 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             ListenAddress = listenAddr,
-            SeedAddress = seedAddr
+            SeedAddresses = [seedAddr]
         };
 
         options.SetMetadata(new Dictionary<string, ByteString>
@@ -202,7 +195,7 @@ public class RapidClusterOptionsTests
         });
 
         Assert.Equal(listenAddr, options.ListenAddress);
-        Assert.Equal(seedAddr, options.SeedAddress);
+        Assert.Equal(seedAddr, options.SeedAddresses![0]);
         Assert.Equal(2, options.Metadata.Metadata_.Count);
     }
 

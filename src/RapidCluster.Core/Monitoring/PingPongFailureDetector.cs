@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using RapidCluster.Logging;
 using RapidCluster.Messaging;
 using RapidCluster.Pb;
 
@@ -110,12 +111,6 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         _onStaleViewDetected = onStaleViewDetected;
         _getLocalConfigurationId = getLocalConfigurationId;
         _logger = logger ?? NullLogger<PingPongFailureDetector>.Instance;
-    }
-
-    private readonly struct LoggableEndpoint(Endpoint endpoint)
-    {
-        private readonly Endpoint _endpoint = endpoint;
-        public override readonly string ToString() => RapidClusterUtils.Loggable(_endpoint);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Probe failed for {Subject} (consecutive failures: {ConsecutiveFailures}/{Threshold})")]

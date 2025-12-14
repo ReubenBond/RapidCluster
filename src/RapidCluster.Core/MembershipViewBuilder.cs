@@ -19,7 +19,7 @@ internal sealed class MembershipViewBuilder
     private readonly List<SortedSet<Endpoint>> _rings;
     private readonly SortedSet<NodeId> _identifiersSeen;
     private readonly HashSet<Endpoint> _allNodes = new(EndpointAddressComparer.Instance);
-    private long _maxMonotonicId;
+    private long _maxNodeId;
     private bool _isSealed;
 
     /// <summary>
@@ -37,7 +37,7 @@ internal sealed class MembershipViewBuilder
         _rings = new List<SortedSet<Endpoint>>(maxRingCount);
         _addressComparators = new List<AddressComparator>(maxRingCount);
         _identifiersSeen = new SortedSet<NodeId>(NodeIdComparer.Instance);
-        _maxMonotonicId = 0;
+        _maxNodeId = 0;
 
         for (var i = 0; i < maxRingCount; i++)
         {
@@ -73,7 +73,7 @@ internal sealed class MembershipViewBuilder
         _rings = new List<SortedSet<Endpoint>>(_maxRingCount);
         _addressComparators = new List<AddressComparator>(_maxRingCount);
         _identifiersSeen = new SortedSet<NodeId>(NodeIdComparer.Instance);
-        _maxMonotonicId = view.MaxMonotonicId;
+        _maxNodeId = view.MaxNodeId;
 
         for (var i = 0; i < _maxRingCount; i++)
         {
@@ -102,8 +102,8 @@ internal sealed class MembershipViewBuilder
     /// (at most nodes-1 rings, minimum 1).</param>
     /// <param name="nodeIds">Collection of node identifiers to add.</param>
     /// <param name="endpoints">Collection of endpoints corresponding to the node IDs.</param>
-    /// <param name="maxMonotonicId">The highest monotonic ID ever assigned. If not provided, computed from endpoints.</param>
-    public MembershipViewBuilder(int maxRingCount, ICollection<NodeId> nodeIds, ICollection<Endpoint> endpoints, long? maxMonotonicId = null)
+    /// <param name="maxNodeId">The highest node ID ever assigned. If not provided, computed from endpoints.</param>
+    public MembershipViewBuilder(int maxRingCount, ICollection<NodeId> nodeIds, ICollection<Endpoint> endpoints, long? maxNodeId = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
@@ -112,8 +112,8 @@ internal sealed class MembershipViewBuilder
         _addressComparators = new List<AddressComparator>(maxRingCount);
         _identifiersSeen = new SortedSet<NodeId>(NodeIdComparer.Instance);
 
-        // Compute maxMonotonicId from endpoints if not provided
-        _maxMonotonicId = maxMonotonicId ?? endpoints.Select(e => e.MonotonicNodeId).DefaultIfEmpty(0).Max();
+        // Compute maxNodeId from endpoints if not provided
+        _maxNodeId = maxNodeId ?? endpoints.Select(e => e.NodeId).DefaultIfEmpty(0).Max();
 
         for (var i = 0; i < maxRingCount; i++)
         {
@@ -157,39 +157,39 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
-    /// Gets the highest monotonic node ID ever assigned.
+    /// Gets the highest node ID ever assigned.
     /// </summary>
-    public long MaxMonotonicId
+    public long MaxNodeId
     {
         get
         {
             ThrowIfSealed();
-            return _maxMonotonicId;
+            return _maxNodeId;
         }
     }
 
     /// <summary>
-    /// Gets the next monotonic node ID to assign and increments the counter.
-    /// Call this when adding a new node to get its unique monotonic ID.
+    /// Gets the next node ID to assign and increments the counter.
+    /// Call this when adding a new node to get its unique node ID.
     /// </summary>
-    /// <returns>The next available monotonic node ID.</returns>
-    public long GetNextMonotonicId()
+    /// <returns>The next available node ID.</returns>
+    public long GetNextNodeId()
     {
         ThrowIfSealed();
-        return ++_maxMonotonicId;
+        return ++_maxNodeId;
     }
 
     /// <summary>
-    /// Sets the max monotonic ID. Used when applying a consensus decision that includes
-    /// the max_monotonic_id from the proposal.
+    /// Sets the max node ID. Used when applying a consensus decision that includes
+    /// the max_node_id from the proposal.
     /// </summary>
-    /// <param name="maxMonotonicId">The new max monotonic ID (must be >= current).</param>
-    public void SetMaxMonotonicId(long maxMonotonicId)
+    /// <param name="maxNodeId">The new max node ID (must be >= current).</param>
+    public void SetMaxNodeId(long maxNodeId)
     {
         ThrowIfSealed();
-        if (maxMonotonicId > _maxMonotonicId)
+        if (maxNodeId > _maxNodeId)
         {
-            _maxMonotonicId = maxMonotonicId;
+            _maxNodeId = maxNodeId;
         }
     }
 
@@ -222,9 +222,9 @@ internal sealed class MembershipViewBuilder
 
     /// <summary>
     /// Add a node to all K rings and records its unique identifier.
-    /// The endpoint must have its MonotonicNodeId already set.
+    /// The endpoint must have its NodeId already set.
     /// </summary>
-    /// <param name="node">The node to be added (must have MonotonicNodeId set).</param>
+    /// <param name="node">The node to be added (must have NodeId set).</param>
     /// <param name="nodeId">The logical identifier of the node being added.</param>
     /// <exception cref="NodeAlreadyInRingException">Thrown if the node is already in the ring.</exception>
     /// <exception cref="UuidAlreadySeenException">Thrown if the node ID has been seen before.</exception>
@@ -252,10 +252,10 @@ internal sealed class MembershipViewBuilder
         _allNodes.Add(node);
         _identifiersSeen.Add(nodeId);
 
-        // Update max monotonic ID if this node's ID is higher
-        if (node.MonotonicNodeId > _maxMonotonicId)
+        // Update max node ID if this node's ID is higher
+        if (node.NodeId > _maxNodeId)
         {
-            _maxMonotonicId = node.MonotonicNodeId;
+            _maxNodeId = node.NodeId;
         }
 
         return this;
@@ -366,7 +366,7 @@ internal sealed class MembershipViewBuilder
             ringsBuilder.Add([.. _rings[i]]);
         }
 
-        return new MembershipView(ringCount, configurationId, ringsBuilder.MoveToImmutable(), [.. _identifiersSeen], _maxMonotonicId);
+        return new MembershipView(ringCount, configurationId, ringsBuilder.MoveToImmutable(), [.. _identifiersSeen], _maxNodeId);
     }
 
     /// <summary>

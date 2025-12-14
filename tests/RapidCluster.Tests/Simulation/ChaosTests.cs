@@ -28,7 +28,6 @@ public sealed class ChaosTests : IAsyncLifetime
         await _harness.DisposeAsync();
     }
 
-
     [Fact]
     public void ChaosInjectorDefaultsToZeroRates()
     {
@@ -100,8 +99,6 @@ public sealed class ChaosTests : IAsyncLifetime
         _chaos.MaybeInjectFault();
         Assert.True(_harness.Network.CanDeliver(node1Addr, node2Addr));
     }
-
-
 
     [Fact]
     public void RunChaosForManySteps()
@@ -179,8 +176,6 @@ public sealed class ChaosTests : IAsyncLifetime
         // Node should still exist
         Assert.Contains(node, _harness.Nodes);
     }
-
-
 
     [Fact]
     public void ScheduledPartitionExecutesOnTime()
@@ -279,8 +274,6 @@ public sealed class ChaosTests : IAsyncLifetime
         _harness.RunForDuration(TimeSpan.FromSeconds(10));
         _chaos.MaybeInjectFault(); // Should not throw even though node is already crashed
     }
-
-
 
     /// <summary>
     /// Tests the cluster's resilience to random network partitions being created and healed.
@@ -396,5 +389,4 @@ public sealed class ChaosTests : IAsyncLifetime
     }
 
 }
-
 

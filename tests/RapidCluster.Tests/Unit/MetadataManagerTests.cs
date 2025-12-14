@@ -85,8 +85,6 @@ public class MetadataManagerTests
         Assert.Equal("us-west", result.Metadata_["datacenter"].ToStringUtf8());
     }
 
-
-
     [Fact]
     public void AddMetadataBulkAddStoresAll()
     {
@@ -135,8 +133,6 @@ public class MetadataManagerTests
         Assert.Equal("follower", manager.Get(endpoint)!.Metadata_["role"].ToStringUtf8());
     }
 
-
-
     [Fact]
     public void GetExistingEndpointReturnsMetadata()
     {
@@ -173,8 +169,6 @@ public class MetadataManagerTests
 
         Assert.Null(result);
     }
-
-
 
     [Fact]
     public void RemoveNodeExistingEndpointRemoves()
@@ -227,8 +221,6 @@ public class MetadataManagerTests
 
         Assert.Null(manager.Get(endpoint));
     }
-
-
 
     [Fact]
     public void GetAllMetadataEmptyReturnsEmptyDictionary()
@@ -288,7 +280,6 @@ public class MetadataManagerTests
         Assert.False(result.ContainsKey(endpoint1));
         Assert.True(result.ContainsKey(endpoint2));
     }
-
 
     private static Metadata CreateMetadata(string key, string value)
     {

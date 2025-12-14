@@ -67,7 +67,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         }
     }
 
-
     /// <summary>
     /// Verifies that the seed node receives view change callbacks for membership changes.
     /// With IObservable, subscribers only receive events published AFTER they subscribe.
@@ -206,8 +205,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
             $"Joiner2 should receive at least 1 callback, got {joiner2CallbackLog.Count}");
     }
 
-
-
     /// <summary>
     /// Verifies that the membership list in callbacks grows as nodes join.
     /// Note: Subscriptions registered after MembershipService initialization will not receive
@@ -298,8 +295,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         Assert.Contains(3, sizes);
         Assert.Contains(2, sizes);
     }
-
-
 
     /// <summary>
     /// Verifies that delta information contains endpoint data for joins with correct Up status.
@@ -408,8 +403,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         Assert.Equal(EdgeStatus.Up, joiner2Delta.Status);
     }
 
-
-
     /// <summary>
     /// Verifies that metadata is propagated in join notifications.
     /// </summary>
@@ -439,8 +432,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var allDeltas = callbackLog.SelectMany(c => c.Delta).ToList();
         Assert.NotEmpty(allDeltas);
     }
-
-
 
     /// <summary>
     /// Verifies that configuration ID changes with each membership change.
@@ -514,8 +505,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         Assert.Equal(seedConfigId, joiner1ConfigId);
     }
 
-
-
     /// <summary>
     /// Verifies that subscriptions added after join still receive future events.
     /// </summary>
@@ -579,8 +568,6 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
                 "ViewChange should follow ViewChangeProposal");
         }
     }
-
-
 
     /// <summary>
     /// Verifies that callback exceptions don't crash the membership service.

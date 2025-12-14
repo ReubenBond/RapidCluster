@@ -4,9 +4,9 @@ namespace RapidCluster.Tests.Simulation.Infrastructure;
 
 /// <summary>
 /// Injects random faults into the RapidCluster simulation for chaos testing.
-/// Extends <see cref="Clockwork.ChaosInjector{TNode, TCluster}"/> with RapidCluster-specific operations.
+/// Extends <see cref="ChaosInjector{TNode, TCluster}"/> with RapidCluster-specific operations.
 /// </summary>
-internal sealed class ChaosInjector : Clockwork.ChaosInjector<RapidSimulationNode, RapidSimulationCluster>
+internal sealed class ChaosInjector : ChaosInjector<RapidSimulationNode, RapidSimulationCluster>
 {
     /// <summary>
     /// Creates a new chaos injector for the specified harness.

@@ -900,7 +900,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 continue;
             }
 
-            proposal.Members.Add(new MemberInfo { Endpoint = endpointWithNodeId, NodeId = nodeId });
+            proposal.Members.Add(new MemberInfo { Endpoint = endpointWithNodeId });
 
             // Add metadata for this member
             var metadata = _metadataManager.Get(endpoint) ?? _joinerMetadata.GetValueOrDefault(endpoint, new Metadata());

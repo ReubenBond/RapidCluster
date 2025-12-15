@@ -175,6 +175,66 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Tests that when a node's own address is in the seed list along with other seeds,
+    /// the self address is filtered out and the node joins the cluster via other seeds.
+    /// This is important for Aspire-style deployments where service discovery may return
+    /// all replica addresses including the node's own address.
+    /// </summary>
+    [Fact]
+    public void SelfInSeedList_FilteredOut_JoinsOthers()
+    {
+        var seedNode = _harness.CreateSeedNode();
+
+        _harness.WaitForConvergence(expectedSize: 1);
+
+        // Get the address that the joiner will use
+        var joinerAddress = RapidClusterUtils.HostFromParts("node", 1);
+
+        // Create joiner with seed list containing [self, seedNode]
+        // Self should be filtered out, and it should join via seedNode
+        var seedsIncludingSelf = new List<Endpoint> { joinerAddress, seedNode.Address };
+        var joiner = _harness.CreateJoinerNodeWithSeedAddresses(seedsIncludingSelf, nodeId: 1);
+
+        _harness.WaitForConvergence(expectedSize: 2);
+
+        Assert.True(joiner.IsInitialized);
+        Assert.Equal(2, joiner.MembershipSize);
+    }
+
+    /// <summary>
+    /// Tests that multiple copies of self in the seed list are all filtered out.
+    /// The node should still successfully join via the remaining valid seeds.
+    /// </summary>
+    [Fact]
+    public void MultipleSelfInSeedList_AllFilteredOut()
+    {
+        var seedNode = _harness.CreateSeedNode();
+        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+
+        _harness.WaitForConvergence(expectedSize: 2);
+
+        // Get the address that joiner2 will use
+        var joiner2Address = RapidClusterUtils.HostFromParts("node", 2);
+
+        // Create joiner with seed list containing [self, self, seedNode, self, joiner1]
+        // All self entries should be filtered out
+        var seedsWithMultipleSelf = new List<Endpoint>
+        {
+            joiner2Address,
+            joiner2Address,
+            seedNode.Address,
+            joiner2Address,
+            joiner1.Address
+        };
+        var joiner2 = _harness.CreateJoinerNodeWithSeedAddresses(seedsWithMultipleSelf, nodeId: 2);
+
+        _harness.WaitForConvergence(expectedSize: 3);
+
+        Assert.True(joiner2.IsInitialized);
+        Assert.Equal(3, joiner2.MembershipSize);
+    }
+
+    /// <summary>
     /// Tests that seed discovery works with larger cluster sizes.
     /// </summary>
     [Fact]

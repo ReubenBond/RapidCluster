@@ -1,7 +1,8 @@
 using Grpc.Core;
+using RapidCluster.Messaging;
 using RapidCluster.Pb;
 
-namespace RapidCluster.Messaging;
+namespace RapidCluster.Grpc;
 
 /// <summary>
 /// gRPC service implementation for Rapid membership protocol.

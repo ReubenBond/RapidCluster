@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option csharp_namespace = "RapidCluster.Pb";
+
+package rapidcluster;
+
+import "rapid_types.proto";
+
+service MembershipService {
+  rpc SendRequest (RapidClusterRequest) returns (RapidClusterResponse) {}
+}

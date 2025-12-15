@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<Description>gRPC transport implementation for RapidCluster - A distributed membership service for .NET.</Description>
+		<RootNamespace>RapidCluster.Grpc</RootNamespace>
+		<PackageId>RapidCluster.Grpc</PackageId>
+		<Version>1.0.0-beta.1</Version>
+		<PackageTags>distributed-systems;membership;grpc;transport;cluster;microservices</PackageTags>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="RapidCluster.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\RapidCluster.Core\RapidCluster.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Grpc.AspNetCore" />
+		<PackageReference Include="Grpc.Net.Client" />
+		<PackageReference Include="Grpc.Tools">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Protobuf Include="Protos\rapid_service.proto" GrpcServices="Both" AdditionalImportDirs="..\RapidCluster.Core\Protos" />
+	</ItemGroup>
+
+</Project>

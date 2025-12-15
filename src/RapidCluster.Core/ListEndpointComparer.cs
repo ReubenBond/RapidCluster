@@ -45,25 +45,6 @@ internal sealed class EndpointAddressComparer : IEqualityComparer<Endpoint>
     }
 }
 
-/// <summary>
-/// Comparer for NodeId instances. Delegates to NodeId.CompareTo.
-/// Used with SortedSet to ensure consistent ordering across nodes.
-/// </summary>
-internal sealed class NodeIdComparer : IComparer<NodeId>
-{
-    public static readonly NodeIdComparer Instance = new();
-
-    private NodeIdComparer() { }
-
-    public int Compare(NodeId? x, NodeId? y)
-    {
-        if (ReferenceEquals(x, y)) return 0;
-        if (x is null) return -1;
-        if (y is null) return 1;
-        return x.CompareTo(y);
-    }
-}
-
 internal sealed class ListEndpointComparer : IEqualityComparer<List<Endpoint>>
 {
     public static readonly ListEndpointComparer Instance = new();
@@ -109,7 +90,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
 
         for (var i = 0; i < x.Members.Count; i++)
         {
-            if (ProtobufEndpointComparer.Instance.Compare(x.Members[i].Endpoint, y.Members[i].Endpoint) != 0)
+            if (ProtobufEndpointComparer.Instance.Compare(x.Members[i], y.Members[i]) != 0)
             {
                 return false;
             }
@@ -123,7 +104,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         hash.Add(obj.ConfigurationId);
         foreach (var member in obj.Members)
         {
-            hash.Add(member.Endpoint?.GetHashCode() ?? 0);
+            hash.Add(member?.GetHashCode() ?? 0);
         }
         return hash.ToHashCode();
     }
@@ -149,11 +130,10 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         // Then compare members lexicographically
         for (var i = 0; i < x.Members.Count; i++)
         {
-            var endpointCompare = ProtobufEndpointComparer.Instance.Compare(x.Members[i].Endpoint, y.Members[i].Endpoint);
+            var endpointCompare = ProtobufEndpointComparer.Instance.Compare(x.Members[i], y.Members[i]);
             if (endpointCompare != 0) return endpointCompare;
         }
 
         return 0;
     }
 }
-

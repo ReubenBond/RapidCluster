@@ -9,17 +9,6 @@ namespace RapidCluster;
 public static class RapidClusterUtils
 {
     /// <summary>
-    /// Converts a UUID to a NodeId.
-    /// </summary>
-    public static NodeId NodeIdFromUuid(Guid uuid)
-    {
-        var bytes = uuid.ToByteArray();
-        var high = BitConverter.ToInt64(bytes, 0);
-        var low = BitConverter.ToInt64(bytes, 8);
-        return new NodeId { High = high, Low = low };
-    }
-
-    /// <summary>
     /// Creates an Endpoint from a host:port string.
     /// </summary>
     public static Endpoint HostFromString(string hostString)

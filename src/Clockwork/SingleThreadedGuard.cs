@@ -27,6 +27,8 @@ public sealed class SingleThreadedGuard
         if (existingOwner != 0 && existingOwner != currentThreadId)
         {
             var ownerStack = _ownerStackTrace ?? "(unknown)";
+            Debugger.Launch();
+            Debugger.Break();
             throw new InvalidOperationException(
                 $"Concurrent access detected in single-threaded simulation code. " +
                 $"Thread {currentThreadId} attempted to enter while thread {existingOwner} is inside. " +

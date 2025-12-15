@@ -174,7 +174,8 @@ public class PaxosTests
         Assert.Equal(5, msg.Rnd.Round);
         Assert.Equal(3, msg.Vrnd.Round);
         Assert.Single(msg.Proposal.Members);
-        Assert.Equal(vval, msg.Proposal.Members[0].Endpoint);
+        Assert.Equal(vval.Hostname, msg.Proposal.Members[0].Hostname);
+        Assert.Equal(vval.Port, msg.Proposal.Members[0].Port);
     }
 
     [Fact]
@@ -195,9 +196,9 @@ public class PaxosTests
     public void Phase1bMessageMultipleMembersAllStored()
     {
         var proposal = new MembershipProposal { ConfigurationId = 101 };
-        proposal.Members.Add(new MemberInfo { Endpoint = Utils.HostFromParts("127.0.0.1", 1001), NodeId = CreateNodeId("id1") });
-        proposal.Members.Add(new MemberInfo { Endpoint = Utils.HostFromParts("127.0.0.1", 1002), NodeId = CreateNodeId("id2") });
-        proposal.Members.Add(new MemberInfo { Endpoint = Utils.HostFromParts("127.0.0.1", 1003), NodeId = CreateNodeId("id3") });
+        proposal.Members.Add(Utils.HostFromParts("127.0.0.1", 1001, Utils.GetNextNodeId()));
+        proposal.Members.Add(Utils.HostFromParts("127.0.0.1", 1002, Utils.GetNextNodeId()));
+        proposal.Members.Add(Utils.HostFromParts("127.0.0.1", 1003, Utils.GetNextNodeId()));
 
         var msg = new Phase1bMessage
         {
@@ -274,11 +275,7 @@ public class PaxosTests
         var proposal = new MembershipProposal { ConfigurationId = 101 };
         for (var i = 0; i < 10; i++)
         {
-            proposal.Members.Add(new MemberInfo
-            {
-                Endpoint = Utils.HostFromParts("192.168.1." + i, 5000 + i),
-                NodeId = CreateNodeId("id" + i)
-            });
+            proposal.Members.Add(Utils.HostFromParts("192.168.1." + i, 5000 + i, Utils.GetNextNodeId()));
         }
 
         var msg = new Phase2bMessage
@@ -327,11 +324,7 @@ public class PaxosTests
         var proposal = new MembershipProposal { ConfigurationId = 101 };
         for (var i = 0; i < 100; i++)
         {
-            proposal.Members.Add(new MemberInfo
-            {
-                Endpoint = Utils.HostFromParts("10.0.0." + i, 5000),
-                NodeId = CreateNodeId("id" + i)
-            });
+            proposal.Members.Add(Utils.HostFromParts("10.0.0." + i, 5000, Utils.GetNextNodeId()));
         }
 
         var msg = new FastRoundPhase2bMessage
@@ -440,8 +433,8 @@ public class PaxosTests
         var deserialized = Phase2aMessage.Parser.ParseFrom(bytes);
 
         Assert.Equal(2, deserialized.Proposal.Members.Count);
-        Assert.Equal("10.0.0.1", deserialized.Proposal.Members[0].Endpoint.Hostname.ToStringUtf8());
-        Assert.Equal(5001, deserialized.Proposal.Members[0].Endpoint.Port);
+        Assert.Equal("10.0.0.1", deserialized.Proposal.Members[0].Hostname.ToStringUtf8());
+        Assert.Equal(5001, deserialized.Proposal.Members[0].Port);
     }
 
     [Fact]
@@ -499,28 +492,16 @@ public class PaxosTests
     private static MembershipProposal CreateProposal(params Endpoint[] endpoints)
     {
         var proposal = new MembershipProposal { ConfigurationId = 100 };
-        var counter = 0;
         foreach (var endpoint in endpoints)
         {
-            proposal.Members.Add(new MemberInfo
+            // If the endpoint doesn't have a node_id set, assign one
+            if (endpoint.NodeId == 0)
             {
-                Endpoint = endpoint,
-                NodeId = CreateNodeId("node" + counter++)
-            });
+                endpoint.NodeId = Utils.GetNextNodeId();
+            }
+            proposal.Members.Add(endpoint);
         }
         return proposal;
-    }
-
-    /// <summary>
-    /// Helper to create a NodeId
-    /// </summary>
-    private static NodeId CreateNodeId(string id)
-    {
-        return new NodeId
-        {
-            High = (long)id.GetHashCode(StringComparison.Ordinal),
-            Low = (long)id.GetHashCode(StringComparison.Ordinal) * 31
-        };
     }
 
     /// <summary>
@@ -574,8 +555,8 @@ public class PaxosTests
 
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -595,8 +576,8 @@ public class PaxosTests
 
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -617,8 +598,8 @@ public class PaxosTests
 
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -642,7 +623,7 @@ public class PaxosTests
         // Should return one of the values (first non-empty proposal from any message)
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        var endpoint = result.Members[0].Endpoint;
+        var endpoint = result.Members[0];
         Assert.True(
             (endpoint.Hostname.Equals(node1.Hostname) && endpoint.Port == node1.Port) ||
             (endpoint.Hostname.Equals(node2.Hostname) && endpoint.Port == node2.Port) ||
@@ -667,8 +648,8 @@ public class PaxosTests
         // Should fall back to the first non-empty proposal
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -695,8 +676,8 @@ public class PaxosTests
         Assert.NotNull(result);
         Assert.Single(result.Members);
         // Falls back to smallest proposal by lexicographic order: node1 < node2
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -725,8 +706,8 @@ public class PaxosTests
         // node2 has 6 votes which exceeds N/4=5
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(node2.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node2.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node2.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node2.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -746,10 +727,10 @@ public class PaxosTests
 
         Assert.NotNull(result);
         Assert.Equal(2, result.Members.Count);
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
-        Assert.Equal(node2.Hostname, result.Members[1].Endpoint.Hostname);
-        Assert.Equal(node2.Port, result.Members[1].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
+        Assert.Equal(node2.Hostname, result.Members[1].Hostname);
+        Assert.Equal(node2.Port, result.Members[1].Port);
     }
 
     [Fact]
@@ -781,8 +762,8 @@ public class PaxosTests
         // Should choose node1 because vrnd (1,2) > (1,1)
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(node1.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, result.Members[0].Hostname);
+        Assert.Equal(node1.Port, result.Members[0].Port);
     }
 
     [Fact]
@@ -825,8 +806,8 @@ public class PaxosTests
 
         // The result should be the "smallest" proposal by lexicographic order
         // node1 (10.0.0.1) < node2 (10.0.0.2) < node3 (10.0.0.3)
-        Assert.Equal(node1.Hostname, firstResult.Members[0].Endpoint.Hostname);
-        Assert.Equal(node1.Port, firstResult.Members[0].Endpoint.Port);
+        Assert.Equal(node1.Hostname, firstResult.Members[0].Hostname);
+        Assert.Equal(node1.Port, firstResult.Members[0].Port);
     }
 
     [Fact]
@@ -850,7 +831,7 @@ public class PaxosTests
         // Should select nodeA (smallest by lexicographic order), not nodeC (first in list)
         Assert.NotNull(result);
         Assert.Single(result.Members);
-        Assert.Equal(nodeA.Hostname, result.Members[0].Endpoint.Hostname);
-        Assert.Equal(nodeA.Port, result.Members[0].Endpoint.Port);
+        Assert.Equal(nodeA.Hostname, result.Members[0].Hostname);
+        Assert.Equal(nodeA.Port, result.Members[0].Port);
     }
 }

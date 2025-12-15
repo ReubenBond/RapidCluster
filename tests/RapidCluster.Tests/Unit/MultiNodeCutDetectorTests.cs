@@ -36,8 +36,8 @@ public class MultiNodeCutDetectorTests
         var builder = new MembershipViewBuilder(k);
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i);
-            builder.RingAdd(node, Utils.NodeIdFromUuid(Guid.NewGuid()));
+            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i, Utils.GetNextNodeId());
+            builder.RingAdd(node);
         }
         return builder.Build();
     }
@@ -290,9 +290,9 @@ public class MultiNodeCutDetectorTests
 
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0.2", 2 + i);
+            var node = Utils.HostFromParts("127.0.0.2", 2 + i, Utils.GetNextNodeId());
             endpoints.Add(node);
-            builder.RingAdd(node, Utils.NodeIdFromUuid(Guid.NewGuid()));
+            builder.RingAdd(node);
         }
 
         var mView = builder.Build();
@@ -1169,9 +1169,9 @@ public class MultiNodeCutDetectorTests
 
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0.2", 2 + i);
+            var node = Utils.HostFromParts("127.0.0.2", 2 + i, Utils.GetNextNodeId());
             endpoints.Add(node);
-            builder.RingAdd(node, Utils.NodeIdFromUuid(Guid.NewGuid()));
+            builder.RingAdd(node);
         }
 
         var mView = builder.Build();
@@ -1248,9 +1248,9 @@ public class MultiNodeCutDetectorTests
 
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i);
+            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i, Utils.GetNextNodeId());
             endpoints.Add(node);
-            builder.RingAdd(node, Utils.NodeIdFromUuid(Guid.NewGuid()));
+            builder.RingAdd(node);
         }
 
         var mView = builder.Build();
@@ -1274,26 +1274,25 @@ public class MultiNodeCutDetectorTests
     /// <summary>
     /// Generator for a list of unique endpoints with their NodeIds.
     /// </summary>
-    private static Gen<List<(Endpoint Endpoint, NodeId NodeId)>> GenUniqueNodes(int minCount, int maxCount)
+    private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Select(
                 Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Count() == count),
                 Gen.Int[1000, 65535].Array[count],
                 Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
-            ).Select((octets, ports, nodeIdSeeds) =>
+            ).Select((octets, ports, nodeIds) =>
             {
-                var result = new List<(Endpoint, NodeId)>(count);
+                var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
                 {
                     var endpoint = new Endpoint
                     {
                         Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
-                        Port = ports[i]
+                        Port = ports[i],
+                        NodeId = nodeIds[i]
                     };
-                    // Use the unique seed for both High and Low to ensure unique NodeIds
-                    var nodeId = new NodeId { High = nodeIdSeeds[i], Low = i };
-                    result.Add((endpoint, nodeId));
+                    result.Add(endpoint);
                 }
                 return result;
             }));
@@ -1312,9 +1311,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1327,7 +1326,7 @@ public class MultiNodeCutDetectorTests
 
                 var detector = new MultiNodeCutDetector(h, l, view);
 
-                var subject = nodes[0].Endpoint;
+                var subject = nodes[0];
 
                 // Report h-1 times - should not trigger
                 var proposals = new List<List<Endpoint>>();
@@ -1336,7 +1335,7 @@ public class MultiNodeCutDetectorTests
                     var result = detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[i + 1].Endpoint,
+                            EdgeSrc = nodes[i + 1],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1356,9 +1355,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1368,8 +1367,8 @@ public class MultiNodeCutDetectorTests
                 // Use actualK > H >= L (e.g., H=actualK-1, L=1)
                 var detector = new MultiNodeCutDetector(actualK - 1, 1, view);
 
-                var observer = nodes[1].Endpoint;
-                var subject = nodes[0].Endpoint;
+                var observer = nodes[1];
+                var subject = nodes[0];
 
                 // Report multiple times from the same observer on the same ring
                 var results = new List<List<Endpoint>>();
@@ -1404,9 +1403,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1417,7 +1416,7 @@ public class MultiNodeCutDetectorTests
                 var l = 1;
 
                 var detector = new MultiNodeCutDetector(h, l, view);
-                var subject = nodes[0].Endpoint;
+                var subject = nodes[0];
 
                 // Send exactly H reports on different rings
                 List<Endpoint> lastResult = [];
@@ -1426,7 +1425,7 @@ public class MultiNodeCutDetectorTests
                     lastResult = detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 1)) + 1].Endpoint,
+                            EdgeSrc = nodes[(i % (nodes.Count - 1)) + 1],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1450,9 +1449,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1464,8 +1463,8 @@ public class MultiNodeCutDetectorTests
                 var l = 2;
 
                 var detector = new MultiNodeCutDetector(h, l, view);
-                var subject1 = nodes[0].Endpoint;
-                var subject2 = nodes[1].Endpoint;
+                var subject1 = nodes[0];
+                var subject2 = nodes[1];
 
                 // Bring subject1 to H-1 reports (just below H, in preProposal)
                 for (var i = 0; i < h - 1; i++)
@@ -1473,7 +1472,7 @@ public class MultiNodeCutDetectorTests
                     detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2].Endpoint,
+                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
                             EdgeDst = subject1,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1486,7 +1485,7 @@ public class MultiNodeCutDetectorTests
                     detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2].Endpoint,
+                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
                             EdgeDst = subject2,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1497,7 +1496,7 @@ public class MultiNodeCutDetectorTests
                 var result = detector.AggregateForProposal(
                     new AlertMessage
                     {
-                        EdgeSrc = nodes[2].Endpoint,
+                        EdgeSrc = nodes[2],
                         EdgeDst = subject1,
                         EdgeStatus = EdgeStatus.Up,
                         RingNumber = { h - 1 }
@@ -1519,9 +1518,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1532,9 +1531,9 @@ public class MultiNodeCutDetectorTests
                 var l = 2;
 
                 var detector = new MultiNodeCutDetector(h, l, view);
-                var subject1 = nodes[0].Endpoint;
-                var subject2 = nodes[1].Endpoint;
-                var subject3 = nodes[2].Endpoint;
+                var subject1 = nodes[0];
+                var subject2 = nodes[1];
+                var subject3 = nodes[2];
 
                 // Bring all three subjects to H-1 reports
                 foreach (var subject in new[] { subject1, subject2, subject3 })
@@ -1544,7 +1543,7 @@ public class MultiNodeCutDetectorTests
                         detector.AggregateForProposal(
                             new AlertMessage
                             {
-                                EdgeSrc = nodes[(i % (nodes.Count - 3)) + 3].Endpoint,
+                                EdgeSrc = nodes[(i % (nodes.Count - 3)) + 3],
                                 EdgeDst = subject,
                                 EdgeStatus = EdgeStatus.Up,
                                 RingNumber = { i }
@@ -1556,7 +1555,7 @@ public class MultiNodeCutDetectorTests
                 detector.AggregateForProposal(
                     new AlertMessage
                     {
-                        EdgeSrc = nodes[3].Endpoint,
+                        EdgeSrc = nodes[3],
                         EdgeDst = subject1,
                         EdgeStatus = EdgeStatus.Up,
                         RingNumber = { h - 1 }
@@ -1565,7 +1564,7 @@ public class MultiNodeCutDetectorTests
                 var result2 = detector.AggregateForProposal(
                     new AlertMessage
                     {
-                        EdgeSrc = nodes[3].Endpoint,
+                        EdgeSrc = nodes[3],
                         EdgeDst = subject2,
                         EdgeStatus = EdgeStatus.Up,
                         RingNumber = { h - 1 }
@@ -1579,7 +1578,7 @@ public class MultiNodeCutDetectorTests
                 var finalResult = detector.AggregateForProposal(
                     new AlertMessage
                     {
-                        EdgeSrc = nodes[3].Endpoint,
+                        EdgeSrc = nodes[3],
                         EdgeDst = subject3,
                         EdgeStatus = EdgeStatus.Up,
                         RingNumber = { h - 1 }
@@ -1605,9 +1604,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1618,13 +1617,13 @@ public class MultiNodeCutDetectorTests
                 var l = 2;
 
                 // Create messages for 3 subjects, each with all actualK ring numbers
-                var subjects = nodes.Take(3).Select(n => n.Endpoint).ToList();
+                var subjects = nodes.Take(3).ToList();
                 var messages = new List<AlertMessage>();
                 foreach (var subject in subjects)
                 {
                     var msg = new AlertMessage
                     {
-                        EdgeSrc = nodes[3].Endpoint,
+                        EdgeSrc = nodes[3],
                         EdgeDst = subject,
                         EdgeStatus = EdgeStatus.Up
                     };
@@ -1675,9 +1674,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1687,12 +1686,12 @@ public class MultiNodeCutDetectorTests
                 var h = actualK - 1;
                 var l = 1;
 
-                var subject = nodes[0].Endpoint;
+                var subject = nodes[0];
 
                 // Create a message with multiple ring numbers (up to h)
                 var msg = new AlertMessage
                 {
-                    EdgeSrc = nodes[1].Endpoint,
+                    EdgeSrc = nodes[1],
                     EdgeDst = subject,
                     EdgeStatus = EdgeStatus.Up
                 };
@@ -1730,9 +1729,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1744,8 +1743,8 @@ public class MultiNodeCutDetectorTests
                 if (l > h - 1) l = h - 1; // Ensure L < H
 
                 var detector = new MultiNodeCutDetector(h, l, view);
-                var subject1 = nodes[0].Endpoint;
-                var subject2 = nodes[1].Endpoint;
+                var subject1 = nodes[0];
+                var subject2 = nodes[1];
 
                 // subject2 gets L-1 reports (below L, should not block)
                 for (var i = 0; i < l - 1; i++)
@@ -1753,7 +1752,7 @@ public class MultiNodeCutDetectorTests
                     detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2].Endpoint,
+                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
                             EdgeDst = subject2,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1767,7 +1766,7 @@ public class MultiNodeCutDetectorTests
                     lastResult = detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2].Endpoint,
+                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
                             EdgeDst = subject1,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1789,9 +1788,9 @@ public class MultiNodeCutDetectorTests
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -1807,13 +1806,13 @@ public class MultiNodeCutDetectorTests
                 var expectedProposals = 0;
                 for (var s = 0; s < 3; s++)
                 {
-                    var subject = nodes[s].Endpoint;
+                    var subject = nodes[s];
                     for (var i = 0; i < h; i++)
                     {
                         var result = detector.AggregateForProposal(
                             new AlertMessage
                             {
-                                EdgeSrc = nodes[(i % (nodes.Count - 3)) + 3].Endpoint,
+                                EdgeSrc = nodes[(i % (nodes.Count - 3)) + 3],
                                 EdgeDst = subject,
                                 EdgeStatus = EdgeStatus.Up,
                                 RingNumber = { i }

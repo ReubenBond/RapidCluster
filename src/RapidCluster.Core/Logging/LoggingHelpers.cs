@@ -47,7 +47,7 @@ internal readonly struct LoggableMembershipProposal(MembershipProposal? proposal
     public override readonly string ToString() =>
         _proposal is null
             ? "[]"
-            : $"[{string.Join(", ", _proposal.Members.Select(m => m.Endpoint.GetNetworkAddressString()))}]";
+            : $"[{string.Join(", ", _proposal.Members.Select(m => m.GetNetworkAddressString()))}]";
 }
 
 /// <summary>

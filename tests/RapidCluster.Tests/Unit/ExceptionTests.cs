@@ -109,54 +109,6 @@ public class ExceptionTests
     public void NodeNotInRingExceptionNullEndpointThrowsArgumentNull() => Assert.Throws<ArgumentNullException>(() => new NodeNotInRingException((Endpoint)null!));
 
     [Fact]
-    public void UuidAlreadySeenExceptionDefaultConstructorWorks()
-    {
-        var ex = new UuidAlreadySeenException();
-        Assert.NotNull(ex);
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionWithMessageWorks()
-    {
-        var ex = new UuidAlreadySeenException("Custom message");
-        Assert.Equal("Custom message", ex.Message);
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionWithEndpointAndNodeIdWorks()
-    {
-        var endpoint = Utils.HostFromParts("10.0.0.1", 9000);
-        var nodeId = Utils.NodeIdFromUuid(Guid.NewGuid());
-        var ex = new UuidAlreadySeenException(endpoint, nodeId);
-
-        Assert.NotNull(ex.Message);
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionWithMessageAndInnerExceptionWorks()
-    {
-        var inner = new InvalidOperationException("Inner");
-        var ex = new UuidAlreadySeenException("Outer", inner);
-
-        Assert.Equal("Outer", ex.Message);
-        Assert.Same(inner, ex.InnerException);
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionNullEndpointThrowsArgumentNull()
-    {
-        var nodeId = Utils.NodeIdFromUuid(Guid.NewGuid());
-        Assert.Throws<ArgumentNullException>(() => new UuidAlreadySeenException(null!, nodeId));
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionNullNodeIdThrowsArgumentNull()
-    {
-        var endpoint = Utils.HostFromParts("10.0.0.1", 9000);
-        Assert.Throws<ArgumentNullException>(() => new UuidAlreadySeenException(endpoint, null!));
-    }
-
-    [Fact]
     public void JoinExceptionInheritsFromException()
     {
         var ex = new JoinException("test");
@@ -174,13 +126,6 @@ public class ExceptionTests
     public void NodeNotInRingExceptionInheritsFromException()
     {
         var ex = new NodeNotInRingException("test");
-        Assert.IsAssignableFrom<Exception>(ex);
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionInheritsFromException()
-    {
-        var ex = new UuidAlreadySeenException("test");
         Assert.IsAssignableFrom<Exception>(ex);
     }
 
@@ -223,21 +168,6 @@ public class ExceptionTests
             throw new NodeNotInRingException("Test");
         }
         catch (NodeNotInRingException)
-        {
-            thrown = true;
-        }
-        Assert.True(thrown);
-    }
-
-    [Fact]
-    public void UuidAlreadySeenExceptionCanBeThrownAndCaught()
-    {
-        var thrown = false;
-        try
-        {
-            throw new UuidAlreadySeenException("Test");
-        }
-        catch (UuidAlreadySeenException)
         {
             thrown = true;
         }

@@ -112,25 +112,12 @@ public class FastPaxosTests
     private static MembershipProposal CreateProposal(params Endpoint[] endpoints)
     {
         var proposal = new MembershipProposal { ConfigurationId = 100 };
-        var counter = 0;
         foreach (var endpoint in endpoints)
         {
-            proposal.Members.Add(new MemberInfo
-            {
-                Endpoint = endpoint,
-                NodeId = CreateNodeId("node" + counter++)
-            });
+            endpoint.NodeId = Utils.GetNextNodeId();
+            proposal.Members.Add(endpoint);
         }
         return proposal;
-    }
-
-    private static NodeId CreateNodeId(string id)
-    {
-        return new NodeId
-        {
-            High = (long)id.GetHashCode(StringComparison.Ordinal),
-            Low = (long)id.GetHashCode(StringComparison.Ordinal) * 31
-        };
     }
 
     /// <summary>

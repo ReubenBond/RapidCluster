@@ -17,7 +17,6 @@ internal sealed class MembershipViewBuilder
     private readonly int _maxRingCount;
     private readonly List<AddressComparator> _addressComparators;
     private readonly List<SortedSet<Endpoint>> _rings;
-    private readonly SortedSet<NodeId> _identifiersSeen;
     private readonly HashSet<Endpoint> _allNodes = new(EndpointAddressComparer.Instance);
     private long _maxNodeId;
     private bool _isSealed;
@@ -36,7 +35,6 @@ internal sealed class MembershipViewBuilder
         _maxRingCount = maxRingCount;
         _rings = new List<SortedSet<Endpoint>>(maxRingCount);
         _addressComparators = new List<AddressComparator>(maxRingCount);
-        _identifiersSeen = new SortedSet<NodeId>(NodeIdComparer.Instance);
         _maxNodeId = 0;
 
         for (var i = 0; i < maxRingCount; i++)
@@ -72,7 +70,6 @@ internal sealed class MembershipViewBuilder
         _maxRingCount = maxRingCount;
         _rings = new List<SortedSet<Endpoint>>(_maxRingCount);
         _addressComparators = new List<AddressComparator>(_maxRingCount);
-        _identifiersSeen = new SortedSet<NodeId>(NodeIdComparer.Instance);
         _maxNodeId = view.MaxNodeId;
 
         for (var i = 0; i < _maxRingCount; i++)
@@ -87,11 +84,6 @@ internal sealed class MembershipViewBuilder
             }
             _rings.Add(set);
         }
-
-        foreach (var nodeId in view.NodeIds)
-        {
-            _identifiersSeen.Add(nodeId);
-        }
     }
 
     /// <summary>
@@ -100,17 +92,15 @@ internal sealed class MembershipViewBuilder
     /// <param name="maxRingCount">Maximum number of monitoring rings to maintain. Must be positive.
     /// The actual ring count in the built view may be less if there are insufficient nodes
     /// (at most nodes-1 rings, minimum 1).</param>
-    /// <param name="nodeIds">Collection of node identifiers to add.</param>
-    /// <param name="endpoints">Collection of endpoints corresponding to the node IDs.</param>
+    /// <param name="endpoints">Collection of endpoints to add.</param>
     /// <param name="maxNodeId">The highest node ID ever assigned. If not provided, computed from endpoints.</param>
-    public MembershipViewBuilder(int maxRingCount, ICollection<NodeId> nodeIds, ICollection<Endpoint> endpoints, long? maxNodeId = null)
+    public MembershipViewBuilder(int maxRingCount, ICollection<Endpoint> endpoints, long? maxNodeId = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
         _rings = new List<SortedSet<Endpoint>>(maxRingCount);
         _addressComparators = new List<AddressComparator>(maxRingCount);
-        _identifiersSeen = new SortedSet<NodeId>(NodeIdComparer.Instance);
 
         // Compute maxNodeId from endpoints if not provided
         _maxNodeId = maxNodeId ?? endpoints.Select(e => e.NodeId).DefaultIfEmpty(0).Max();
@@ -127,19 +117,14 @@ internal sealed class MembershipViewBuilder
             }
             _rings.Add(set);
         }
-
-        foreach (var nodeId in nodeIds)
-        {
-            _identifiersSeen.Add(nodeId);
-        }
     }
 
-    private static int ComputeRingCount(int ringCount, int nodeIdCount)
+    private static int ComputeRingCount(int ringCount, int nodeCount)
     {
         // There is no reason to have more rings than there are nodes.
         // For one or two nodes, there should be one ring.
         // For more nodes, there should be at most one less ring than there are nodes.
-        ringCount = Math.Clamp(ringCount, 1, Math.Max(1, nodeIdCount - 1));
+        ringCount = Math.Clamp(ringCount, 1, Math.Max(1, nodeCount - 1));
         return ringCount;
     }
 
@@ -214,24 +199,16 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
-    /// Add a node to all K rings and records its unique identifier.
+    /// Add a node to all K rings.
     /// The endpoint must have its NodeId already set.
     /// </summary>
     /// <param name="node">The node to be added (must have NodeId set).</param>
-    /// <param name="nodeId">The logical identifier of the node being added.</param>
     /// <exception cref="NodeAlreadyInRingException">Thrown if the node is already in the ring.</exception>
-    /// <exception cref="UuidAlreadySeenException">Thrown if the node ID has been seen before.</exception>
     /// <returns>This builder for method chaining.</returns>
-    public MembershipViewBuilder RingAdd(Endpoint node, NodeId nodeId)
+    public MembershipViewBuilder RingAdd(Endpoint node)
     {
         ThrowIfSealed();
         ArgumentNullException.ThrowIfNull(node);
-        ArgumentNullException.ThrowIfNull(nodeId);
-
-        if (_identifiersSeen.Contains(nodeId))
-        {
-            throw new UuidAlreadySeenException(node, nodeId);
-        }
 
         if (_rings[0].Contains(node))
         {
@@ -243,7 +220,6 @@ internal sealed class MembershipViewBuilder
             _rings[k].Add(node);
         }
         _allNodes.Add(node);
-        _identifiersSeen.Add(nodeId);
 
         // Update max node ID if this node's ID is higher
         if (node.NodeId > _maxNodeId)
@@ -289,17 +265,6 @@ internal sealed class MembershipViewBuilder
     {
         ThrowIfSealed();
         return _allNodes.Contains(address);
-    }
-
-    /// <summary>
-    /// Query if an identifier has been used by a node already.
-    /// </summary>
-    /// <param name="identifier">The identifier to query for.</param>
-    /// <returns>True if the identifier has been seen before and false otherwise.</returns>
-    public bool IsIdentifierPresent(NodeId identifier)
-    {
-        ThrowIfSealed();
-        return _identifiersSeen.Contains(identifier);
     }
 
     /// <summary>
@@ -359,7 +324,7 @@ internal sealed class MembershipViewBuilder
             ringsBuilder.Add([.. _rings[i]]);
         }
 
-        return new MembershipView(ringCount, configurationId, ringsBuilder.MoveToImmutable(), [.. _identifiersSeen], _maxNodeId);
+        return new MembershipView(ringCount, configurationId, ringsBuilder.MoveToImmutable(), _maxNodeId);
     }
 
     /// <summary>

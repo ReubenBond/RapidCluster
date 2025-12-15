@@ -7,49 +7,6 @@ namespace RapidCluster.Tests.Unit;
 /// </summary>
 public class RapidClusterUtilsTests
 {
-
-    [Fact]
-    public void NodeIdFromUuidConvertsGuidCorrectly()
-    {
-        var guid = Guid.NewGuid();
-        var nodeId = RapidClusterUtils.NodeIdFromUuid(guid);
-
-        Assert.NotEqual(0, nodeId.High);
-        Assert.NotEqual(0, nodeId.Low);
-    }
-
-    [Fact]
-    public void NodeIdFromUuidProducesDeterministicResults()
-    {
-        var guid = new Guid("12345678-1234-1234-1234-123456789abc");
-        var nodeId1 = RapidClusterUtils.NodeIdFromUuid(guid);
-        var nodeId2 = RapidClusterUtils.NodeIdFromUuid(guid);
-
-        Assert.Equal(nodeId1.High, nodeId2.High);
-        Assert.Equal(nodeId1.Low, nodeId2.Low);
-    }
-
-    [Fact]
-    public void NodeIdFromUuidDifferentGuidsProduceDifferentNodeIds()
-    {
-        var guid1 = Guid.NewGuid();
-        var guid2 = Guid.NewGuid();
-
-        var nodeId1 = RapidClusterUtils.NodeIdFromUuid(guid1);
-        var nodeId2 = RapidClusterUtils.NodeIdFromUuid(guid2);
-
-        Assert.False(nodeId1.High == nodeId2.High && nodeId1.Low == nodeId2.Low);
-    }
-
-    [Fact]
-    public void NodeIdFromUuidEmptyGuidWorks()
-    {
-        var nodeId = RapidClusterUtils.NodeIdFromUuid(Guid.Empty);
-
-        Assert.Equal(0, nodeId.High);
-        Assert.Equal(0, nodeId.Low);
-    }
-
     [Fact]
     public void HostFromStringValidInputParsesCorrectly()
     {
@@ -236,11 +193,9 @@ public class RapidClusterUtilsTests
     public void ToRapidClusterRequestFastRoundPhase2bMessageWrapsCorrectly()
     {
         var proposal = new MembershipProposal { ConfigurationId = 100 };
-        proposal.Members.Add(new MemberInfo
-        {
-            Endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235),
-            NodeId = new NodeId { High = 1, Low = 2 }
-        });
+        var endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235);
+        endpoint.NodeId = 12345L;
+        proposal.Members.Add(endpoint);
 
         var msg = new FastRoundPhase2bMessage
         {
@@ -292,11 +247,9 @@ public class RapidClusterUtilsTests
     public void ToRapidClusterRequestPhase2aMessageWrapsCorrectly()
     {
         var proposal = new MembershipProposal { ConfigurationId = 100 };
-        proposal.Members.Add(new MemberInfo
-        {
-            Endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235),
-            NodeId = new NodeId { High = 1, Low = 2 }
-        });
+        var endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235);
+        endpoint.NodeId = 12345L;
+        proposal.Members.Add(endpoint);
 
         var msg = new Phase2aMessage
         {
@@ -316,11 +269,9 @@ public class RapidClusterUtilsTests
     public void ToRapidClusterRequestPhase2bMessageWrapsCorrectly()
     {
         var proposal = new MembershipProposal { ConfigurationId = 100 };
-        proposal.Members.Add(new MemberInfo
-        {
-            Endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235),
-            NodeId = new NodeId { High = 1, Low = 2 }
-        });
+        var endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235);
+        endpoint.NodeId = 12345L;
+        proposal.Members.Add(endpoint);
 
         var msg = new Phase2bMessage
         {

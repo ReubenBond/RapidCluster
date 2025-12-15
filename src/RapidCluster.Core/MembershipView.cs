@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.IO.Hashing;
 using RapidCluster.Exceptions;
 using RapidCluster.Pb;
 
@@ -19,7 +18,7 @@ public sealed class MembershipView
     /// <summary>
     /// An empty membership view with no members. Used as the initial state before the cluster is initialized.
     /// </summary>
-    public static MembershipView Empty { get; } = new(0, ConfigurationId.Empty, [], [], 0);
+    public static MembershipView Empty { get; } = new(0, ConfigurationId.Empty, [], 0);
 
     private readonly ImmutableArray<ImmutableArray<Endpoint>> _rings;
     private readonly ImmutableSortedSet<Endpoint> _allNodes;
@@ -31,16 +30,14 @@ public sealed class MembershipView
     /// <param name="ringCount">Number of monitoring rings.</param>
     /// <param name="configurationId">The configuration identifier for this view.</param>
     /// <param name="rings">The rings of endpoints (each ring is sorted by its comparator).</param>
-    /// <param name="nodeIds">The set of node identifiers seen.</param>
     /// <param name="maxNodeId">The highest node ID ever assigned.</param>
-    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<Endpoint>> rings, ImmutableArray<NodeId> nodeIds, long maxNodeId)
+    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<Endpoint>> rings, long maxNodeId)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(ringCount);
         ArgumentOutOfRangeException.ThrowIfNotEqual(rings.Length, ringCount, "Number of rings does not match ring count");
         RingCount = ringCount;
         ConfigurationId = configurationId;
         _rings = rings;
-        NodeIds = nodeIds;
         MaxNodeId = maxNodeId;
         // Use ProtobufEndpointComparer to ignore NodeId when checking membership
         _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(ProtobufEndpointComparer.Instance) : ImmutableSortedSet<Endpoint>.Empty;
@@ -79,11 +76,6 @@ public sealed class MembershipView
     public int Size => Members.Length;
 
     /// <summary>
-    /// Gets the list of node identifiers that have been seen (including those that have left).
-    /// </summary>
-    public ImmutableArray<NodeId> NodeIds { get; }
-
-    /// <summary>
     /// Gets the highest node ID ever assigned in this cluster.
     /// This value only ever increases, even when nodes leave.
     /// Used to assign unique IDs to new joiners for Paxos correctness.
@@ -93,7 +85,7 @@ public sealed class MembershipView
     /// <summary>
     /// Gets the configuration for this view, which can be used to bootstrap a new MembershipViewBuilder.
     /// </summary>
-    public MembershipViewConfiguration Configuration => new(NodeIds, Members, MaxNodeId);
+    public MembershipViewConfiguration Configuration => new(Members, MaxNodeId);
 
     /// <summary>
     /// Checks if a specific endpoint is a member of this view.
@@ -352,23 +344,20 @@ public sealed class MembershipView
 }
 
 /// <summary>
-/// The MembershipViewConfiguration object contains a list of nodes in the membership view as well as a list of UUIDs.
+/// The MembershipViewConfiguration object contains a list of nodes in the membership view.
 /// An instance of this object created from one MembershipView object contains the necessary information
 /// to bootstrap an identical MembershipView via MembershipViewBuilder.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class MembershipViewConfiguration
 {
-    public MembershipViewConfiguration(IEnumerable<NodeId> nodeIds, IEnumerable<Endpoint> endpoints, long maxNodeId)
+    public MembershipViewConfiguration(IEnumerable<Endpoint> endpoints, long maxNodeId)
     {
-        ArgumentNullException.ThrowIfNull(nodeIds);
         ArgumentNullException.ThrowIfNull(endpoints);
-        NodeIds = [.. nodeIds];
         Endpoints = [.. endpoints];
         MaxNodeId = maxNodeId;
     }
 
-    public ImmutableArray<NodeId> NodeIds { get; }
     public ImmutableArray<Endpoint> Endpoints { get; }
 
     /// <summary>
@@ -381,7 +370,7 @@ public sealed class MembershipViewConfiguration
     /// </summary>
     public ConfigurationId ConfigurationId => new(0);
 
-    private string DebuggerDisplay => $"MembershipViewConfiguration(Endpoints={Endpoints.Length}, NodeIds={NodeIds.Length}, MaxNodeId={MaxNodeId})";
+    private string DebuggerDisplay => $"MembershipViewConfiguration(Endpoints={Endpoints.Length}, MaxNodeId={MaxNodeId})";
 }
 
 internal sealed class MembershipViewDebugView(MembershipView view)
@@ -393,4 +382,3 @@ internal sealed class MembershipViewDebugView(MembershipView view)
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
     public Endpoint[] Members => [.. view.Members];
 }
-

@@ -47,13 +47,6 @@ message RapidClusterResponse
 
 // ******* Join protocol messages *******
 
-// NodeId is a 128-bit identifier used in consensus proposals.
-message NodeId
-{
-   int64 high = 1;
-   int64 low = 2;
-}
-
 // Phase 1 of join protocol: joiner contacts a seed to get observers
 message PreJoinMessage
 {
@@ -77,10 +70,9 @@ message JoinResponse
    JoinStatusCode statusCode = 2;
    int64 configurationId = 3;
    repeated Endpoint endpoints = 4;
-   repeated NodeId identifiers = 5;
-   repeated Endpoint metadataKeys = 6;
-   repeated Metadata metadataValues = 7;
-    int64 max_node_id = 8;  // Highest node_id ever assigned (for Paxos correctness)
+   repeated Endpoint metadataKeys = 5;
+   repeated Metadata metadataValues = 6;
+   int64 max_node_id = 7;  // Highest node_id ever assigned (for Paxos correctness)
 }
 
 enum JoinStatusCode {
@@ -120,32 +112,22 @@ message Response
 
 // ******* Consensus proposal - represents the decided membership state *******
 // This message carries all information needed to construct a new MembershipView.
-// By including the full member list with NodeIds, all nodes can independently
+// By including the full member list with their node_ids, all nodes can independently
 // arrive at the same view state after consensus.
 message MembershipProposal
 {
     // The new configuration ID (version) for this view
     int64 configurationId = 1;
 
-    // All members in the new view with their identifiers
-    repeated MemberInfo members = 2;
+    // All members in the new view (Endpoint contains node_id)
+    repeated Endpoint members = 2;
 
     // Metadata for each member (parallel array with members)
     repeated Metadata memberMetadata = 3;
 
-    // All NodeIds ever seen (for UUID uniqueness checking)
-    repeated NodeId allNodeIds = 4;
-
     // Highest node_id ever assigned (only increments, never decreases)
     // Used to assign unique IDs to new joiners for Paxos correctness
-    int64 max_node_id = 5;
-}
-
-// Information about a single member in the cluster
-message MemberInfo
-{
-    Endpoint endpoint = 1;
-    NodeId nodeId = 2;
+    int64 max_node_id = 4;
 }
 
 // ******* Fast Paxos Phase 2 message *******
@@ -259,8 +241,7 @@ message MembershipViewResponse
     Endpoint sender = 1;
     int64 configurationId = 2;
     repeated Endpoint endpoints = 3;
-    repeated NodeId identifiers = 4;
-    repeated Endpoint metadataKeys = 5;
-    repeated Metadata metadataValues = 6;
-    int64 max_node_id = 7;  // Highest node_id ever assigned (for Paxos correctness)
+    repeated Endpoint metadataKeys = 4;
+    repeated Metadata metadataValues = 5;
+    int64 max_node_id = 6;  // Highest node_id ever assigned (for Paxos correctness)
 }

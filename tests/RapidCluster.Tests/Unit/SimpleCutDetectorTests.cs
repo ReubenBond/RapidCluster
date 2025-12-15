@@ -34,7 +34,8 @@ public class SimpleCutDetectorTests
         for (var i = 0; i < numNodes; i++)
         {
             var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i);
-            builder.RingAdd(node, Utils.NodeIdFromUuid(Guid.NewGuid()));
+            node.NodeId = Utils.GetNextNodeId();
+            builder.RingAdd(node);
         }
         return builder.Build();
     }
@@ -361,26 +362,25 @@ public class SimpleCutDetectorTests
     /// <summary>
     /// Generator for a list of unique endpoints with their NodeIds.
     /// </summary>
-    private static Gen<List<(Endpoint Endpoint, NodeId NodeId)>> GenUniqueNodes(int minCount, int maxCount)
+    private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Select(
                 Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Count() == count),
                 Gen.Int[1000, 65535].Array[count],
                 Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
-            ).Select((octets, ports, nodeIdSeeds) =>
+            ).Select((octets, ports, nodeIds) =>
             {
-                var result = new List<(Endpoint, NodeId)>(count);
+                var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
                 {
                     var endpoint = new Endpoint
                     {
                         Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
-                        Port = ports[i]
+                        Port = ports[i],
+                        NodeId = nodeIds[i]
                     };
-                    // Use the unique seed for both High and Low to ensure unique NodeIds
-                    var nodeId = new NodeId { High = nodeIdSeeds[i], Low = i };
-                    result.Add((endpoint, nodeId));
+                    result.Add(endpoint);
                 }
                 return result;
             }));
@@ -394,9 +394,9 @@ public class SimpleCutDetectorTests
             .Sample((observersPerSubject, nodes) =>
             {
                 var builder = new MembershipViewBuilder(observersPerSubject);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -405,7 +405,7 @@ public class SimpleCutDetectorTests
 
                 var detector = new SimpleCutDetector(view);
 
-                var subject = nodes[0].Endpoint;
+                var subject = nodes[0];
 
                 // Report actualRingCount times (simulating different observers on different rings)
                 var proposals = new List<List<Endpoint>>();
@@ -414,7 +414,7 @@ public class SimpleCutDetectorTests
                     var result = detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i + 1) % nodes.Count].Endpoint,
+                            EdgeSrc = nodes[(i + 1) % nodes.Count],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -436,9 +436,9 @@ public class SimpleCutDetectorTests
             .Sample((observersPerSubject, nodes) =>
             {
                 var builder = new MembershipViewBuilder(observersPerSubject);
-                foreach (var (endpoint, nodeId) in nodes)
+                foreach (var endpoint in nodes)
                 {
-                    builder.RingAdd(endpoint, nodeId);
+                    builder.RingAdd(endpoint);
                 }
                 var view = builder.Build();
 
@@ -458,7 +458,7 @@ public class SimpleCutDetectorTests
                 var result = detector.AggregateForProposal(
                     new AlertMessage
                     {
-                        EdgeSrc = nodes[0].Endpoint,
+                        EdgeSrc = nodes[0],
                         EdgeDst = unknownEndpoint,
                         EdgeStatus = EdgeStatus.Up,
                         RingNumber = { 0 }

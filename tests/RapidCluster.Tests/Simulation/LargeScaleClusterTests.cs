@@ -203,26 +203,18 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     [Theory]
     [InlineData(20)]
     [InlineData(50)]
-    public async Task ParallelJoins_WithDetailedViewTracking(int clusterSize)
+    public void ParallelJoins_WithDetailedViewTracking(int clusterSize)
     {
         // Create seed node first
         var seedNode = _harness.CreateSeedNode();
         var viewHistory = new List<MembershipView> { seedNode.CurrentView };
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        // Subscribe to view changes on the seed node
-        var viewCollectionComplete = false;
-        var viewCollectionTask = Task.Run(async () =>
-        {
-            await foreach (var view in seedNode.ViewAccessor.Updates.WithCancellation(cancellationToken))
-            {
-                viewHistory.Add(view);
-                if (view.Size >= clusterSize || viewCollectionComplete)
-                {
-                    break;
-                }
-            }
-        }, cancellationToken);
+        // Subscribe to view changes using IObservable pattern instead of async enumerable.
+        // This avoids Task.Run which introduces real concurrency outside the simulation.
+        // The observer's OnNext will be called synchronously during view publication,
+        // which happens during simulation step execution.
+        using var subscription = seedNode.ViewAccessor.Updates.Subscribe(new ViewHistoryObserver(viewHistory, clusterSize));
 
         // Create nodes first (without starting joins)
         var nodes = new List<RapidSimulationNode>();
@@ -242,10 +234,6 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         }, maxIterations);
         _harness.WaitForConvergence(expectedSize: clusterSize, maxIterations: maxIterations);
 
-        // Signal view collection is complete and wait for it
-        viewCollectionComplete = true;
-        await viewCollectionTask;
-
         // Compute and log detailed view transitions
         var transitions = ComputeViewTransitions(viewHistory);
         LogViewTransitions("ParallelJoins", transitions);
@@ -261,6 +249,26 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         Assert.True(configChanges < nodesJoined,
             $"Expected batching (fewer config changes than nodes joined). " +
             $"Got {configChanges} changes for {nodesJoined} nodes joined.");
+    }
+
+    /// <summary>
+    /// Observer that collects view changes into a history list.
+    /// Used instead of async enumerable to avoid Task.Run and real concurrency.
+    /// </summary>
+    private sealed class ViewHistoryObserver(List<MembershipView> viewHistory, int targetSize) : IObserver<MembershipView>
+    {
+        public void OnNext(MembershipView value)
+        {
+            // Only add if we haven't reached the target size yet
+            if (viewHistory.Count == 0 || viewHistory[^1].Size < targetSize)
+            {
+                viewHistory.Add(value);
+            }
+        }
+
+        public void OnError(Exception error) { }
+
+        public void OnCompleted() { }
     }
 
     /// <summary>

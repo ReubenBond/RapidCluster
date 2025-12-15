@@ -8,6 +8,8 @@ namespace RapidCluster.Tests;
 /// </summary>
 internal static class Utils
 {
+    private static long s_nodeIdCounter;
+
     /// <summary>
     /// Creates an Endpoint from hostname and port.
     /// </summary>
@@ -21,15 +23,23 @@ internal static class Utils
     }
 
     /// <summary>
-    /// Converts a UUID to a NodeId.
+    /// Creates an Endpoint from hostname, port, and node_id.
     /// </summary>
-    public static NodeId NodeIdFromUuid(Guid uuid)
+    public static Endpoint HostFromParts(string hostname, int port, long nodeId)
     {
-        var bytes = uuid.ToByteArray();
-        var high = BitConverter.ToInt64(bytes, 0);
-        var low = BitConverter.ToInt64(bytes, 8);
-        return new NodeId { High = high, Low = low };
+        return new Endpoint
+        {
+            Hostname = ByteString.CopyFromUtf8(hostname),
+            Port = port,
+            NodeId = nodeId
+        };
     }
+
+    /// <summary>
+    /// Gets a unique node ID for testing purposes.
+    /// Thread-safe via Interlocked.
+    /// </summary>
+    public static long GetNextNodeId() => Interlocked.Increment(ref s_nodeIdCounter);
 
     /// <summary>
     /// Creates a MembershipView with the specified number of nodes and K value.
@@ -40,8 +50,8 @@ internal static class Utils
         var builder = new MembershipViewBuilder(k);
         for (var i = 0; i < numNodes; i++)
         {
-            var node = HostFromParts("127.0.0." + (i + 1), 1000 + i);
-            builder.RingAdd(node, NodeIdFromUuid(Guid.NewGuid()));
+            var node = HostFromParts("127.0.0." + (i + 1), 1000 + i, GetNextNodeId());
+            builder.RingAdd(node);
         }
         return builder.Build();
     }

@@ -28,7 +28,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<Endpoint, Channel<TaskCompletionSource<RapidClusterResponse>>> _joinersToRespondTo = new(EndpointAddressComparer.Instance);
     private readonly Dictionary<Endpoint, Metadata> _joinerMetadata = new(EndpointAddressComparer.Instance);
-    private readonly Dictionary<Endpoint, NodeId> _memberNodeIds = new(EndpointAddressComparer.Instance);  // Maps current members to their NodeIds
+
     private readonly IMessagingClient _messagingClient;
     private readonly MetadataManager _metadataManager;
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
@@ -235,8 +235,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         _log.StartingNewCluster(_myAddr);
 
-        var nodeId = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
-
         // Create endpoint with node ID = 1 for the seed node
         var seedEndpoint = new Endpoint
         {
@@ -245,11 +243,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             NodeId = 1
         };
 
-        _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [nodeId], [seedEndpoint], maxNodeId: 1).Build();
+        _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [seedEndpoint], maxNodeId: 1).Build();
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
-
-        // Initialize member NodeId tracking
-        _memberNodeIds[seedEndpoint] = nodeId;
 
         _metadataManager.Add(seedEndpoint, _nodeMetadata);
 
@@ -355,18 +350,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
         _membershipView = new MembershipViewBuilder(
             _options.ObserversPerSubject,
-            [.. successfulResponse.Identifiers],
             [.. successfulResponse.Endpoints],
             successfulResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(successfulResponse.ConfigurationId));
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
         _metadataManager.AddMetadata(metadataMap);
-
-        // Initialize member NodeId tracking for all initial members
-        _memberNodeIds.Clear();
-        for (var i = 0; i < successfulResponse.Endpoints.Count && i < successfulResponse.Identifiers.Count; i++)
-        {
-            _memberNodeIds[successfulResponse.Endpoints[i]] = successfulResponse.Identifiers[i];
-        }
 
         FinalizeInitialization();
         _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
@@ -500,15 +487,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <param name="metadataMap">Metadata for nodes in the view. If null, existing metadata is preserved.</param>
     /// <param name="nodeStatusChanges">The status changes to publish. If null, all nodes are treated as Up (initial join).</param>
     /// <param name="addedNodes">Nodes that were added (for notifying waiting joiners). Can be null.</param>
-    /// <param name="nodeIdMap">Complete mapping of endpoints to NodeIds. If provided, replaces _memberNodeIds entirely.
-    /// Used when adopting a view from an external source (rejoin, learner protocol).</param>
     /// <returns>The previous consensus instance that should be disposed by the caller.</returns>
     private ConsensusCoordinator? SetMembershipView(
         MembershipView newView,
         Dictionary<Endpoint, Metadata>? metadataMap,
         List<NodeStatusChange>? nodeStatusChanges,
-        List<Endpoint>? addedNodes,
-        Dictionary<Endpoint, NodeId>? nodeIdMap = null)
+        List<Endpoint>? addedNodes)
     {
         // Must be called under _membershipUpdateLock
         // Always capture the previous consensus instance to ensure it gets disposed.
@@ -524,18 +508,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             _metadataManager.Clear();
             _metadataManager.AddMetadata(metadataMap);
-        }
-
-        // Update member NodeId tracking
-        // If nodeIdMap is provided (view replacement from external source), rebuild entirely
-        // Otherwise, the caller is responsible for incremental updates (see DecideViewChange)
-        if (nodeIdMap != null)
-        {
-            _memberNodeIds.Clear();
-            foreach (var kvp in nodeIdMap)
-            {
-                _memberNodeIds[kvp.Key] = kvp.Value;
-            }
         }
 
         // Recreate cut detector for the new cluster size
@@ -607,7 +579,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     MaxNodeId = _membershipView.MaxNodeId
                 };
                 response.Endpoints.AddRange(config.Endpoints);
-                response.Identifiers.AddRange(config.NodeIds);
                 var allMetadata = _metadataManager.GetAllMetadata();
                 response.MetadataKeys.AddRange(allMetadata.Keys);
                 response.MetadataValues.AddRange(allMetadata.Values);
@@ -805,7 +776,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     _log.JoinerAlreadyInRing();
                     responseBuilder.StatusCode = JoinStatusCode.SafeToJoin;
                     responseBuilder.Endpoints.AddRange(configuration.Endpoints);
-                    responseBuilder.Identifiers.AddRange(configuration.NodeIds);
                     var allMetadata = _metadataManager.GetAllMetadata();
                     responseBuilder.MetadataKeys.AddRange(allMetadata.Keys);
                     responseBuilder.MetadataValues.AddRange(allMetadata.Values);
@@ -824,9 +794,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     /// <summary>
     /// Creates a MembershipProposal from a list of endpoints to add/remove.
-    /// The proposal contains the complete new membership state including all NodeIds,
-    /// ensuring that nodes can correctly apply the view change even without receiving
-    /// AlertMessages containing the joiner UUIDs.
+    /// The proposal contains the complete new membership state.
     /// </summary>
     /// <param name="endpointsToChange">Endpoints being added or removed from the cluster.</param>
     /// <returns>A complete MembershipProposal with the new view state.</returns>
@@ -862,29 +830,21 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
         }
 
-        // Build MemberInfo list with NodeIds for each member in the new view
+        // Build member list for the proposal - endpoints already contain their node_id
         foreach (var endpoint in newMembers)
         {
-            NodeId? nodeId = null;
             Endpoint endpointWithNodeId;
 
-            // Check if this is an existing member (already has node ID)
+            // Check if this is an existing member (already has node ID in the endpoint)
             if (_membershipView.IsHostPresent(endpoint))
             {
-                // Existing member - get NodeId from tracking and keep existing node ID
-                if (_memberNodeIds.TryGetValue(endpoint, out var existingId))
-                {
-                    nodeId = existingId;
-                }
-                endpointWithNodeId = endpoint; // Already has NodeId set
+                // Existing member - use endpoint as-is, it already has the node_id
+                endpointWithNodeId = endpoint;
             }
             else
             {
-                // New joiner - create a new NodeId and assign new monotonic node ID
-                // Since we no longer use UUID-based identity, we generate a fresh NodeId
-                // using the monotonic ID as the low bits for uniqueness
+                // New joiner - assign a new monotonic node ID
                 nextNodeId++;
-                nodeId = new NodeId { High = 0, Low = nextNodeId };
                 endpointWithNodeId = new Endpoint
                 {
                     Hostname = endpoint.Hostname,
@@ -893,22 +853,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 };
             }
 
-            if (nodeId == null)
-            {
-                // This should not happen - skip the node if we don't have its ID
-                _log.DecidedNodeWithoutUuid(endpoint);
-                continue;
-            }
-
-            proposal.Members.Add(new MemberInfo { Endpoint = endpointWithNodeId });
+            proposal.Members.Add(endpointWithNodeId);
 
             // Add metadata for this member
             var metadata = _metadataManager.Get(endpoint) ?? _joinerMetadata.GetValueOrDefault(endpoint, new Metadata());
             proposal.MemberMetadata.Add(metadata);
         }
-
-        // Include all NodeIds ever seen (for UUID uniqueness checking)
-        proposal.AllNodeIds.AddRange(_membershipView.NodeIds);
 
         // Set the max node ID (highest ever assigned, only increases)
         proposal.MaxNodeId = nextNodeId;
@@ -1133,10 +1083,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             MaxNodeId = _membershipView.MaxNodeId
         };
 
-        // Add all endpoints and their node IDs
+        // Add all endpoints (which already contain node_id)
         var members = _membershipView.Members;
         response.Endpoints.AddRange(members);
-        response.Identifiers.AddRange(_membershipView.NodeIds);
 
         // Add metadata for all nodes
         foreach (var endpoint in members)
@@ -1193,17 +1142,17 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // can grow beyond its current ring count when new nodes join
             var builder = _membershipView.ToBuilder(_options.ObserversPerSubject);
 
-            // Build a lookup from the proposal for fast access to NodeIds and endpoints with NodeId
+            // Build a lookup from the proposal for fast access to endpoints (which contain NodeId)
             var proposalMemberLookup = proposal.Members.ToDictionary(
-                m => m.Endpoint,
-                m => (NodeId: m.NodeId, EndpointWithNodeId: m.Endpoint),
+                m => m,
+                m => m,
                 EndpointAddressComparer.Instance);
             var proposalMetadataLookup = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
             for (var i = 0; i < proposal.Members.Count; i++)
             {
                 if (i < proposal.MemberMetadata.Count)
                 {
-                    proposalMetadataLookup[proposal.Members[i].Endpoint] = proposal.MemberMetadata[i];
+                    proposalMetadataLookup[proposal.Members[i]] = proposal.MemberMetadata[i];
                 }
             }
 
@@ -1212,7 +1161,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             // Determine which nodes are being added and which are being removed
             var currentMembers = new HashSet<Endpoint>(_membershipView.Members, EndpointAddressComparer.Instance);
-            var proposedMembers = new HashSet<Endpoint>(proposal.Members.Select(m => m.Endpoint), EndpointAddressComparer.Instance);
+            var proposedMembers = new HashSet<Endpoint>(proposal.Members, EndpointAddressComparer.Instance);
 
             // Track counts for metrics
             var removedCount = 0;
@@ -1223,9 +1172,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _log.RemovingNode(node);
                 builder.RingDelete(node);
                 nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Down, _metadataManager.Get(node) ?? new Metadata()));
-
-                // Remove from memberNodeIds tracking
-                _memberNodeIds.Remove(node);
                 removedCount++;
             }
 
@@ -1238,24 +1184,19 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // Nodes to add: in proposed but not in current
             foreach (var node in proposedMembers.Except(currentMembers, EndpointAddressComparer.Instance))
             {
-                if (!proposalMemberLookup.TryGetValue(node, out var memberInfo))
+                if (!proposalMemberLookup.TryGetValue(node, out var endpointWithNodeId))
                 {
-                    // This should never happen - the proposal should always have the NodeId
+                    // This should never happen - the proposal should always have the endpoint
                     _log.DecidedNodeWithoutUuid(node);
                     continue;
                 }
 
-                var nodeId = memberInfo.NodeId;
-                var endpointWithNodeId = memberInfo.EndpointWithNodeId;
                 var metadata = proposalMetadataLookup.GetValueOrDefault(node) ?? _joinerMetadata.GetValueOrDefault(node, new Metadata());
 
                 _log.AddingNode(endpointWithNodeId);
-                builder.RingAdd(endpointWithNodeId, nodeId);
+                builder.RingAdd(endpointWithNodeId);
                 _metadataManager.Add(endpointWithNodeId, metadata);
                 nodeStatusChanges.Add(new NodeStatusChange(endpointWithNodeId, EdgeStatus.Up, metadata));
-
-                // Track NodeId for this member (use endpoint with node ID)
-                _memberNodeIds[endpointWithNodeId] = nodeId;
 
                 // Clean up joiner data (use original node key without node ID)
                 _joinerMetadata.Remove(node);
@@ -1492,7 +1433,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var metadata = _metadataManager.Get(_myAddr) ?? new Metadata();
 
         JoinResponse? successfulResponse = null;
-        NodeId? nodeId = null;
 
         foreach (var seed in candidateSeeds)
         {
@@ -1503,10 +1443,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             try
             {
-                // Generate a new node ID for each attempt - this avoids UUID collision issues
-                // where our old UUID might still be in the cluster's identifiers-seen set
-                nodeId = RapidClusterUtils.NodeIdFromUuid(_sharedResources.NewGuid());
-                successfulResponse = await TryRejoinThroughSeedAsync(seed, nodeId, metadata, cancellationToken).ConfigureAwait(true);
+                successfulResponse = await TryRejoinThroughSeedAsync(seed, metadata, cancellationToken).ConfigureAwait(true);
                 if (successfulResponse != null)
                 {
                     break;
@@ -1519,7 +1456,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
         }
 
-        if (successfulResponse == null || nodeId == null)
+        if (successfulResponse == null)
         {
             return null; // All attempts failed
         }
@@ -1540,23 +1477,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 metadataMap[successfulResponse.MetadataKeys[i]] = successfulResponse.MetadataValues[i];
             }
 
-            // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
+            // Build the new view - endpoints in the response already contain node_id
             var newView = new MembershipViewBuilder(
                 _options.ObserversPerSubject,
-                [.. successfulResponse.Identifiers],
                 [.. successfulResponse.Endpoints],
                 successfulResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(successfulResponse.ConfigurationId));
 
-            // Build nodeIdMap for all members in the new view
-            var nodeIdMap = new Dictionary<Endpoint, NodeId>(EndpointAddressComparer.Instance);
-            for (var i = 0; i < successfulResponse.Endpoints.Count && i < successfulResponse.Identifiers.Count; i++)
-            {
-                nodeIdMap[successfulResponse.Endpoints[i]] = successfulResponse.Identifiers[i];
-            }
-
             // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
-            // The nodeIdMap parameter ensures _memberNodeIds is rebuilt correctly
-            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null, nodeIdMap);
+            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null);
         }
 
         // Dispose old consensus instance.
@@ -1578,7 +1506,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// </summary>
     private async Task<JoinResponse?> TryRejoinThroughSeedAsync(
         Endpoint seed,
-        NodeId nodeId,
         Metadata metadata,
         CancellationToken cancellationToken)
     {
@@ -1771,11 +1698,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 metadataMap[viewResponse.MetadataKeys[i]] = viewResponse.MetadataValues[i];
             }
 
-            // Build the new view from the response
-            // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
+            // Build the new view from the response - endpoints already contain node_id
             var newView = new MembershipViewBuilder(
                 _options.ObserversPerSubject,
-                [.. viewResponse.Identifiers],
                 [.. viewResponse.Endpoints],
                 viewResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(viewResponse.ConfigurationId));
 
@@ -1834,15 +1759,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     }
                 }
 
-                // Build nodeIdMap for all members in the new view
-                var nodeIdMap = new Dictionary<Endpoint, NodeId>(EndpointAddressComparer.Instance);
-                for (var i = 0; i < viewResponse.Endpoints.Count && i < viewResponse.Identifiers.Count; i++)
-                {
-                    nodeIdMap[viewResponse.Endpoints[i]] = viewResponse.Identifiers[i];
-                }
-
-                // Apply the new view - nodeIdMap ensures _memberNodeIds is rebuilt correctly
-                oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges, addedNodes: null, nodeIdMap);
+                // Apply the new view
+                oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges, addedNodes: null);
             }
         }
 

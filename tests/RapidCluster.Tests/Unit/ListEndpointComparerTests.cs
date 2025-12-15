@@ -236,7 +236,7 @@ public class ListEndpointComparerTests
     /// <summary>
     /// Generator for a list of unique endpoints with their NodeIds.
     /// </summary>
-    private static Gen<List<(Endpoint Endpoint, NodeId NodeId)>> GenUniqueNodes(int minCount, int maxCount)
+    private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Select(
@@ -245,17 +245,16 @@ public class ListEndpointComparerTests
                 Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
             ).Select((octets, ports, nodeIdSeeds) =>
             {
-                var result = new List<(Endpoint, NodeId)>(count);
+                var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
                 {
                     var endpoint = new Endpoint
                     {
                         Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
-                        Port = ports[i]
+                        Port = ports[i],
+                        NodeId = nodeIdSeeds[i]
                     };
-                    // Use the unique seed for both High and Low to ensure unique NodeIds
-                    var nodeId = new NodeId { High = nodeIdSeeds[i], Low = i };
-                    result.Add((endpoint, nodeId));
+                    result.Add(endpoint);
                 }
                 return result;
             }));
@@ -267,8 +266,8 @@ public class ListEndpointComparerTests
         GenUniqueNodes(1, 10)
             .Sample(nodes =>
             {
-                var list1 = nodes.Select(n => n.Endpoint).ToList();
-                var list2 = nodes.Select(n => n.Endpoint).ToList();
+                var list1 = nodes.ToList();
+                var list2 = nodes.ToList();
 
                 var comparer = ListEndpointComparer.Instance;
 
@@ -283,8 +282,8 @@ public class ListEndpointComparerTests
         GenUniqueNodes(2, 10)
             .Sample(nodes =>
             {
-                var list1 = nodes.Select(n => n.Endpoint).ToList();
-                var list2 = nodes.Select(n => n.Endpoint).Reverse().ToList();
+                var list1 = nodes.ToList();
+                var list2 = nodes.AsEnumerable().Reverse().ToList();
 
                 var comparer = ListEndpointComparer.Instance;
 
@@ -300,8 +299,8 @@ public class ListEndpointComparerTests
         Gen.Select(GenUniqueNodes(2, 10), GenEndpoint)
             .Sample((nodes, extra) =>
             {
-                var list1 = nodes.Select(n => n.Endpoint).ToList();
-                var list2 = nodes.Select(n => n.Endpoint).ToList();
+                var list1 = nodes.ToList();
+                var list2 = nodes.ToList();
                 list2.Add(extra);
 
                 var comparer = ListEndpointComparer.Instance;
@@ -386,18 +385,12 @@ public class ListEndpointComparerTests
     private static MembershipProposal CreateProposal(Endpoint[] endpoints, long configId)
     {
         var proposal = new MembershipProposal { ConfigurationId = configId };
-        var counter = 0;
+        var counter = 0L;
         foreach (var endpoint in endpoints)
         {
-            proposal.Members.Add(new MemberInfo
-            {
-                Endpoint = endpoint,
-                NodeId = new NodeId
-                {
-                    High = (long)("node" + counter).GetHashCode(StringComparison.Ordinal),
-                    Low = (long)("node" + counter++).GetHashCode(StringComparison.Ordinal) * 31
-                }
-            });
+            var member = endpoint.Clone();
+            member.NodeId = counter++;
+            proposal.Members.Add(member);
         }
         return proposal;
     }

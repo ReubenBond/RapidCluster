@@ -2,14 +2,15 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Grpc.Core;
+using Grpc.Net.Client;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using RapidCluster.Logging;
+using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
-namespace RapidCluster.Messaging;
+namespace RapidCluster.Grpc;
 
 /// <summary>
 /// gRPC-based messaging client for Rapid.
@@ -29,6 +30,15 @@ internal sealed partial class GrpcClient(
     private bool _disposed;
 
     private const string SendRequestMethod = "SendRequest";
+
+    /// <summary>
+    /// Wrapper for logging a single Endpoint address.
+    /// </summary>
+    private readonly struct LoggableEndpoint(Endpoint endpoint)
+    {
+        private readonly string _display = endpoint.GetNetworkAddressString();
+        public override readonly string ToString() => _display;
+    }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "RPC failed to {Remote}")]
     private partial void LogRpcFailed(Exception ex, LoggableEndpoint Remote);
@@ -167,7 +177,7 @@ internal sealed partial class GrpcClient(
         var key = $"{remote.Hostname.ToStringUtf8()}:{remote.Port}";
         return _clients.GetOrAdd(key, _ =>
         {
-            var channel = Grpc.Net.Client.GrpcChannel.ForAddress($"http://{key}");
+            var channel = GrpcChannel.ForAddress($"http://{key}");
             return new Pb.MembershipService.MembershipServiceClient(channel);
         });
     }

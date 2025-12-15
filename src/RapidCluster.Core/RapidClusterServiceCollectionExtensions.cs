@@ -14,7 +14,9 @@ namespace RapidCluster;
 public static class RapidClusterServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds RapidCluster services to the service collection.
+    /// Adds RapidCluster core services to the service collection.
+    /// Note: You must also call AddRapidClusterGrpc() from the RapidCluster.Grpc package
+    /// (or provide your own IMessagingClient implementation) for the cluster to communicate.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
@@ -51,7 +53,6 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddSingleton(provider);
 
         // Add core services
-        services.AddGrpc();
         services.AddSingleton(sp =>
         {
             var lifetime = sp.GetService<IHostApplicationLifetime>();
@@ -62,12 +63,7 @@ public static class RapidClusterServiceCollectionExtensions
         // Register metrics
         services.AddSingleton<RapidClusterMetrics>();
 
-        // Register messaging infrastructure
-        // GrpcClient is registered as a hosted service so it shuts down AFTER RapidClusterService
-        // (hosted services are stopped in reverse registration order)
-        services.AddSingleton<GrpcClient>();
-        services.AddSingleton<IMessagingClient>(sp => sp.GetRequiredService<GrpcClient>());
-        services.AddHostedService(sp => sp.GetRequiredService<GrpcClient>());
+        // Register broadcaster factory (requires IMessagingClient to be registered)
         services.AddSingleton<IBroadcasterFactory, UnicastToAllBroadcasterFactory>();
 
         // Register failure detector factory
@@ -104,9 +100,6 @@ public static class RapidClusterServiceCollectionExtensions
         // Register the membership service handler
         services.AddSingleton<IMembershipServiceHandler>(sp => sp.GetRequiredService<MembershipService>());
 
-        // Register the gRPC service implementation
-        services.AddSingleton<MembershipServiceImpl>();
-
         // Register the cluster service as a hosted service
         services.AddSingleton<RapidClusterHostedService>();
         services.AddHostedService(sp => sp.GetRequiredService<RapidClusterHostedService>());
@@ -114,17 +107,6 @@ public static class RapidClusterServiceCollectionExtensions
         // Register the cluster interface for application access
         services.AddSingleton<IRapidCluster, RapidClusterImpl>();
 
-        return services;
-    }
-
-    /// <summary>
-    /// Adds RapidCluster gRPC services to the service collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services)
-    {
-        services.AddGrpc();
         return services;
     }
 }

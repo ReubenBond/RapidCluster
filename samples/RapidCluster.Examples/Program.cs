@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RapidCluster;
+using RapidCluster.Grpc;
 
 /// <summary>
 /// RapidCluster example application using modern ASP.NET hosting.
@@ -74,6 +75,9 @@ internal sealed partial class Program
             options.ListenAddress = listen;
             options.SeedAddresses = [seed];
         });
+
+        // Add gRPC transport for cluster communication
+        builder.Services.AddRapidClusterGrpc();
 
         // Add background service to monitor cluster
         builder.Services.AddHostedService<ClusterMonitorService>();

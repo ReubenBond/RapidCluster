@@ -1,4 +1,3 @@
-using Grpc.Core;
 using Microsoft.Extensions.Logging;
 
 namespace RapidCluster;
@@ -38,27 +37,6 @@ internal static partial class TaskExtensions
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
         }
-    }
-
-    /// <summary>
-    /// Observes and ignores a potential exception on a given Task.
-    /// If a Task fails and throws an exception which is never observed, it will be caught by the .NET finalizer thread.
-    /// This function awaits the given task and if the exception is thrown, it observes this exception and simply ignores it.
-    /// This will prevent the escalation of this exception to the .NET finalizer thread.
-    /// </summary>
-    /// <param name="task">The task to be ignored.</param>
-    public static async void Ignore<TResponse>(this AsyncUnaryCall<TResponse> task)
-    {
-#pragma warning disable CA1031 // Do not catch general exception types
-        try
-        {
-            await task.ConfigureAwait(true);
-        }
-        catch
-        {
-            // Ignore
-        }
-#pragma warning restore CA1031 // Do not catch general exception types
     }
 
     /// <summary>

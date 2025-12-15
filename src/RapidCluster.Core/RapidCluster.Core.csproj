@@ -10,25 +10,24 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="RapidCluster.Grpc" />
 		<InternalsVisibleTo Include="RapidCluster.Tests" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Google.Protobuf" />
-		<PackageReference Include="Grpc.Net.Client" />
-		<PackageReference Include="Grpc.AspNetCore" />
-		<PackageReference Include="Grpc.Core" />
 		<PackageReference Include="Grpc.Tools">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Microsoft.Extensions.Diagnostics" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 		<PackageReference Include="System.IO.Hashing" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<Protobuf Include="Protos\rapid.proto" GrpcServices="Both" />
+		<Protobuf Include="Protos\rapid_types.proto" GrpcServices="None" />
 	</ItemGroup>
 
 	<ItemGroup>

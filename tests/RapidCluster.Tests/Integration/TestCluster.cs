@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using RapidCluster.Grpc;
 using RapidCluster.Tests.Simulation.Infrastructure;
 
 namespace RapidCluster.Tests.Integration;
@@ -55,6 +56,7 @@ internal sealed class TestCluster : IAsyncDisposable
             options.ListenAddress = address;
             options.SeedAddresses = [address]; // Same as listen = seed node
         });
+        builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
@@ -90,6 +92,7 @@ internal sealed class TestCluster : IAsyncDisposable
             options.SeedAddresses = [address];
             configureOptions(options);
         });
+        builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
@@ -124,6 +127,7 @@ internal sealed class TestCluster : IAsyncDisposable
             options.ListenAddress = address;
             options.SeedAddresses = [seedAddress];
         });
+        builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
@@ -160,6 +164,7 @@ internal sealed class TestCluster : IAsyncDisposable
             options.SeedAddresses = [seedAddress];
             configureOptions(options);
         });
+        builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
         app.MapRapidClusterMembershipService();

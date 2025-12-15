@@ -28,6 +28,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Clockwork\Clockwork.csproj" />
 		<ProjectReference Include="..\..\src\RapidCluster.Core\RapidCluster.Core.csproj" />
+		<ProjectReference Include="..\..\src\RapidCluster.Grpc\RapidCluster.Grpc.csproj" />
 	</ItemGroup>
 
 </Project>

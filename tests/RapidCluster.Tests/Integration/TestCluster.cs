@@ -180,7 +180,7 @@ internal sealed class TestCluster : IAsyncDisposable
     /// </summary>
     private static async Task WaitForClusterInitializedAsync(IRapidCluster cluster, CancellationToken cancellationToken)
     {
-        while (cluster.CurrentView.Members.Count == 0)
+        while (cluster.CurrentView.Members.Length == 0)
         {
             await Task.Delay(10, cancellationToken).ConfigureAwait(true);
         }
@@ -194,7 +194,7 @@ internal sealed class TestCluster : IAsyncDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (cluster.CurrentView.Members.Count >= expectedSize)
+            if (cluster.CurrentView.Members.Length >= expectedSize)
                 return;
             await Task.Delay(10).ConfigureAwait(true);
         }
@@ -209,11 +209,11 @@ internal sealed class TestCluster : IAsyncDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (cluster.CurrentView.Members.Count == expectedSize)
+            if (cluster.CurrentView.Members.Length == expectedSize)
                 return;
             await Task.Delay(10).ConfigureAwait(true);
         }
-        throw new TimeoutException($"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.CurrentView.Members.Count}");
+        throw new TimeoutException($"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.CurrentView.Members.Length}");
     }
 
     public async ValueTask DisposeAsync()

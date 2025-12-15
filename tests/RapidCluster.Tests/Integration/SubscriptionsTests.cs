@@ -139,7 +139,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         Assert.True(seedCb.NumTimesCalled() >= 1, $"Expected seed to receive at least 1 view update, got {seedCb.NumTimesCalled()}");
 
         // Verify that the seed's final membership includes both nodes
-        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Count);
+        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Length);
         Assert.True(seedMaxMembership >= 2, $"Seed max membership was {seedMaxMembership}, expected at least 2");
     }
 
@@ -199,7 +199,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         Assert.True(viewUpdates.Count > 0);
 
         // At least one view should have 2 members
-        var viewsWithTwoMembers = viewUpdates.Where(v => v.Members.Count >= 2).ToList();
+        var viewsWithTwoMembers = viewUpdates.Where(v => v.Members.Length >= 2).ToList();
         Assert.True(viewsWithTwoMembers.Count > 0, "Expected at least one view with 2 members");
     }
 
@@ -231,8 +231,9 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
 
         // Final view should include both nodes with metadata
         var lastView = viewUpdates.OrderByDescending(v => v.ConfigurationId).First();
-        Assert.Equal(2, lastView.Members.Count);
-        Assert.Equal(2, lastView.Metadata.Count);
+        Assert.Equal(2, lastView.Members.Length);
+        // Verify both members have metadata
+        Assert.All(lastView.Members, m => Assert.True(m.Metadata.ContainsKey("role")));
     }
 
     /// <summary>
@@ -278,8 +279,8 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         Assert.True(joiner1Cb.NumTimesCalled() >= 1, $"Expected joiner1 to receive at least 1 view, got {joiner1Cb.NumTimesCalled()}");
 
         // Final membership should have 3 nodes (check max to handle timing issues)
-        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Count);
-        var joiner1MaxMembership = joiner1Cb.GetViewLog().Max(v => v.Members.Count);
+        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Length);
+        var joiner1MaxMembership = joiner1Cb.GetViewLog().Max(v => v.Members.Length);
         Assert.True(seedMaxMembership >= 3, $"Seed max membership was {seedMaxMembership}, expected at least 3");
         Assert.True(joiner1MaxMembership >= 3, $"Joiner1 max membership was {joiner1MaxMembership}, expected at least 3");
     }
@@ -326,7 +327,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         Assert.True(seedCb.NumTimesCalled() >= 1, $"Expected seed to receive at least 1 view, got {seedCb.NumTimesCalled()}");
 
         // Verify that the seed's final membership includes both nodes
-        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Count);
+        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Length);
         Assert.True(seedMaxMembership >= 2, $"Seed max membership was {seedMaxMembership}, expected at least 2");
     }
 
@@ -383,7 +384,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         // Use Rx operators to transform the stream: extract membership count
         // Explicit cast needed because ViewUpdates implements both IObservable<T> and IAsyncEnumerable<T>
         var subscription = ((IObservable<ClusterMembershipView>)seed.ViewUpdates)
-            .Select(v => v.Members.Count)
+            .Select(v => v.Members.Length)
             .Subscribe(membershipCounts.Add);
         _observableSubscriptions.Add(subscription);
 
@@ -439,8 +440,8 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         Assert.True(joiner1Cb.NumTimesCalled() >= 1, $"Expected joiner1 to receive at least 1 view, got {joiner1Cb.NumTimesCalled()}");
 
         // Final membership should have 3 nodes
-        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Count);
-        var joiner1MaxMembership = joiner1Cb.GetViewLog().Max(v => v.Members.Count);
+        var seedMaxMembership = seedCb.GetViewLog().Max(v => v.Members.Length);
+        var joiner1MaxMembership = joiner1Cb.GetViewLog().Max(v => v.Members.Length);
         Assert.True(seedMaxMembership >= 3, $"Seed max membership was {seedMaxMembership}, expected at least 3");
         Assert.True(joiner1MaxMembership >= 3, $"Joiner1 max membership was {joiner1MaxMembership}, expected at least 3");
     }

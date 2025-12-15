@@ -16,7 +16,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     private RapidSimulationCluster _harness = null!;
     private SynchronizationContextScope _syncContextScope;
     private const int BaseSeed = 67890;
-    private readonly List<ObservableCollector<ClusterEventNotification>> _collectors = [];
+    private readonly List<ObservableCollector<MembershipView>> _collectors = [];
 
     // Track instance reuse - each test should get a fresh instance
     private readonly Guid _instanceId = Guid.NewGuid();
@@ -69,25 +69,25 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Creates an event collector for the node and registers it for cleanup during disposal.
+    /// Creates a view collector for the node and registers it for cleanup during disposal.
     /// </summary>
-    private ObservableCollector<ClusterEventNotification> CreateEventCollector(RapidSimulationNode node)
+    private ObservableCollector<MembershipView> CreateViewCollector(RapidSimulationNode node)
     {
-        var collector = new ObservableCollector<ClusterEventNotification>(node.EventStream);
+        var collector = new ObservableCollector<MembershipView>(node.ViewAccessor.Updates);
         _collectors.Add(collector);
         return collector;
     }
 
     /// <summary>
-    /// Counts ViewChange events in the collector.
+    /// Counts view changes in the collector.
     /// </summary>
-    private static int CountViewChangeEvents(ObservableCollector<ClusterEventNotification> collector) => collector.Items.Where(n => n.Event == ClusterEvents.ViewChange).Count();
+    private static int CountViewChanges(ObservableCollector<MembershipView> collector) => collector.Items.Count;
 
     /// <summary>
-    /// Collects membership sizes from ViewChange events in the collector.
+    /// Collects membership sizes from view changes in the collector.
     /// </summary>
-    private static List<int> CollectViewChangeMembershipSizes(ObservableCollector<ClusterEventNotification> collector)
-        => [.. collector.Items.Where(n => n.Event == ClusterEvents.ViewChange).Select(n => n.Change.Membership.Count)];
+    private static List<int> CollectViewChangeMembershipSizes(ObservableCollector<MembershipView> collector)
+        => [.. collector.Items.Select(v => v.Size)];
 
     [Fact]
     public void GracefulLeave_SingleNode_RemainingNodesConverge()
@@ -285,33 +285,33 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     [Fact]
     public void GracefulLeave_TriggersSubscriptionCallback()
     {
-        // Arrange: Create a 3-node cluster and set up event consumer before any actions
+        // Arrange: Create a 3-node cluster and set up view collector before any actions
         var nodes = _harness.CreateCluster(size: 3);
         _harness.WaitForConvergence(expectedSize: 3);
 
-        var collector = CreateEventCollector(nodes[0]);
+        var collector = CreateViewCollector(nodes[0]);
 
         // Act: One node gracefully leaves
         _harness.RemoveNodeGracefully(nodes[2]);
         _harness.WaitForConvergence(expectedSize: 2);
 
-        // Assert: ViewChange events were emitted
-        var viewChangeCount = CountViewChangeEvents(collector);
+        // Assert: View changes were emitted
+        var viewChangeCount = CountViewChanges(collector);
         Assert.True(viewChangeCount >= 1, "Membership changed callback should be invoked");
     }
 
     [Fact]
     public void GracefulLeave_AllRemainingNodesReceiveNotification()
     {
-        // Arrange: Create a 4-node cluster and set up event consumers before any actions
+        // Arrange: Create a 4-node cluster and set up view collectors before any actions
         var nodes = _harness.CreateCluster(size: 4);
         _harness.WaitForConvergence(expectedSize: 4);
 
         var collectors = new[]
         {
-            CreateEventCollector(nodes[0]),
-            CreateEventCollector(nodes[1]),
-            CreateEventCollector(nodes[2])
+            CreateViewCollector(nodes[0]),
+            CreateViewCollector(nodes[1]),
+            CreateViewCollector(nodes[2])
         };
 
         // Act: Node 3 gracefully leaves
@@ -319,18 +319,18 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.WaitForConvergence(expectedSize: 3);
 
         // Assert: All remaining nodes received notification
-        var viewChangeCounts = collectors.Select(CountViewChangeEvents).ToArray();
+        var viewChangeCounts = collectors.Select(CountViewChanges).ToArray();
         Assert.All(viewChangeCounts, count => Assert.True(count >= 1));
     }
 
     [Fact]
     public void GracefulLeave_CallbackIncludesCorrectMembershipSize()
     {
-        // Arrange: Create a 4-node cluster and set up event consumer before any actions
+        // Arrange: Create a 4-node cluster and set up view collector before any actions
         var nodes = _harness.CreateCluster(size: 4);
         _harness.WaitForConvergence(expectedSize: 4);
 
-        var collector = CreateEventCollector(nodes[0]);
+        var collector = CreateViewCollector(nodes[0]);
 
         // Act: Two nodes leave
         _harness.RemoveNodeGracefully(nodes[3]);

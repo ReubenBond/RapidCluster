@@ -231,12 +231,6 @@ internal sealed class RapidSimulationNode : SimulationNode
     }
 
     /// <summary>
-    /// Gets the async enumerable for subscribing to cluster events.
-    /// Each subscriber receives all events published after they start iterating.
-    /// </summary>
-    public BroadcastChannelReader<ClusterEventNotification> EventStream => _membershipService.Events;
-
-    /// <summary>
     /// Gracefully stops the node by notifying observers and waiting for background tasks.
     /// The node can still receive messages after this method returns.
     /// Call <see cref="DisposeAsync"/> after unregistering from the network to release resources.

@@ -112,8 +112,8 @@ internal sealed partial class Program
             {
                 await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
                 {
-                    LogViewChange(logger, view.ConfigurationId, view.Members.Count);
-                    LogMembershipSize(logger, view.Members.Count);
+                    LogViewChange(logger, view.ConfigurationId, view.Members.Length);
+                    LogMembershipSize(logger, view.Members.Length);
                 }
             }
             catch (OperationCanceledException)

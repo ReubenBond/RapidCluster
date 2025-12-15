@@ -11,14 +11,14 @@ namespace RapidCluster;
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 [SuppressMessage("Naming", "CA1710:Identifiers should have correct suffix", Justification = "ClusterMetadata is a semantic name; adding 'Dictionary' suffix would be awkward")]
-public sealed class ClusterMetadata : IReadOnlyDictionary<string, ReadOnlyMemory<byte>>
+public sealed class ClusterNodeMetadata : IReadOnlyDictionary<string, ReadOnlyMemory<byte>>
 {
-    private static readonly Dictionary<string, ReadOnlyMemory<byte>> EmptyData = new();
+    private static readonly Dictionary<string, ReadOnlyMemory<byte>> EmptyData = [];
 
     /// <summary>
     /// An empty metadata instance with no entries.
     /// </summary>
-    public static ClusterMetadata Empty { get; } = new(EmptyData);
+    public static ClusterNodeMetadata Empty { get; } = new(EmptyData);
 
     private readonly Dictionary<string, ReadOnlyMemory<byte>> _data;
 
@@ -26,7 +26,7 @@ public sealed class ClusterMetadata : IReadOnlyDictionary<string, ReadOnlyMemory
     /// Creates a new ClusterMetadata instance with the specified data.
     /// </summary>
     /// <param name="data">The metadata dictionary.</param>
-    internal ClusterMetadata(Dictionary<string, ReadOnlyMemory<byte>> data)
+    internal ClusterNodeMetadata(Dictionary<string, ReadOnlyMemory<byte>> data)
     {
         ArgumentNullException.ThrowIfNull(data);
         _data = data;

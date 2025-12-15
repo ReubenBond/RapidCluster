@@ -51,9 +51,7 @@ message RapidClusterResponse
 
 // ******* Join protocol messages *******
 
-// NodeId is a 128-bit UUID used historically for node identity.
-// With monotonic node IDs now embedded in Endpoint.node_id, this is only
-// kept for backward compatibility in consensus proposals and view responses.
+// NodeId is a 128-bit identifier used in consensus proposals.
 message NodeId
 {
    int64 high = 1;
@@ -64,19 +62,17 @@ message NodeId
 message PreJoinMessage
 {
    Endpoint sender = 1;
-   // Field 2 (nodeId) removed - node IDs are now assigned by the cluster
-   repeated int32 ringNumber = 3;
-   int64 configurationId = 4;
+   repeated int32 ringNumber = 2;
+   int64 configurationId = 3;
 }
 
 // Phase 2 of join protocol: joiner contacts observers to announce intent to join
 message JoinMessage
 {
    Endpoint sender = 1;
-   // Field 2 (nodeId) removed - node IDs are now assigned by the cluster
-   repeated int32 ringNumber = 3;
-   int64 configurationId = 4;
-   Metadata metadata = 5;
+   repeated int32 ringNumber = 2;
+   int64 configurationId = 3;
+   Metadata metadata = 4;
 }
 
 message JoinResponse
@@ -93,10 +89,9 @@ message JoinResponse
 
 enum JoinStatusCode {
     HOSTNAME_ALREADY_IN_RING = 0;
-    // Value 1 was UUID_ALREADY_IN_RING - removed since node IDs are now assigned by the cluster
-    SAFE_TO_JOIN = 2;
-    CONFIG_CHANGED = 3;
-    MEMBERSHIP_REJECTED = 4;
+    SAFE_TO_JOIN = 1;
+    CONFIG_CHANGED = 2;
+    MEMBERSHIP_REJECTED = 3;
 };
 
 // ******* Alert messages *******
@@ -104,7 +99,7 @@ enum JoinStatusCode {
 message BatchedAlertMessage
 {
     Endpoint sender = 1;
-    repeated AlertMessage messages = 3;
+    repeated AlertMessage messages = 2;
 }
 
 message AlertMessage
@@ -114,8 +109,7 @@ message AlertMessage
     EdgeStatus edgeStatus = 3;
     int64 configurationId = 4;
     repeated int32 ringNumber = 5;
-    // Field 6 (nodeId) removed - node IDs are now assigned by the cluster during consensus
-    Metadata metadata = 7;                // Required only for join protocol
+    Metadata metadata = 6;                // Required only for join protocol
 }
 
 enum EdgeStatus {
@@ -231,8 +225,8 @@ message LeaveMessage
 message ProbeMessage
 {
     Endpoint sender = 1;
-    repeated bytes payload = 3;
-    int64 configurationId = 4;  // Sender's configuration ID for bidirectional stale view detection
+    repeated bytes payload = 2;
+    int64 configurationId = 3;  // Sender's configuration ID for bidirectional stale view detection
 }
 
 message ProbeResponse

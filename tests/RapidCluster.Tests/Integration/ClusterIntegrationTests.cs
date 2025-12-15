@@ -91,8 +91,8 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        Assert.Equal(2, seed.CurrentView.Members.Count);
-        Assert.Equal(2, joiner.CurrentView.Members.Count);
+        Assert.Equal(2, seed.CurrentView.Members.Length);
+        Assert.Equal(2, joiner.CurrentView.Members.Length);
     }
 
     /// <summary>
@@ -114,9 +114,9 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        Assert.Equal(3, seed.CurrentView.Members.Count);
-        Assert.Equal(3, joiner1.CurrentView.Members.Count);
-        Assert.Equal(3, joiner2.CurrentView.Members.Count);
+        Assert.Equal(3, seed.CurrentView.Members.Length);
+        Assert.Equal(3, joiner1.CurrentView.Members.Length);
+        Assert.Equal(3, joiner2.CurrentView.Members.Length);
     }
 
     /// <summary>
@@ -173,16 +173,16 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
         // Verify metadata is available
-        var seedMetadata = seed.CurrentView.Metadata;
-        Assert.Equal(2, seedMetadata.Count);
+        var members = seed.CurrentView.Members;
+        Assert.Equal(2, members.Length);
 
-        // Verify both endpoints are in the metadata
-        Assert.True(seedMetadata.ContainsKey(seedAddress));
-        Assert.True(seedMetadata.ContainsKey(joinerAddress));
+        // Find members by endpoint
+        var seedMember = members.First(m => m.EndPoint.Equals(seedAddress));
+        var joinerMember = members.First(m => m.EndPoint.Equals(joinerAddress));
 
         // Verify metadata values
-        Assert.Equal("seed", Encoding.UTF8.GetString(seedMetadata[seedAddress]["role"].Span));
-        Assert.Equal("worker", Encoding.UTF8.GetString(seedMetadata[joinerAddress]["role"].Span));
+        Assert.Equal("seed", Encoding.UTF8.GetString(seedMember.Metadata["role"].Span));
+        Assert.Equal("worker", Encoding.UTF8.GetString(joinerMember.Metadata["role"].Span));
     }
 
     // TODO: NodeCanLeaveGracefully test removed - LeaveGracefullyAsync is no longer on public API
@@ -213,12 +213,12 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         // Wait for cluster convergence - increased timeout for concurrent joins
         await TestCluster.WaitForClusterSizeAsync(seed, numJoiners + 1, TimeSpan.FromSeconds(30)).ConfigureAwait(true);
 
-        Assert.Equal(numJoiners + 1, seed.CurrentView.Members.Count);
+        Assert.Equal(numJoiners + 1, seed.CurrentView.Members.Length);
 
         foreach (var (app, joiner) in joiners)
         {
             await TestCluster.WaitForClusterSizeAsync(joiner, numJoiners + 1, TimeSpan.FromSeconds(30)).ConfigureAwait(true);
-            Assert.Equal(numJoiners + 1, joiner.CurrentView.Members.Count);
+            Assert.Equal(numJoiners + 1, joiner.CurrentView.Members.Length);
         }
     }
 
@@ -241,7 +241,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         foreach (var node in nodes)
         {
             await TestCluster.WaitForClusterSizeAsync(node, 5, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-            Assert.Equal(5, node.CurrentView.Members.Count);
+            Assert.Equal(5, node.CurrentView.Members.Length);
         }
     }
 
@@ -263,9 +263,9 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        Assert.Equal(3, seed.CurrentView.Members.Count);
-        Assert.Equal(3, joiner1.CurrentView.Members.Count);
-        Assert.Equal(3, joiner2.CurrentView.Members.Count);
+        Assert.Equal(3, seed.CurrentView.Members.Length);
+        Assert.Equal(3, joiner1.CurrentView.Members.Length);
+        Assert.Equal(3, joiner2.CurrentView.Members.Length);
     }
 
     [Fact]
@@ -281,9 +281,9 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         var members = seed.CurrentView.Members;
 
-        Assert.Equal(2, members.Count);
-        Assert.Contains(members, e => ((IPEndPoint)e).Port == seedAddress.Port);
-        Assert.Contains(members, e => ((IPEndPoint)e).Port == joiner1Address.Port);
+        Assert.Equal(2, members.Length);
+        Assert.Contains(members, m => ((IPEndPoint)m.EndPoint).Port == seedAddress.Port);
+        Assert.Contains(members, m => ((IPEndPoint)m.EndPoint).Port == joiner1Address.Port);
     }
 
     [Fact]
@@ -301,9 +301,9 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var seedList = seed.CurrentView.Members.Select(e => ((IPEndPoint)e).Port).OrderBy(p => p).ToList();
-        var joiner1List = joiner1.CurrentView.Members.Select(e => ((IPEndPoint)e).Port).OrderBy(p => p).ToList();
-        var joiner2List = joiner2.CurrentView.Members.Select(e => ((IPEndPoint)e).Port).OrderBy(p => p).ToList();
+        var seedList = seed.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).OrderBy(p => p).ToList();
+        var joiner1List = joiner1.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).OrderBy(p => p).ToList();
+        var joiner2List = joiner2.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).OrderBy(p => p).ToList();
 
         Assert.Equal(seedList.Count, joiner1List.Count);
         Assert.Equal(seedList.Count, joiner2List.Count);
@@ -341,13 +341,15 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var allMetadata = seed.CurrentView.Metadata;
+        var members = seed.CurrentView.Members;
 
-        Assert.Equal(2, allMetadata.Count);
-        Assert.Equal("seed", Encoding.UTF8.GetString(allMetadata[seedAddress]["role"].Span));
-        Assert.Equal("worker", Encoding.UTF8.GetString(allMetadata[joinerAddress]["role"].Span));
-        Assert.Equal("us-west-2", Encoding.UTF8.GetString(allMetadata[seedAddress]["region"].Span));
-        Assert.Equal("us-east-1", Encoding.UTF8.GetString(allMetadata[joinerAddress]["region"].Span));
+        Assert.Equal(2, members.Length);
+        var seedMember = members.First(m => m.EndPoint.Equals(seedAddress));
+        var joinerMember = members.First(m => m.EndPoint.Equals(joinerAddress));
+        Assert.Equal("seed", Encoding.UTF8.GetString(seedMember.Metadata["role"].Span));
+        Assert.Equal("worker", Encoding.UTF8.GetString(joinerMember.Metadata["role"].Span));
+        Assert.Equal("us-west-2", Encoding.UTF8.GetString(seedMember.Metadata["region"].Span));
+        Assert.Equal("us-east-1", Encoding.UTF8.GetString(joinerMember.Metadata["region"].Span));
     }
 
     [Fact]
@@ -362,11 +364,13 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
 
-        var allMetadata = seed.CurrentView.Metadata;
+        var members = seed.CurrentView.Members;
 
-        Assert.Equal(2, allMetadata.Count);
-        Assert.Empty(allMetadata[seedAddress]);
-        Assert.Empty(allMetadata[joinerAddress]);
+        Assert.Equal(2, members.Length);
+        var seedMember = members.First(m => m.EndPoint.Equals(seedAddress));
+        var joinerMember = members.First(m => m.EndPoint.Equals(joinerAddress));
+        Assert.Empty(seedMember.Metadata);
+        Assert.Empty(joinerMember.Metadata);
     }
 
     [Fact]
@@ -418,7 +422,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         Assert.NotEmpty(viewUpdates);
         var lastView = viewUpdates.OrderByDescending(v => v.ConfigurationId).First();
-        Assert.True(lastView.Members.Count >= 2);
+        Assert.True(lastView.Members.Length >= 2);
     }
 
     [Fact]
@@ -463,10 +467,10 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         await TestCluster.WaitForClusterSizeAsync(joiner2, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
         await TestCluster.WaitForClusterSizeAsync(joiner3, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
 
-        Assert.Equal(4, seed.CurrentView.Members.Count);
-        Assert.Equal(4, joiner1.CurrentView.Members.Count);
-        Assert.Equal(4, joiner2.CurrentView.Members.Count);
-        Assert.Equal(4, joiner3.CurrentView.Members.Count);
+        Assert.Equal(4, seed.CurrentView.Members.Length);
+        Assert.Equal(4, joiner1.CurrentView.Members.Length);
+        Assert.Equal(4, joiner2.CurrentView.Members.Length);
+        Assert.Equal(4, joiner3.CurrentView.Members.Length);
     }
 
     [Fact]

@@ -69,18 +69,18 @@ internal static class MetadataConversions
     /// </summary>
     /// <param name="metadata">The protobuf metadata to convert.</param>
     /// <returns>A ClusterMetadata instance.</returns>
-    internal static ClusterMetadata ToClusterMetadata(this Metadata metadata)
+    internal static ClusterNodeMetadata ToClusterMetadata(this Metadata metadata)
     {
         if (metadata.Metadata_.Count == 0)
         {
-            return ClusterMetadata.Empty;
+            return ClusterNodeMetadata.Empty;
         }
 
         var dict = metadata.Metadata_
             .ToDictionary(
                 kvp => kvp.Key,
                 kvp => (ReadOnlyMemory<byte>)kvp.Value.ToByteArray());
-        return new ClusterMetadata(dict);
+        return new ClusterNodeMetadata(dict);
     }
 
     /// <summary>
@@ -134,15 +134,27 @@ internal static class MembershipViewConversions
         this MembershipView view,
         IReadOnlyDictionary<Endpoint, Metadata>? protobufMetadata = null)
     {
-        var members = view.Members
-            .Select(e => e.ToEndPointPreferIP())
-            .ToImmutableHashSet(EndPointComparer.Instance);
+        var membersBuilder = ImmutableArray.CreateBuilder<ClusterMember>(view.Size);
 
-        var metadata = protobufMetadata?.ToDictionary(kvp => kvp.Key.ToEndPointPreferIP(), kvp => kvp.Value.ToClusterMetadata(), EndPointComparer.Instance) ?? [];
+        for (var i = 0; i < view.Members.Length; i++)
+        {
+            var pbEndpoint = view.Members[i];
+            var endPoint = pbEndpoint.ToEndPointPreferIP();
+            var nodeId = pbEndpoint.NodeId;
 
-        return new ClusterMembershipView(
-            view.ConfigurationId,
-            members,
-            metadata);
+            ClusterNodeMetadata metadata;
+            if (protobufMetadata is not null && protobufMetadata.TryGetValue(pbEndpoint, out var pbMetadata))
+            {
+                metadata = pbMetadata.ToClusterMetadata();
+            }
+            else
+            {
+                metadata = ClusterNodeMetadata.Empty;
+            }
+
+            membersBuilder.Add(new ClusterMember(endPoint, nodeId, metadata));
+        }
+
+        return new ClusterMembershipView(view.ConfigurationId, membersBuilder.MoveToImmutable());
     }
 }

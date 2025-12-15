@@ -5,24 +5,33 @@ using System.Net;
 namespace RapidCluster;
 
 /// <summary>
+/// Represents a member of the cluster with its endpoint, unique identifier, and metadata.
+/// </summary>
+/// <param name="EndPoint">The network endpoint of the member.</param>
+/// <param name="Id">The unique monotonically increasing identifier assigned during join.</param>
+/// <param name="Metadata">The metadata associated with this member.</param>
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
+public sealed record ClusterMember(EndPoint EndPoint, long Id, ClusterNodeMetadata Metadata)
+{
+    private string DebuggerDisplay => $"{EndPoint} (Id={Id})";
+}
+
+/// <summary>
 /// An immutable snapshot of the cluster membership at a point in time.
 /// This is the public-facing view type that uses standard .NET types.
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, IComparable<ClusterMembershipView>
 {
-    private static readonly ImmutableHashSet<EndPoint> EmptyMembers = ImmutableHashSet.Create<EndPoint>(EndPointComparer.Instance);
-    private static readonly IReadOnlyDictionary<EndPoint, ClusterMetadata> EmptyMetadata = ImmutableDictionary.Create<EndPoint, ClusterMetadata>(EndPointComparer.Instance);
-
     /// <summary>
     /// An empty membership view with no members.
     /// </summary>
-    public static ClusterMembershipView Empty { get; } = new(ConfigurationId.Empty, EmptyMembers, EmptyMetadata);
+    public static ClusterMembershipView Empty { get; } = new(ConfigurationId.Empty, []);
 
     /// <summary>
-    /// Gets the set of member endpoints in the cluster.
+    /// Gets the members in the cluster.
     /// </summary>
-    public ImmutableHashSet<EndPoint> Members { get; }
+    public ImmutableArray<ClusterMember> Members { get; }
 
     /// <summary>
     /// Gets the configuration identifier for this view.
@@ -30,24 +39,16 @@ public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, I
     public ConfigurationId ConfigurationId { get; }
 
     /// <summary>
-    /// Gets the metadata for all members in the cluster.
-    /// </summary>
-    public IReadOnlyDictionary<EndPoint, ClusterMetadata> Metadata { get; }
-
-    /// <summary>
     /// Creates a new ClusterMembershipView instance.
     /// </summary>
     /// <param name="configurationId">The configuration identifier.</param>
-    /// <param name="members">The set of member endpoints.</param>
-    /// <param name="metadata">The metadata for each member.</param>
+    /// <param name="members">The cluster members.</param>
     internal ClusterMembershipView(
         ConfigurationId configurationId,
-        ImmutableHashSet<EndPoint> members,
-        IReadOnlyDictionary<EndPoint, ClusterMetadata> metadata)
+        ImmutableArray<ClusterMember> members)
     {
         ConfigurationId = configurationId;
         Members = members;
-        Metadata = metadata;
     }
 
     /// <inheritdoc/>
@@ -103,5 +104,5 @@ public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, I
     /// </summary>
     public static bool operator >=(ClusterMembershipView? left, ClusterMembershipView? right) => left is null ? right is null : left.CompareTo(right) >= 0;
 
-    private string DebuggerDisplay => $"ClusterMembershipView(Config={ConfigurationId}, Members={Members.Count})";
+    private string DebuggerDisplay => $"ClusterMembershipView(Config={ConfigurationId}, Members={Members.Length})";
 }

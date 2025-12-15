@@ -9,13 +9,13 @@ namespace RapidCluster.Tests.Simulation.Infrastructure;
 /// <remarks>
 /// Usage pattern:
 /// <code>
-/// using var collector = new ObservableCollector&lt;ClusterEventNotification&gt;(node.ClusterEvents);
+/// using var collector = new ObservableCollector&lt;MembershipView&gt;(node.ViewAccessor.Updates);
 /// 
 /// // Run simulation or perform operations...
 /// harness.WaitForConvergence(expectedSize: 3);
 /// 
 /// // Inspect collected items
-/// var viewChanges = collector.Items.Where(n => n.Event == ClusterEvents.ViewChange).ToList();
+/// var viewsWithSize3 = collector.Items.Where(v => v.Size == 3).ToList();
 /// </code>
 /// </remarks>
 public sealed class ObservableCollector<T> : IDisposable

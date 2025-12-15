@@ -34,9 +34,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
     private MembershipView _membershipView = null!;
 
-    // Event subscriptions (IAsyncEnumerable and IObservable-based using BroadcastChannel)
-    private readonly BroadcastChannel<ClusterEventNotification> _eventChannel;
-
     // Fields used by batching logic.
     private readonly Channel<AlertMessage> _sendQueue;
     private readonly SharedResources _sharedResources;
@@ -165,7 +162,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _metrics = metrics;
         _log = new MembershipServiceLogger(logger);
         _sendQueue = Channel.CreateUnbounded<AlertMessage>();
-        _eventChannel = new BroadcastChannel<ClusterEventNotification>();
 
         // Create linked CTS so background tasks stop on either StopAsync or SharedResources shutdown
         _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(sharedResources.ShuttingDownToken);
@@ -578,13 +574,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Record metrics for the view change
         _metrics.RecordMembershipViewChange();
 
-        // Publish VIEW_CHANGE event
-        var statusChanges = nodeStatusChanges ?? GetInitialViewChange();
-        var currentMembership = _membershipView.Members;
-        var clusterStatusChange = new ClusterStatusChange(_membershipView.ConfigurationId, [.. currentMembership], statusChanges);
-
         _log.PublishingViewChange(_membershipView);
-        PublishEvent(ClusterEvents.ViewChange, clusterStatusChange);
 
         // Clear pending joiner data that's no longer needed
         _pendingConsensusMessages.Keys
@@ -1020,13 +1010,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     var proposalList = proposals.ToList();
                     _log.InitiatingConsensus(proposalList);
 
-                    // Inform subscribers that a proposal has been announced.
-                    var nodeStatusChanges = CreateNodeStatusChangeList(proposalList);
-                    var currentMembership = _membershipView.Members;
-                    var clusterStatusChange = new ClusterStatusChange(currentConfigurationId, [.. currentMembership], nodeStatusChanges);
-
-                    PublishEvent(ClusterEvents.ViewChangeProposal, clusterStatusChange);
-
                     // Create full membership proposal with NodeIds for all members
                     var membershipProposal = CreateMembershipProposal(proposalList);
                     _consensusInstance.Propose(membershipProposal, cancellationToken);
@@ -1303,12 +1286,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
-    /// Gets the async enumerable for subscribing to cluster events.
-    /// Each subscriber receives all events published after they start iterating.
-    /// </summary>
-    public BroadcastChannelReader<ClusterEventNotification> Events => _eventChannel.Reader;
-
-    /// <summary>
     /// Gets the list of endpoints currently in the membership view.
     /// </summary>
     /// <returns>list of endpoints in the membership view</returns>
@@ -1430,17 +1407,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             list.Add(new NodeStatusChange(node, EdgeStatus.Up, _metadataManager.Get(node) ?? new Metadata()));
         }
         return list;
-    }
-
-    /// <summary>
-    /// Publishes a cluster event to all subscribers via the channel.
-    /// </summary>
-    /// <param name="evt">The cluster event type.</param>
-    /// <param name="statusChange">The cluster status change details.</param>
-    private void PublishEvent(ClusterEvents evt, ClusterStatusChange statusChange)
-    {
-        var notification = new ClusterEventNotification(evt, statusChange);
-        _eventChannel.Writer.TryPublish(notification);
     }
 
     /// <summary>
@@ -1841,12 +1807,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                         _myAddr,
                         viewResponse.ConfigurationId,
                         _membershipView.ConfigurationId.Version);
-
-                    var currentMembership = _membershipView.Members;
-                    var nodeStatusChange = new NodeStatusChange(_myAddr, EdgeStatus.Down, _metadataManager.Get(_myAddr) ?? new Metadata());
-                    var clusterStatusChange = new ClusterStatusChange(_membershipView.ConfigurationId, [.. currentMembership], [nodeStatusChange]);
-
-                    PublishEvent(ClusterEvents.Kicked, clusterStatusChange);
                 }
                 oldConsensus = null;
             }
@@ -2164,9 +2124,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Cancel background tasks (in case StopAsync wasn't called)
         _stoppingCts.SafeCancel(_log.Logger);
         _stoppingCts.Dispose();
-
-        // Dispose the event channel to signal completion to all subscribers
-        _eventChannel.Dispose();
 
         // Dispose failure detectors
         foreach (var fd in _failureDetectors)

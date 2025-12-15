@@ -1,6 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Options;
 using RapidCluster;
 using RapidCluster.Aspire.Node;
 using RapidCluster.Discovery;
@@ -11,37 +14,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults (OpenTelemetry, health checks, service discovery)
 builder.AddServiceDefaults();
 
-// Get the gRPC endpoint configuration from Aspire
-// Aspire sets ASPNETCORE_URLS for HTTP endpoints, but for gRPC we need HTTP/2
-var grpcPort = builder.Configuration.GetValue<int>("GRPC_PORT", 5000);
-
-// Also check for Aspire-injected port via environment or configuration
-var aspireGrpcPort = builder.Configuration.GetValue<int?>("services__cluster__grpc__0");
-if (aspireGrpcPort.HasValue)
-{
-    grpcPort = aspireGrpcPort.Value;
-}
-
-// Configure Kestrel for HTTP/2 (required for gRPC)
+// Configure Kestrel to use HTTP/2 for gRPC support
+// We use Http2 protocol to enable gRPC over plain HTTP (H2C - HTTP/2 Cleartext)
+// This is necessary because gRPC requires HTTP/2, and without TLS we need to explicitly enable it
 builder.WebHost.ConfigureKestrel(options =>
 {
-    // Listen for gRPC on the configured port
-    options.ListenAnyIP(grpcPort, listenOptions =>
+    options.ConfigureEndpointDefaults(listenOptions =>
     {
+        // Use HTTP/2 only - this enables gRPC over plain HTTP (H2C)
+        // Health checks and other HTTP/1.1 clients may not work on this endpoint
         listenOptions.Protocols = HttpProtocols.Http2;
     });
-
-    // Also listen on a separate port for HTTP/1.1 health checks if needed
-    var healthPort = builder.Configuration.GetValue<int>("HEALTH_PORT", 8080);
-    options.ListenAnyIP(healthPort, listenOptions =>
-    {
-        listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
-    });
 });
-
-// Get the hostname for this replica
-var hostname = builder.Configuration["HOSTNAME"] ?? Environment.MachineName;
-var listenEndpoint = new DnsEndPoint(hostname, grpcPort);
 
 // Register the service discovery seed provider
 builder.Services.AddSingleton<ISeedProvider>(sp =>
@@ -50,12 +34,20 @@ builder.Services.AddSingleton<ISeedProvider>(sp =>
         sp.GetRequiredService<ILogger<ServiceDiscoverySeedProvider>>(),
         "cluster"));
 
-// Add RapidCluster services
-builder.Services.AddRapidCluster(options =>
+// Register our deferred options configurator that will set ListenAddress after the server starts
+builder.Services.AddSingleton<DeferredRapidClusterOptionsConfigurator>();
+builder.Services.AddSingleton<IConfigureOptions<RapidClusterOptions>>(sp =>
+    sp.GetRequiredService<DeferredRapidClusterOptionsConfigurator>());
+
+// Add RapidCluster services with manual lifecycle management
+// We use AddRapidClusterManual because the listen address is only known after the server starts
+builder.Services.AddRapidClusterManual(options =>
 {
-    options.ListenAddress = listenEndpoint;
-    // BootstrapExpect = 5 means seeds wait for 5 nodes before forming cluster
-    options.BootstrapExpect = builder.Configuration.GetValue<int>("CLUSTER_SIZE", 5);
+    // ListenAddress will be set by DeferredRapidClusterOptionsConfigurator after server starts
+    // BootstrapExpect=1 allows single node to bootstrap; others join via seed discovery
+    // Note: In Aspire with replicas, each node discovers itself as the seed, so each forms its own cluster
+    // For multi-node clusters, you'd need external service discovery (e.g., Redis, DNS, shared database)
+    options.BootstrapExpect = 1;
     options.BootstrapTimeout = TimeSpan.FromMinutes(2);
 });
 
@@ -79,20 +71,138 @@ app.MapDefaultEndpoints();
 // Map RapidCluster gRPC service
 app.MapRapidClusterMembershipService();
 
+// Set up manual lifecycle management for RapidCluster
+// We start the cluster after the server is ready (ApplicationStarted)
+// and stop it when the application is stopping
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+var configurator = app.Services.GetRequiredService<DeferredRapidClusterOptionsConfigurator>();
+var server = app.Services.GetRequiredService<IServer>();
+var configuration = app.Services.GetRequiredService<IConfiguration>();
+
+// We need to capture the cluster lifecycle in a variable that can be shared between callbacks
+// but we can't resolve it until after the address is configured
+IRapidClusterLifecycle? clusterLifecycle = null;
+
+lifetime.ApplicationStarted.Register(() =>
+{
+    // Configure the listen address from the server's actual bound address
+    configurator.ConfigureFromServer(server, configuration);
+
+    // Now it's safe to resolve the cluster lifecycle (options are configured)
+    clusterLifecycle = app.Services.GetRequiredService<IRapidClusterLifecycle>();
+
+    // Start the cluster
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await clusterLifecycle.StartAsync(lifetime.ApplicationStopping);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during shutdown
+        }
+    });
+});
+
+lifetime.ApplicationStopping.Register(() =>
+{
+    // Stop the cluster gracefully
+    clusterLifecycle?.StopAsync(CancellationToken.None).GetAwaiter().GetResult();
+});
+
 app.Run();
 
 /// <summary>
+/// Configures RapidClusterOptions.ListenAddress after the server has started.
+/// This is necessary because Aspire assigns dynamic ports via ASPNETCORE_URLS,
+/// and the actual bound address is only available after the server starts.
+/// </summary>
+[SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated via DI")]
+internal sealed class DeferredRapidClusterOptionsConfigurator : IConfigureOptions<RapidClusterOptions>, IDisposable
+{
+    private EndPoint? _listenAddress;
+    private readonly object _lock = new();
+    private readonly ManualResetEventSlim _addressConfigured = new(false);
+
+    public void Configure(RapidClusterOptions options)
+    {
+        // Wait for the address to be configured (with timeout to prevent deadlock)
+        if (!_addressConfigured.Wait(TimeSpan.FromSeconds(30)))
+        {
+            throw new InvalidOperationException(
+                "Timed out waiting for server address to be configured. " +
+                "Ensure the server has started before resolving RapidClusterOptions.");
+        }
+
+        lock (_lock)
+        {
+            options.ListenAddress = _listenAddress!;
+        }
+    }
+
+    /// <summary>
+    /// Waits for the configuration to be set. Can be cancelled via the provided token.
+    /// </summary>
+    public void WaitForConfiguration(CancellationToken cancellationToken)
+    {
+        _addressConfigured.Wait(cancellationToken);
+    }
+
+    public void ConfigureFromServer(IServer server, IConfiguration configuration)
+    {
+        var addressFeature = server.Features.Get<IServerAddressesFeature>();
+        if (addressFeature == null || addressFeature.Addresses.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Server addresses are not available. Ensure the server has started.");
+        }
+
+        // Prefer the HTTP address for gRPC (HTTP/2 Cleartext)
+        // HTTPS requires TLS ALPN negotiation which adds complexity
+        var address = addressFeature.Addresses
+            .FirstOrDefault(a => a.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            ?? addressFeature.Addresses.First();
+
+        var uri = new Uri(address);
+
+        // Get the hostname to advertise
+        var hostname = configuration["HOSTNAME"]
+            ?? Environment.GetEnvironmentVariable("HOSTNAME")
+            ?? Environment.MachineName;
+
+        lock (_lock)
+        {
+            _listenAddress = new DnsEndPoint(hostname, uri.Port);
+        }
+
+        _addressConfigured.Set();
+    }
+
+    public void Dispose()
+    {
+        _addressConfigured.Dispose();
+    }
+}
+
+/// <summary>
 /// Background service that logs cluster status changes.
+/// Uses IServiceProvider to lazily resolve IRapidCluster after the server has started.
 /// </summary>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated via DI")]
 internal sealed partial class ClusterStatusLogger : BackgroundService
 {
-    private readonly IRapidCluster _cluster;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly DeferredRapidClusterOptionsConfigurator _configurator;
     private readonly ILogger<ClusterStatusLogger> _logger;
 
-    public ClusterStatusLogger(IRapidCluster cluster, ILogger<ClusterStatusLogger> logger)
+    public ClusterStatusLogger(
+        IServiceProvider serviceProvider,
+        DeferredRapidClusterOptionsConfigurator configurator,
+        ILogger<ClusterStatusLogger> logger)
     {
-        _cluster = cluster;
+        _serviceProvider = serviceProvider;
+        _configurator = configurator;
         _logger = logger;
     }
 
@@ -100,7 +210,11 @@ internal sealed partial class ClusterStatusLogger : BackgroundService
     {
         try
         {
-            await foreach (var view in _cluster.ViewUpdates.WithCancellation(stoppingToken))
+            // Wait for the address to be configured before accessing the cluster
+            _configurator.WaitForConfiguration(stoppingToken);
+
+            var cluster = _serviceProvider.GetRequiredService<IRapidCluster>();
+            await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
             {
                 LogViewChange(_logger, view.ConfigurationId, view.Members.Length);
             }

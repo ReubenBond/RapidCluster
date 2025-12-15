@@ -14,7 +14,8 @@ namespace RapidCluster;
 public static class RapidClusterServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds RapidCluster core services to the service collection.
+    /// Adds RapidCluster core services to the service collection with automatic lifecycle management.
+    /// The cluster will start automatically when the host starts and stop when the host stops.
     /// Note: You must also call AddRapidClusterGrpc() from the RapidCluster.Grpc package
     /// (or provide your own IMessagingClient implementation) for the cluster to communicate.
     /// </summary>
@@ -28,6 +29,54 @@ public static class RapidClusterServiceCollectionExtensions
         Action<RapidClusterOptions> configure,
         Action<RapidClusterProtocolOptions>? configureProtocol = null,
         TimeProvider? timeProvider = null)
+    {
+        // Add core services
+        AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
+
+        // Register the cluster service as a hosted service for automatic lifecycle management
+        services.AddHostedService(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds RapidCluster core services to the service collection with manual lifecycle management.
+    /// Use this when you need to control when the cluster starts, for example when the listen address
+    /// is only known after the server starts (e.g., with Aspire's dynamic port assignment).
+    /// </summary>
+    /// <remarks>
+    /// When using this method, you must manually call <see cref="IRapidClusterLifecycle.StartAsync"/>
+    /// after the server has started and <see cref="IRapidClusterLifecycle.StopAsync"/> before shutdown.
+    /// Typically, you would hook into <see cref="IHostApplicationLifetime.ApplicationStarted"/> and
+    /// <see cref="IHostApplicationLifetime.ApplicationStopping"/> to manage the lifecycle.
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">Configuration action for Rapid options.</param>
+    /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
+    /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddRapidClusterManual(
+        this IServiceCollection services,
+        Action<RapidClusterOptions> configure,
+        Action<RapidClusterProtocolOptions>? configureProtocol = null,
+        TimeProvider? timeProvider = null)
+    {
+        // Add core services without the hosted service registration
+        AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
+
+        // No hosted service registration - caller must manage lifecycle manually via IRapidClusterLifecycle
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds RapidCluster core services without lifecycle management.
+    /// </summary>
+    private static void AddRapidClusterCore(
+        IServiceCollection services,
+        Action<RapidClusterOptions> configure,
+        Action<RapidClusterProtocolOptions>? configureProtocol,
+        TimeProvider? timeProvider)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);
@@ -94,19 +143,17 @@ public static class RapidClusterServiceCollectionExtensions
         // Register MetadataManager as singleton (shared between MembershipService and RapidClusterImpl)
         services.AddSingleton<MetadataManager>();
 
-        // Register MembershipService directly (InitializeAsync is called by RapidClusterService)
+        // Register MembershipService directly (InitializeAsync is called by RapidClusterLifecycleService)
         services.AddSingleton<MembershipService>();
 
         // Register the membership service handler
         services.AddSingleton<IMembershipServiceHandler>(sp => sp.GetRequiredService<MembershipService>());
 
-        // Register the cluster service as a hosted service
-        services.AddSingleton<RapidClusterHostedService>();
-        services.AddHostedService(sp => sp.GetRequiredService<RapidClusterHostedService>());
+        // Register the lifecycle service (for both manual and automatic scenarios)
+        services.AddSingleton<RapidClusterLifecycleService>();
+        services.AddSingleton<IRapidClusterLifecycle>(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
 
         // Register the cluster interface for application access
         services.AddSingleton<IRapidCluster, RapidClusterImpl>();
-
-        return services;
     }
 }

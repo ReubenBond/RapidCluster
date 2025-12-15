@@ -6,15 +6,17 @@ using RapidCluster.Logging;
 namespace RapidCluster;
 
 /// <summary>
-/// Hosted service that manages the RapidCluster lifecycle.
+/// Service that manages the RapidCluster lifecycle.
+/// Implements both <see cref="IRapidClusterLifecycle"/> for manual control
+/// and <see cref="IHostedService"/> for automatic lifecycle management.
 /// </summary>
-internal sealed partial class RapidClusterHostedService(
+internal sealed partial class RapidClusterLifecycleService(
     IOptions<RapidClusterOptions> options,
     MembershipService membershipService,
-    ILogger<RapidClusterHostedService> logger) : IHostedService
+    ILogger<RapidClusterLifecycleService> logger) : IRapidClusterLifecycle, IHostedService
 {
     private readonly RapidClusterOptions _options = options.Value;
-    private readonly ILogger<RapidClusterHostedService> _logger = logger;
+    private readonly ILogger<RapidClusterLifecycleService> _logger = logger;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Starting RapidCluster service on {ListenAddress}")]
     private partial void LogStarting(LoggableEndpoint ListenAddress);
@@ -28,6 +30,7 @@ internal sealed partial class RapidClusterHostedService(
     [LoggerMessage(Level = LogLevel.Error, Message = "Error in RapidCluster service")]
     private partial void LogError(Exception ex);
 
+    /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         LogStopping();
@@ -35,6 +38,7 @@ internal sealed partial class RapidClusterHostedService(
         await membershipService.StopAsync(cancellationToken).ConfigureAwait(true);
     }
 
+    /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
@@ -59,4 +63,8 @@ internal sealed partial class RapidClusterHostedService(
             }
         }
     }
+
+    // IHostedService implementation delegates to the same methods
+    Task IHostedService.StartAsync(CancellationToken cancellationToken) => StartAsync(cancellationToken);
+    Task IHostedService.StopAsync(CancellationToken cancellationToken) => StopAsync(cancellationToken);
 }

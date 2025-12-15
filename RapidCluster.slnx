@@ -6,6 +6,11 @@
   </Configurations>
 <Folder Name="/samples/">
     <Project Path="samples/RapidCluster.Examples/RapidCluster.Examples.csproj" />
+    <Folder Name="/samples/RapidCluster.Aspire/">
+      <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.AppHost/RapidCluster.Aspire.AppHost.csproj" />
+      <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.Node/RapidCluster.Aspire.Node.csproj" />
+      <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.ServiceDefaults/RapidCluster.Aspire.ServiceDefaults.csproj" />
+    </Folder>
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Clockwork/Clockwork.csproj" />

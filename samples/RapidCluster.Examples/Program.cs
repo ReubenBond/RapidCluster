@@ -31,14 +31,13 @@ internal sealed partial class Program
     private static async Task<int> Main(string[] args)
     {
         var listenOption = new Option<string>(
-            "--listen",
-            "The listening address (e.g., 127.0.0.1:1234)")
-        { Required = true };
+            "listen",
+            "l")
+        { Description = "The listening address (e.g., 127.0.0.1:1234)" };
 
         var seedOption = new Option<string>(
-            "--seed",
-            "The seed node's address for bootstrap (e.g., 127.0.0.1:1234)")
-        { Required = true };
+            "seed", "s")
+        { Description = "The seed node's address for bootstrap (e.g., 127.0.0.1:1234)" };
 
         var rootCommand = new RootCommand("RapidCluster Standalone Node");
         rootCommand.Options.Add(listenOption);

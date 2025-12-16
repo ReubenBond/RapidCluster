@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Options;
 using RapidCluster;
@@ -151,29 +150,20 @@ internal sealed class DeferredRapidClusterOptionsConfigurator : IConfigureOption
 
     public void ConfigureFromServer(IServer server, IConfiguration configuration)
     {
-        var addressFeature = server.Features.Get<IServerAddressesFeature>();
-        if (addressFeature == null || addressFeature.Addresses.Count == 0)
-        {
-            throw new InvalidOperationException(
-                "Server addresses are not available. Ensure the server has started.");
-        }
+        // Get the hostname to use for advertising (from config or environment)
+        var preferredHost = configuration["HOSTNAME"]
+            ?? Environment.GetEnvironmentVariable("HOSTNAME");
 
-        // Prefer the HTTP address for gRPC (HTTP/2 Cleartext)
-        // HTTPS requires TLS ALPN negotiation which adds complexity
-        var address = addressFeature.Addresses
-            .FirstOrDefault(a => a.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            ?? addressFeature.Addresses.First();
-
-        var uri = new Uri(address);
-
-        // Get the hostname to advertise
-        var hostname = configuration["HOSTNAME"]
-            ?? Environment.GetEnvironmentVariable("HOSTNAME")
-            ?? Environment.MachineName;
+        // Use ServerAddressResolver to get the advertised endpoint
+        // preferHttps: false because we use gRPC over HTTP/2 Cleartext (H2C)
+        var listenAddress = ServerAddressResolver.GetAdvertisedEndpoint(
+            server,
+            preferredHost,
+            preferHttps: false);
 
         lock (_lock)
         {
-            _listenAddress = new DnsEndPoint(hostname, uri.Port);
+            _listenAddress = listenAddress;
         }
 
         _addressConfigured.Set();

@@ -22,7 +22,23 @@ public static class RapidClusterGrpcExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services)
     {
+        return services.AddRapidClusterGrpc(_ => { });
+    }
+
+    /// <summary>
+    /// Adds RapidCluster gRPC transport services to the service collection with configuration.
+    /// Call this after <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/> to add gRPC transport support.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configureOptions">A delegate to configure the protocol options.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services, Action<RapidClusterProtocolOptions> configureOptions)
+    {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configureOptions);
+
+        // Configure protocol options
+        services.Configure(configureOptions);
 
         // Add gRPC infrastructure
         services.AddGrpc();

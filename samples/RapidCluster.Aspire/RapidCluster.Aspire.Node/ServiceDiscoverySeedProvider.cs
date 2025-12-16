@@ -1,127 +1,133 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.ServiceDiscovery;
 using RapidCluster.Discovery;
 
 namespace RapidCluster.Aspire.Node;
 
 /// <summary>
-/// Seed provider that uses .NET Aspire's service discovery to find cluster replicas.
-/// In Aspire, each replica of a service gets its own unique endpoint that can be
-/// discovered through configuration-based service discovery.
+/// Seed provider that uses .NET Aspire's service discovery to find cluster nodes.
+/// Uses <see cref="ServiceEndpointResolver"/> to dynamically resolve endpoints
+/// for each cluster node service.
 /// </summary>
 /// <remarks>
-/// This provider reads the service endpoints from Aspire's configuration system.
-/// Aspire injects service endpoint information via environment variables that are
-/// mapped to configuration, allowing replicas to discover each other.
+/// <para>
+/// This provider uses Aspire's runtime service discovery mechanism to resolve
+/// endpoints for services named with a pattern like "cluster-0", "cluster-1", etc.
+/// </para>
+/// <para>
+/// The service name prefix (default "cluster") combined with the cluster size from
+/// configuration determines which services to resolve.
+/// </para>
 /// </remarks>
+[SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Available for use but not currently instantiated")]
 internal sealed partial class ServiceDiscoverySeedProvider : ISeedProvider
 {
+    private readonly ServiceEndpointResolver _resolver;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ServiceDiscoverySeedProvider> _logger;
-    private readonly string _serviceName;
+    private readonly string _serviceNamePrefix;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ServiceDiscoverySeedProvider"/> class.
     /// </summary>
-    /// <param name="configuration">The configuration containing service discovery information.</param>
+    /// <param name="resolver">The service endpoint resolver for discovering service endpoints.</param>
+    /// <param name="configuration">The configuration to read cluster size from.</param>
     /// <param name="logger">The logger.</param>
-    /// <param name="serviceName">The name of the service to discover (typically "cluster").</param>
+    /// <param name="serviceNamePrefix">The prefix for service names (e.g., "cluster" for cluster-0, cluster-1, etc.).</param>
     public ServiceDiscoverySeedProvider(
+        ServiceEndpointResolver resolver,
         IConfiguration configuration,
         ILogger<ServiceDiscoverySeedProvider> logger,
-        string serviceName = "cluster")
+        string serviceNamePrefix = "cluster")
     {
+        _resolver = resolver;
         _configuration = configuration;
         _logger = logger;
-        _serviceName = serviceName;
+        _serviceNamePrefix = serviceNamePrefix;
     }
 
     /// <inheritdoc/>
-    public ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
         var endpoints = new List<EndPoint>();
+        var clusterSize = _configuration.GetValue<int>("CLUSTER_SIZE", 1);
 
-        // Aspire uses the services__<servicename>__<index>__<endpoint> configuration pattern
-        // For example: services__cluster__0__grpc, services__cluster__1__grpc, etc.
-        var servicesSection = _configuration.GetSection("services");
-        var serviceSection = servicesSection.GetSection(_serviceName);
+        LogDiscoveringNodes(_logger, clusterSize, _serviceNamePrefix);
 
-        if (!serviceSection.Exists())
+        // Resolve each cluster node service (cluster-0, cluster-1, etc.)
+        for (var i = 0; i < clusterSize; i++)
         {
-            LogNoServiceEndpoints(_logger, _serviceName);
-            return ValueTask.FromResult<IReadOnlyList<EndPoint>>(endpoints);
-        }
+            var serviceName = $"{_serviceNamePrefix}-{i}";
+            var serviceUri = $"http://{serviceName}";
 
-        // Iterate through all replica indices (0, 1, 2, etc.)
-        foreach (var replicaSection in serviceSection.GetChildren())
-        {
-            // Look for the grpc endpoint
-            var grpcEndpoint = replicaSection.GetSection("grpc").Value;
-            if (string.IsNullOrEmpty(grpcEndpoint))
+            try
             {
-                // Try alternate naming patterns
-                grpcEndpoint = replicaSection.GetValue<string>("0");
+                var result = await _resolver.GetEndpointsAsync(serviceUri, cancellationToken);
+
+                foreach (var serviceEndpoint in result.Endpoints)
+                {
+                    var endpoint = ConvertToStandardEndPoint(serviceEndpoint.EndPoint);
+                    if (endpoint != null)
+                    {
+                        endpoints.Add(endpoint);
+                        var endpointString = endpoint.ToString()!;
+                        LogDiscoveredSeed(_logger, serviceName, endpointString);
+                    }
+                }
             }
-
-            if (!string.IsNullOrEmpty(grpcEndpoint) && TryParseEndpoint(grpcEndpoint, out var endpoint))
+            catch (InvalidOperationException ex)
             {
-                endpoints.Add(endpoint);
-                LogDiscoveredSeed(_logger, grpcEndpoint);
-            }
-        }
-
-        // If no structured config found, try the connection string pattern
-        if (endpoints.Count == 0)
-        {
-            var connectionString = _configuration.GetConnectionString(_serviceName);
-            if (!string.IsNullOrEmpty(connectionString) && TryParseEndpoint(connectionString, out var endpoint))
-            {
-                endpoints.Add(endpoint);
-                LogDiscoveredSeed(_logger, connectionString);
+                // Service discovery may fail if the service is not yet registered
+                LogServiceDiscoveryError(_logger, serviceName, ex);
             }
         }
 
-        LogTotalSeedsDiscovered(_logger, endpoints.Count, _serviceName);
-        return ValueTask.FromResult<IReadOnlyList<EndPoint>>(endpoints);
+        LogTotalSeedsDiscovered(_logger, endpoints.Count, _serviceNamePrefix);
+        return endpoints;
     }
 
-    private static bool TryParseEndpoint(string value, out EndPoint endpoint)
+    /// <summary>
+    /// Converts an endpoint to a standard .NET EndPoint type (DnsEndPoint or IPEndPoint).
+    /// ServiceEndpointResolver returns UriEndPoint which is not supported by RapidCluster.
+    /// </summary>
+    private static EndPoint? ConvertToStandardEndPoint(EndPoint endpoint)
     {
-        endpoint = null!;
-
-        // Handle URI format (http://host:port or https://host:port)
-        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        return endpoint switch
         {
-            endpoint = new DnsEndPoint(uri.Host, uri.Port);
-            return true;
-        }
-
-        // Handle host:port format
-        var lastColon = value.LastIndexOf(':');
-        if (lastColon > 0 && int.TryParse(value.AsSpan(lastColon + 1), out var port))
-        {
-            var host = value[..lastColon];
-            if (IPAddress.TryParse(host, out var ipAddress))
-            {
-                endpoint = new IPEndPoint(ipAddress, port);
-            }
-            else
-            {
-                endpoint = new DnsEndPoint(host, port);
-            }
-            return true;
-        }
-
-        return false;
+            // UriEndPoint is returned by Aspire's ServiceEndpointResolver
+            UriEndPoint uriEndPoint => ConvertUriEndPoint(uriEndPoint),
+            // Already a standard endpoint type
+            IPEndPoint or DnsEndPoint => endpoint,
+            // Unknown type - skip it
+            _ => null
+        };
     }
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "No service endpoints found for service '{ServiceName}'")]
-    private static partial void LogNoServiceEndpoints(ILogger logger, string serviceName);
+    private static EndPoint ConvertUriEndPoint(UriEndPoint uriEndPoint)
+    {
+        var uri = uriEndPoint.Uri;
+        var port = uri.Port > 0 ? uri.Port : (uri.Scheme == "https" ? 443 : 80);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered seed endpoint: {Endpoint}")]
-    private static partial void LogDiscoveredSeed(ILogger logger, string endpoint);
+        // Try to parse as IP address first
+        if (IPAddress.TryParse(uri.Host, out var ipAddress))
+        {
+            return new IPEndPoint(ipAddress, port);
+        }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Discovered {Count} seed(s) for service '{ServiceName}'")]
-    private static partial void LogTotalSeedsDiscovered(ILogger logger, int count, string serviceName);
+        // Fall back to DNS endpoint
+        return new DnsEndPoint(uri.Host, port);
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Discovering {ClusterSize} nodes with service prefix '{ServicePrefix}'")]
+    private static partial void LogDiscoveringNodes(ILogger logger, int clusterSize, string servicePrefix);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Discovered seed from {ServiceName}: {Endpoint}")]
+    private static partial void LogDiscoveredSeed(ILogger logger, string serviceName, string endpoint);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Discovered {Count} seed(s) for cluster '{ServicePrefix}'")]
+    private static partial void LogTotalSeedsDiscovered(ILogger logger, int count, string servicePrefix);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to discover endpoints for service '{ServiceName}'")]
+    private static partial void LogServiceDiscoveryError(ILogger logger, string serviceName, Exception ex);
 }

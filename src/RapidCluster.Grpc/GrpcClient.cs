@@ -177,7 +177,18 @@ internal sealed partial class GrpcClient(
         var key = $"{remote.Hostname.ToStringUtf8()}:{remote.Port}";
         return _clients.GetOrAdd(key, _ =>
         {
-            var channel = GrpcChannel.ForAddress($"http://{key}");
+            var scheme = _options.UseHttps ? "https" : "http";
+            var handler = new SocketsHttpHandler
+            {
+                EnableMultipleHttp2Connections = true
+            };
+            var channel = GrpcChannel.ForAddress($"{scheme}://{key}", new GrpcChannelOptions
+            {
+                HttpHandler = handler,
+                HttpVersion = new Version(2, 0),
+                HttpVersionPolicy = HttpVersionPolicy.RequestVersionExact, // Force HTTP/2 prior knowledge (for HTTP) or ALPN (for HTTPS)
+                ThrowOperationCanceledOnCancellation = true
+            });
             return new Pb.MembershipService.MembershipServiceClient(channel);
         });
     }

@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Options;
 using RapidCluster;
 using RapidCluster.Aspire.Node;
@@ -13,25 +13,27 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults (OpenTelemetry, health checks, service discovery)
 builder.AddServiceDefaults();
 
-// Configure Kestrel to use HTTP/2 for gRPC support
-// We use Http2 protocol to enable gRPC over plain HTTP (H2C - HTTP/2 Cleartext)
-// This is necessary because gRPC requires HTTP/2, and without TLS we need to explicitly enable it
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ConfigureEndpointDefaults(listenOptions =>
-    {
-        // Use HTTP/2 only - this enables gRPC over plain HTTP (H2C)
-        // Health checks and other HTTP/1.1 clients may not work on this endpoint
-        listenOptions.Protocols = HttpProtocols.Http2;
-    });
-});
+// With HTTPS (TLS), Kestrel uses ALPN negotiation to support both HTTP/1.1 and HTTP/2
+// on the same port. This is configured via appsettings.json: Kestrel:EndpointDefaults:Protocols = "Http1AndHttp2"
+// - Health checks use HTTP/1.1
+// - gRPC uses HTTP/2
+// Both work on the same HTTPS endpoint without any special configuration.
 
-// Register the service discovery seed provider
-builder.Services.AddSingleton<ISeedProvider>(sp =>
-    new ServiceDiscoverySeedProvider(
-        sp.GetRequiredService<IConfiguration>(),
-        sp.GetRequiredService<ILogger<ServiceDiscoverySeedProvider>>(),
-        "cluster"));
+// Read cluster configuration from environment variables set by AppHost
+var clusterSize = builder.Configuration.GetValue<int>("CLUSTER_SIZE", 1);
+var nodeIndex = builder.Configuration.GetValue<int>("CLUSTER_NODE_INDEX", 0);
+var bootstrapFilePath = builder.Configuration["CLUSTER_BOOTSTRAP_FILE"]
+    ?? Path.Combine(Path.GetTempPath(), "rapidcluster-aspire-bootstrap.json");
+
+// Register the file-based bootstrap provider for coordinated startup
+// Node 0 will start a new cluster, others will wait for node 0 and join it
+builder.Services.AddSingleton<FileBasedBootstrapProvider>(sp =>
+    new FileBasedBootstrapProvider(
+        bootstrapFilePath,
+        nodeIndex,
+        clusterSize,
+        sp.GetRequiredService<ILogger<FileBasedBootstrapProvider>>()));
+builder.Services.AddSingleton<ISeedProvider>(sp => sp.GetRequiredService<FileBasedBootstrapProvider>());
 
 // Register our deferred options configurator that will set ListenAddress after the server starts
 builder.Services.AddSingleton<DeferredRapidClusterOptionsConfigurator>();
@@ -43,15 +45,15 @@ builder.Services.AddSingleton<IConfigureOptions<RapidClusterOptions>>(sp =>
 builder.Services.AddRapidClusterManual(options =>
 {
     // ListenAddress will be set by DeferredRapidClusterOptionsConfigurator after server starts
-    // BootstrapExpect=1 allows single node to bootstrap; others join via seed discovery
-    // Note: In Aspire with replicas, each node discovers itself as the seed, so each forms its own cluster
-    // For multi-node clusters, you'd need external service discovery (e.g., Redis, DNS, shared database)
-    options.BootstrapExpect = 1;
-    options.BootstrapTimeout = TimeSpan.FromMinutes(2);
+    // Disable BootstrapExpect since we're using file-based coordination instead
+    options.BootstrapExpect = 0;
 });
 
-// Add gRPC transport
-builder.Services.AddRapidClusterGrpc();
+// Add gRPC transport with HTTPS enabled (required for Http1AndHttp2 with TLS)
+builder.Services.AddRapidClusterGrpc(options =>
+{
+    options.UseHttps = true;
+});
 
 // Add cluster membership health check
 builder.Services.AddHealthChecks()
@@ -75,8 +77,8 @@ app.MapRapidClusterMembershipService();
 // and stop it when the application is stopping
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 var configurator = app.Services.GetRequiredService<DeferredRapidClusterOptionsConfigurator>();
+var bootstrapProvider = app.Services.GetRequiredService<FileBasedBootstrapProvider>();
 var server = app.Services.GetRequiredService<IServer>();
-var configuration = app.Services.GetRequiredService<IConfiguration>();
 
 // We need to capture the cluster lifecycle in a variable that can be shared between callbacks
 // but we can't resolve it until after the address is configured
@@ -84,8 +86,11 @@ IRapidClusterLifecycle? clusterLifecycle = null;
 
 lifetime.ApplicationStarted.Register(() =>
 {
-    // Configure the listen address from the server's actual bound address
-    configurator.ConfigureFromServer(server, configuration);
+    // Configure the listen address from the server's actual bound HTTPS address
+    var listenAddress = configurator.ConfigureFromServer(server);
+
+    // Set the address on the bootstrap provider so it can register in the shared file
+    bootstrapProvider.SetMyAddress(listenAddress);
 
     // Now it's safe to resolve the cluster lifecycle (options are configured)
     clusterLifecycle = app.Services.GetRequiredService<IRapidClusterLifecycle>();
@@ -148,18 +153,35 @@ internal sealed class DeferredRapidClusterOptionsConfigurator : IConfigureOption
         _addressConfigured.Wait(cancellationToken);
     }
 
-    public void ConfigureFromServer(IServer server, IConfiguration configuration)
+    public EndPoint ConfigureFromServer(IServer server)
     {
-        // Get the hostname to use for advertising (from config or environment)
-        var preferredHost = configuration["HOSTNAME"]
-            ?? Environment.GetEnvironmentVariable("HOSTNAME");
+        // Get the first available HTTPS server address for gRPC communication
+        // With TLS, both HTTP/1.1 (health) and HTTP/2 (gRPC) work on the same HTTPS endpoint
+        var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
+        
+        // Prefer HTTPS addresses for gRPC (required for Http1AndHttp2 with ALPN)
+        var address = addresses.FirstOrDefault(a => a.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            ?? addresses.FirstOrDefault();
 
-        // Use ServerAddressResolver to get the advertised endpoint
-        // preferHttps: false because we use gRPC over HTTP/2 Cleartext (H2C)
-        var listenAddress = ServerAddressResolver.GetAdvertisedEndpoint(
-            server,
-            preferredHost,
-            preferHttps: false);
+        if (string.IsNullOrEmpty(address) || !Uri.TryCreate(address, UriKind.Absolute, out var selectedUri))
+        {
+            throw new InvalidOperationException(
+                "Server addresses are not available. Ensure the server has started before calling this method.");
+        }
+
+        // For local Aspire testing, we need to use the actual bound address (localhost)
+        // rather than resolving to a network IP, because the server only binds to localhost
+        var host = selectedUri.Host;
+        EndPoint listenAddress;
+
+        if (IPAddress.TryParse(host, out var ipAddress))
+        {
+            listenAddress = new IPEndPoint(ipAddress, selectedUri.Port);
+        }
+        else
+        {
+            listenAddress = new DnsEndPoint(host, selectedUri.Port);
+        }
 
         lock (_lock)
         {
@@ -167,6 +189,7 @@ internal sealed class DeferredRapidClusterOptionsConfigurator : IConfigureOption
         }
 
         _addressConfigured.Set();
+        return listenAddress;
     }
 
     public void Dispose()

@@ -7,26 +7,19 @@ namespace RapidCluster.Aspire.Node;
 /// Health check that reports the cluster membership status.
 /// Reports healthy when the node is part of a cluster with at least one member.
 /// </summary>
+/// <remarks>
+/// Initializes a new instance of the <see cref="ClusterMembershipHealthCheck"/> class.
+/// </remarks>
+/// <param name="cluster">The RapidCluster instance.</param>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated via DI")]
-internal sealed class ClusterMembershipHealthCheck : IHealthCheck
+internal sealed class ClusterMembershipHealthCheck(IRapidCluster cluster) : IHealthCheck
 {
-    private readonly IRapidCluster _cluster;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClusterMembershipHealthCheck"/> class.
-    /// </summary>
-    /// <param name="cluster">The RapidCluster instance.</param>
-    public ClusterMembershipHealthCheck(IRapidCluster cluster)
-    {
-        _cluster = cluster;
-    }
-
     /// <inheritdoc/>
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
-        var view = _cluster.CurrentView;
+        var view = cluster.CurrentView;
 
         if (view is null)
         {
@@ -39,8 +32,7 @@ internal sealed class ClusterMembershipHealthCheck : IHealthCheck
 
         if (memberCount == 0)
         {
-            return Task.FromResult(HealthCheckResult.Unhealthy(
-                "Not a member of any cluster"));
+            return Task.FromResult(HealthCheckResult.Degraded("Not a member of any cluster"));
         }
 
         var data = new Dictionary<string, object>

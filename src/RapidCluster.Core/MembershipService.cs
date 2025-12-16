@@ -57,6 +57,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly Metadata _nodeMetadata;
     private readonly ISeedProvider _seedProvider;
 
+    // Bootstrap configuration
+    private readonly int _bootstrapExpect;
+
+    // Tracks whether this node was at the first position in the seed list
+    // (before filtering self). Used to determine the bootstrap coordinator.
+    private bool _wasFirstSeed;
+
     // Buffer for consensus messages from future configurations
     // Key: configurationId, Value: list of messages waiting for that config
     private readonly Dictionary<long, List<RapidClusterRequest>> _pendingConsensusMessages = [];
@@ -135,6 +142,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _nodeMetadata = opts.Metadata.ToProtobuf();
         _options = protocolOptions.Value;
         _seedProvider = seedProvider;
+        _bootstrapExpect = opts.BootstrapExpect;
 
         // Seed addresses will be fetched asynchronously during InitializeAsync
         // For now, use the static list from options as a fallback
@@ -193,6 +201,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // No valid seed addresses (empty list or all were self) - start a new cluster
             StartNewCluster();
         }
+        else if (ShouldBeBootstrapCoordinator())
+        {
+            // This node has the lowest address among all seeds (including self)
+            // and BootstrapExpect is set, so this node becomes the bootstrap coordinator.
+            // It starts as a single-node cluster and other nodes will join it.
+            _log.StartingAsBootstrapCoordinator(_myAddr, _bootstrapExpect);
+            StartNewCluster();
+        }
         else
         {
             // Join an existing cluster
@@ -207,8 +223,26 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
+    /// Determines if this node should be the bootstrap coordinator.
+    /// When BootstrapExpect > 0, the node that was first in the seed list becomes the coordinator.
+    /// This ensures deterministic leader election during bootstrap - the first seed always wins.
+    /// </summary>
+    private bool ShouldBeBootstrapCoordinator()
+    {
+        // Only applies when BootstrapExpect is set
+        if (_bootstrapExpect <= 0)
+        {
+            return false;
+        }
+
+        // The node that was first in the seed list becomes the coordinator
+        return _wasFirstSeed;
+    }
+
+    /// <summary>
     /// Refreshes the seed addresses from the seed provider.
     /// Filters out self and duplicates while preserving order.
+    /// Also tracks whether self was the first seed (for bootstrap coordinator election).
     /// </summary>
     private async Task RefreshSeedsAsync(CancellationToken cancellationToken)
     {
@@ -216,9 +250,33 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
         _seedAddresses = [];
+        _wasFirstSeed = false;
+        var isFirstSeed = true;
+        Endpoint? firstSeed = null;
+
         foreach (var seed in seeds)
         {
             var pbSeed = seed.ToProtobuf();
+
+            // Check if this is the first seed and if it matches self
+            if (isFirstSeed)
+            {
+                isFirstSeed = false;
+                firstSeed = pbSeed;
+
+                // Compare by port only when bootstrapExpect > 0 and ports match
+                // This handles dynamic environments (like Aspire) where the hostname
+                // might differ between discovery (container IP) and local address (hostname)
+                if (_bootstrapExpect > 0 && pbSeed.Port == _myAddr.Port)
+                {
+                    _wasFirstSeed = true;
+                }
+                else if (EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr))
+                {
+                    _wasFirstSeed = true;
+                }
+            }
+
             if (!EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr) && seen.Add(pbSeed))
             {
                 _seedAddresses.Add(pbSeed);
@@ -226,6 +284,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         _log.SeedsRefreshed(_seedAddresses.Count);
+        _log.BootstrapCoordinatorCheck(_myAddr, firstSeed, _wasFirstSeed, _bootstrapExpect);
     }
 
     /// <summary>

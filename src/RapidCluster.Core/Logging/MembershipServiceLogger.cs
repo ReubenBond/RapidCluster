@@ -232,6 +232,10 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     private partial void StartingNewClusterCore(LoggableEndpoint myAddr);
     public void StartingNewCluster(Endpoint myAddr) => StartingNewClusterCore(new(myAddr));
 
+    [LoggerMessage(EventName = nameof(StartingAsBootstrapCoordinator), Level = LogLevel.Information, Message = "Starting as bootstrap coordinator at {MyAddr} (BootstrapExpect={BootstrapExpect})")]
+    private partial void StartingAsBootstrapCoordinatorCore(LoggableEndpoint myAddr, int bootstrapExpect);
+    public void StartingAsBootstrapCoordinator(Endpoint myAddr, int bootstrapExpect) => StartingAsBootstrapCoordinatorCore(new(myAddr), bootstrapExpect);
+
     [LoggerMessage(EventName = nameof(JoiningCluster), Level = LogLevel.Information, Message = "Joining cluster through seed {Seed} at {MyAddr}")]
     private partial void JoiningClusterCore(LoggableEndpoint seed, LoggableEndpoint myAddr);
     public void JoiningCluster(Endpoint seed, Endpoint myAddr) => JoiningClusterCore(new(seed), new(myAddr));
@@ -285,4 +289,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(EventName = nameof(RefreshingSeedsForRejoin), Level = LogLevel.Information, Message = "Node {MyAddr} refreshing seeds from provider before retry")]
     private partial void RefreshingSeedsForRejoinCore(LoggableEndpoint myAddr);
     public void RefreshingSeedsForRejoin(Endpoint myAddr) => RefreshingSeedsForRejoinCore(new(myAddr));
+
+    [LoggerMessage(EventName = nameof(BootstrapCoordinatorCheck), Level = LogLevel.Information, Message = "Bootstrap coordinator check: myAddr={MyAddr}, firstSeed={FirstSeed}, wasFirstSeed={WasFirstSeed}, bootstrapExpect={BootstrapExpect}")]
+    private partial void BootstrapCoordinatorCheckCore(LoggableEndpoint myAddr, LoggableEndpoint firstSeed, bool wasFirstSeed, int bootstrapExpect);
+    public void BootstrapCoordinatorCheck(Endpoint myAddr, Endpoint? firstSeed, bool wasFirstSeed, int bootstrapExpect) => BootstrapCoordinatorCheckCore(new(myAddr), firstSeed != null ? new(firstSeed) : new(new Endpoint()), wasFirstSeed, bootstrapExpect);
 }

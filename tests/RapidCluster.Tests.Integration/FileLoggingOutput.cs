@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace RapidCluster.Tests.Simulation.Infrastructure;
+namespace RapidCluster.Tests.Integration;
 
 /// <summary>
 /// The log output which all <see cref="FileLogger"/> instances share to log messages to.

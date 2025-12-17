@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RapidCluster.Grpc;
-using RapidCluster.Tests.Simulation.Infrastructure;
 
 namespace RapidCluster.Tests.Integration;
 

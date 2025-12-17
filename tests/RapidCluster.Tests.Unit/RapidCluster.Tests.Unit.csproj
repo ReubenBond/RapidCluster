@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<IsPackable>false</IsPackable>
+		<!-- Suppress logging performance warnings for test projects -->
+		<NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
+		<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CsCheck" />
+		<PackageReference Include="MartinCostello.Logging.XUnit.v3" />
+		<PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+		<PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+		<PackageReference Include="xunit.v3.mtp-v2" />
+		<PackageReference Include="xunit.analyzers">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="Xunit" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\RapidCluster.Core\RapidCluster.Core.csproj" />
+		<ProjectReference Include="..\..\src\RapidCluster.Grpc\RapidCluster.Grpc.csproj" />
+	</ItemGroup>
+
+</Project>

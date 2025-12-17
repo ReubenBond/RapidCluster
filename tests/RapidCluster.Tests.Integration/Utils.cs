@@ -1,7 +1,7 @@
 using Google.Protobuf;
 using RapidCluster.Pb;
 
-namespace RapidCluster.Tests;
+namespace RapidCluster.Tests.Integration;
 
 /// <summary>
 /// Test utility methods.

@@ -5,7 +5,7 @@
 		<IsPackable>false</IsPackable>
 		<!-- Suppress logging performance warnings for test projects -->
 		<NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
-    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+		<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
 	</PropertyGroup>
 
 	<ItemGroup>

@@ -4,19 +4,23 @@
 
 ## Build & Test Commands
 ```bash
-dotnet build RapidCluster/RapidCluster.slnx                    # Build
+dotnet build RapidCluster.slnx                    # Build
 
 # Run tests using dotnet run (xUnit v3 with Microsoft.Testing.Platform)
-cd RapidCluster/tests/RapidCluster.Tests
-dotnet run -- --timeout 60s                                        # Run all tests with 60s timeout
-dotnet run -- --timeout 60s --filter-class "*ClusterBasicTests"    # Single test class
-dotnet run -- --timeout 60s --filter-method "*TestMethodName"      # Single test method
-dotnet run -- --timeout 60s --filter-not-class "*Integration*"     # Exclude integration tests
-dotnet run -- --list-tests                                         # List all tests
-dotnet run -- --help                                               # Show all options
+# Each test project is run separately:
+dotnet run --project tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj -- --timeout 60s
+dotnet run --project tests/RapidCluster.Integration.Tests/RapidCluster.Integration.Tests.csproj -- --timeout 60s
+dotnet run --project tests/RapidCluster.Simulation.Tests/RapidCluster.Simulation.Tests.csproj -- --timeout 60s
+dotnet run --project tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.Tests/RapidCluster.EndToEnd.Tests.csproj -- --timeout 60s
+
+# Common test options:
+dotnet run --project tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj -- --timeout 60s --filter-class "*ClusterBasicTests"    # Single test class
+dotnet run --project tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj -- --timeout 60s --filter-method "*TestMethodName"      # Single test method
+dotnet run --project tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj -- --list-tests                                         # List all tests
+dotnet run --project tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj -- --help                                               # Show all options
 
 # Code coverage (using Microsoft.Testing.Extensions.CodeCoverage)
-dotnet run -- --coverage --coverage-output-format cobertura --coverage-output coverage.xml --timeout 60s
+dotnet run --project tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj -- --coverage --coverage-output-format cobertura --coverage-output coverage.xml --timeout 60s
 ```
 
 Note: This project uses xUnit v3 with Microsoft.Testing.Platform (MTP). Use `dotnet run --` to run tests, not `dotnet test`. The `--timeout` parameter sets a global test execution timeout (format: `<value>[h|m|s]`).
@@ -45,12 +49,12 @@ Code coverage is collected using `Microsoft.Testing.Extensions.CodeCoverage`. Us
 - **Regions**: Do not use `#region`/`#endregion` directives
 
 ## Project Structure
-- `RapidCluster/src/RapidCluster.Core/` - Main library
-- `RapidCluster/src/Clockwork/` - Deterministic simulation testing framework
-- `RapidCluster/tests/RapidCluster.Tests/` - xUnit v3 tests (underscores allowed in test names)
-  - `Unit/` - Unit tests
-  - `Integration/` - Integration tests with real networking
-  - `Simulation/` - Deterministic simulation tests using Clockwork
+- `src/RapidCluster.Core/` - Main library
+- `src/Clockwork/` - Deterministic simulation testing framework
+- `tests/RapidCluster.Unit.Tests/` - Unit tests (underscores allowed in test names)
+- `tests/RapidCluster.Integration.Tests/` - Integration tests with real networking
+- `tests/RapidCluster.Simulation.Tests/` - Deterministic simulation tests using Clockwork
+- `tests/RapidCluster.EndToEnd/` - End-to-end tests using Aspire
 
 ## Work Item Management
 
@@ -71,7 +75,7 @@ This project uses multiple testing techniques to ensure correctness. **New funct
 
 ### Test Types
 
-#### 1. Unit Tests (`tests/RapidCluster.Tests/Unit/`)
+#### 1. Unit Tests (`tests/RapidCluster.Unit.Tests/`)
 
 Isolated tests for individual components without external dependencies.
 
@@ -91,7 +95,7 @@ public async Task DeclaresSuccess_BeforeAllVotesReceived()
 }
 ```
 
-#### 2. Integration Tests (`tests/RapidCluster.Tests/Integration/`)
+#### 2. Integration Tests (`tests/RapidCluster.Integration.Tests/`)
 
 End-to-end tests using real networking (gRPC over HTTP/2).
 
@@ -121,7 +125,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 }
 ```
 
-#### 3. Simulation Tests (`tests/RapidCluster.Tests/Simulation/`)
+#### 3. Simulation Tests (`tests/RapidCluster.Simulation.Tests/`)
 
 Deterministic tests using the **Clockwork** framework (`src/Clockwork/`). These tests control all sources of non-determinism (time, randomness, network) for reproducible distributed system testing.
 

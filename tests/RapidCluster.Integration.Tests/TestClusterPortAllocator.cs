@@ -1,0 +1,248 @@
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+
+namespace RapidCluster.Integration.Tests;
+
+/// <summary>
+/// Tries to allocate unused ports.
+/// </summary>
+internal sealed class TestClusterPortAllocator : IDisposable
+{
+    private bool _disposed;
+    private readonly Lock _lockObj = new();
+    private readonly Dictionary<int, string> _allocatedPorts = [];
+
+    /// <summary>
+    /// Allocates a single available port.
+    /// </summary>
+    /// <returns>An available port number.</returns>
+    public int AllocatePort()
+    {
+        var ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
+        var tcpConnInfoArray = ipGlobalProperties.GetActiveTcpListeners();
+
+        return GetAvailablePort(tcpConnInfoArray, 22300, 50000);
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Releases unmanaged and - optionally - managed resources.
+    /// </summary>
+    /// <param name="disposing"><see langword="true" /> to release both managed and unmanaged resources; <see langword="false" /> to release only unmanaged resources.</param>
+    private void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        lock (_lockObj)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            foreach (var pair in _allocatedPorts)
+            {
+                MutexManager.Instance.SignalRelease(pair.Value);
+            }
+
+            _allocatedPorts.Clear();
+            _disposed = true;
+        }
+    }
+
+    /// <summary>
+    /// Finalizes an instance of the <see cref="TestClusterPortAllocator"/> class.
+    /// </summary>
+    ~TestClusterPortAllocator()
+    {
+        Dispose(false);
+    }
+
+    private int GetAvailablePort(IPEndPoint[] tcpConnInfoArray, int portStartRange, int portEndRange)
+    {
+        const int MaxAttempts = 100;
+
+        for (var attempts = 0; attempts < MaxAttempts; attempts++)
+        {
+#pragma warning disable CA5394 // Do not use insecure randomness
+            var port = Random.Shared.Next(portStartRange, portEndRange);
+#pragma warning restore CA5394 // Do not use insecure randomness
+
+            // make sure the port is not in use
+            if (tcpConnInfoArray.Any(endpoint => endpoint.Port == port))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
+            }
+            catch (SocketException)
+            {
+                continue;
+            }
+
+            var name = $"Global.TestCluster.{port.ToString(CultureInfo.InvariantCulture)}";
+            if (MutexManager.Instance.Acquire(name))
+            {
+                lock (_lockObj)
+                {
+                    _allocatedPorts[port] = name;
+                }
+
+                return port;
+            }
+        }
+
+        throw new InvalidOperationException("Cannot find a free port");
+    }
+
+    private class MutexManager
+    {
+        private readonly Dictionary<string, Mutex> _mutexes = [];
+        private readonly BlockingCollection<Action> _workItems = [];
+        private readonly Thread _thread;
+
+        public static MutexManager Instance { get; } = new MutexManager();
+
+        private MutexManager()
+        {
+            _thread = new Thread(Run)
+            {
+                Name = "MutexManager.Worker",
+                IsBackground = true,
+            };
+            _thread.Start();
+            AppDomain.CurrentDomain.DomainUnload += this.OnAppDomainUnload;
+        }
+
+        private void OnAppDomainUnload(object? sender, EventArgs e) => Shutdown();
+
+        private void Shutdown()
+        {
+            _workItems.CompleteAdding();
+            _thread.Join();
+        }
+
+        public bool Acquire(string name)
+        {
+            var result = new[] { 0 };
+            using var signal = new ManualResetEventSlim(initialState: false);
+            _workItems.Add(() =>
+            {
+                try
+                {
+                    if (!_mutexes.TryGetValue(name, out var mutex))
+                    {
+                        mutex = new Mutex(false, name);
+                        if (mutex.WaitOne(500))
+                        {
+                            // Acquired
+                            _mutexes[name] = mutex;
+                            Interlocked.Increment(ref result[0]);
+                            return;
+                        }
+
+                        // Failed to acquire: the mutex is already held by another process.
+                        try
+                        {
+                            mutex.ReleaseMutex();
+                        }
+                        finally
+                        {
+                            mutex.Close();
+                        }
+                    }
+
+                    // Failed to acquire: the mutex is already held by this process.
+                }
+                finally
+                {
+                    signal.Set();
+                }
+            });
+
+            if (!signal.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new TimeoutException("Timed out while waiting for MutexManager to acquire mutex.");
+            }
+
+            return result[0] == 1;
+        }
+
+        public void SignalRelease(string name)
+        {
+            if (_workItems.IsAddingCompleted) return;
+
+#pragma warning disable CA1031 // Do not catch general exception types
+            try
+            {
+                _workItems.Add(() =>
+                {
+                    if (_mutexes.Remove(name, out var value))
+                    {
+                        value.ReleaseMutex();
+                        value.Close();
+                    }
+                });
+            }
+            catch
+            {
+            }
+#pragma warning restore CA1031 // Do not catch general exception types
+        }
+
+        private void Run()
+        {
+#pragma warning disable CA1031 // Do not catch general exception types
+            try
+            {
+                foreach (var action in _workItems.GetConsumingEnumerable())
+                {
+                    try
+                    {
+                        action();
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                foreach (var mutex in _mutexes.Values)
+                {
+                    try
+                    {
+                        mutex.ReleaseMutex();
+                    }
+                    catch { }
+                    finally
+                    {
+                        mutex.Close();
+                    }
+                }
+
+                _mutexes.Clear();
+            }
+#pragma warning restore CA1031 // Do not catch general exception types
+        }
+    }
+}

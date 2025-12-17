@@ -18,9 +18,9 @@
     <Project Path="src/RapidCluster.Grpc/RapidCluster.Grpc.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/RapidCluster.Tests.Unit/RapidCluster.Tests.Unit.csproj" />
-    <Project Path="tests/RapidCluster.Tests.Integration/RapidCluster.Tests.Integration.csproj" />
-    <Project Path="tests/RapidCluster.Tests.Simulation/RapidCluster.Tests.Simulation.csproj" />
+    <Project Path="tests/RapidCluster.Unit.Tests/RapidCluster.Unit.Tests.csproj" />
+    <Project Path="tests/RapidCluster.Integration.Tests/RapidCluster.Integration.Tests.csproj" />
+    <Project Path="tests/RapidCluster.Simulation.Tests/RapidCluster.Simulation.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/RapidCluster.EndToEnd/">
     <Project Path="tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.AppHost/RapidCluster.EndToEnd.AppHost.csproj" />

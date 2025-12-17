@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RapidCluster.EndToEnd.ServiceDefaults\RapidCluster.EndToEnd.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\src\RapidCluster.Core\RapidCluster.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\RapidCluster.Grpc\RapidCluster.Grpc.csproj" />
+  </ItemGroup>
+
+</Project>

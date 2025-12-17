@@ -1,4 +1,4 @@
-namespace RapidCluster.Tests;
+namespace RapidCluster.Tests.Unit;
 
 /// <summary>
 /// Helper class for creating deterministic GUIDs from names

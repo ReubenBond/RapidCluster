@@ -4,14 +4,13 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-<Folder Name="/samples/">
+  <Folder Name="/samples/">
     <Project Path="samples/RapidCluster.Examples/RapidCluster.Examples.csproj" />
   </Folder>
   <Folder Name="/samples/RapidCluster.Aspire/">
     <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.AppHost/RapidCluster.Aspire.AppHost.csproj" />
     <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.Node/RapidCluster.Aspire.Node.csproj" />
     <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.ServiceDefaults/RapidCluster.Aspire.ServiceDefaults.csproj" />
-    <Project Path="samples/RapidCluster.Aspire/RapidCluster.Aspire.Tests/RapidCluster.Aspire.Tests.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Clockwork/Clockwork.csproj" />
@@ -19,6 +18,14 @@
     <Project Path="src/RapidCluster.Grpc/RapidCluster.Grpc.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/RapidCluster.Tests/RapidCluster.Tests.csproj" />
+    <Project Path="tests/RapidCluster.Tests.Unit/RapidCluster.Tests.Unit.csproj" />
+    <Project Path="tests/RapidCluster.Tests.Integration/RapidCluster.Tests.Integration.csproj" />
+    <Project Path="tests/RapidCluster.Tests.Simulation/RapidCluster.Tests.Simulation.csproj" />
+  </Folder>
+  <Folder Name="/tests/RapidCluster.EndToEnd/">
+    <Project Path="tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.AppHost/RapidCluster.EndToEnd.AppHost.csproj" />
+    <Project Path="tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.Node/RapidCluster.EndToEnd.Node.csproj" />
+    <Project Path="tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.ServiceDefaults/RapidCluster.EndToEnd.ServiceDefaults.csproj" />
+    <Project Path="tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.Tests/RapidCluster.EndToEnd.Tests.csproj" />
   </Folder>
 </Solution>

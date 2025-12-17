@@ -1,0 +1,10 @@
+{
+  "$schema": "https://xunit.net/schema/current/testconfig.json",
+  "xUnit": {
+    "diagnosticMessages": true,
+    "parallelizeTestCollections": false,
+    "methodDisplay": "classAndMethod",
+    "preEnumerateTheories": true,
+    "longRunningTestSeconds": 120
+  }
+}

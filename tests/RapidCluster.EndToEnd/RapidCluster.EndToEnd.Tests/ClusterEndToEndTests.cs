@@ -4,14 +4,14 @@ using Microsoft.Extensions.Logging;
 #pragma warning disable IDE0005 // Using directive is unnecessary - needed for implicit usings resolution
 #pragma warning disable CA1849 // Call async methods when in an async method - synchronous Cancel is intentional
 
-namespace RapidCluster.Aspire.Tests;
+namespace RapidCluster.EndToEnd.Tests;
 
 /// <summary>
-/// Integration tests for the RapidCluster Aspire sample.
+/// End-to-end tests for the RapidCluster using Aspire.
 /// These tests use Aspire.Hosting.Testing to spin up the AppHost
 /// and verify that the cluster nodes start and become healthy.
 /// </summary>
-public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IAsyncLifetime
+public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyncLifetime
 {
     private const int ClusterSize = 5;
     private DistributedApplication? _app;
@@ -23,7 +23,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     public async ValueTask InitializeAsync()
     {
         var appHost = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.RapidCluster_Aspire_AppHost>();
+            .CreateAsync<Projects.RapidCluster_EndToEnd_AppHost>();
 
         appHost.Services.AddLogging(logging =>
         {

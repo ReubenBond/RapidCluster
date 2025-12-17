@@ -2,6 +2,7 @@ using MartinCostello.Logging.XUnit;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable IDE0005 // Using directive is unnecessary - needed for implicit usings resolution
+#pragma warning disable CA1849 // Call async methods when in an async method - synchronous Cancel is intentional
 
 namespace RapidCluster.Aspire.Tests;
 
@@ -86,7 +87,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         // Cancel log watching
         if (_logWatchCts is not null)
         {
-            await _logWatchCts.CancelAsync();
+            _logWatchCts.Cancel();
             _logWatchCts.Dispose();
         }
 

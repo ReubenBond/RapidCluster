@@ -11,10 +11,9 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="RapidCluster.Grpc" />
-		<InternalsVisibleTo Include="RapidCluster.Tests" />
-		<InternalsVisibleTo Include="RapidCluster.Tests.Unit" />
-		<InternalsVisibleTo Include="RapidCluster.Tests.Integration" />
-		<InternalsVisibleTo Include="RapidCluster.Tests.Simulation" />
+		<InternalsVisibleTo Include="RapidCluster.Unit.Tests" />
+		<InternalsVisibleTo Include="RapidCluster.Integration.Tests" />
+		<InternalsVisibleTo Include="RapidCluster.Simulation.Tests" />
 	</ItemGroup>
 
 	<ItemGroup>

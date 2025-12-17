@@ -9,7 +9,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<InternalsVisibleTo Include="RapidCluster.Tests" />
+		<InternalsVisibleTo Include="RapidCluster.Unit.Tests" />
+		<InternalsVisibleTo Include="RapidCluster.Integration.Tests" />
+		<InternalsVisibleTo Include="RapidCluster.Simulation.Tests" />
 	</ItemGroup>
 
 	<ItemGroup>

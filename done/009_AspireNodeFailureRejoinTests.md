@@ -78,3 +78,56 @@ These tests are deterministic, fast, and reproducible. The Aspire tests can focu
 
 - [Aspire Testing Documentation](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/testing)
 - [Aspire.Hosting.Testing NuGet Package](https://www.nuget.org/packages/Aspire.Hosting.Testing)
+
+---
+
+## Resolution (December 2025)
+
+**Decision**: Option 4 - Rely on Simulation Tests
+
+After thorough investigation, the simulation tests provide comprehensive coverage of node failure and rejoin scenarios:
+
+### Simulation Test Coverage
+
+**NodeFailureTests.cs** (14 tests):
+- `NodeCrashRemovesFromCluster` - Verifies crashed nodes are removed
+- `CrashedNodeCannotReceiveMessages` - Verifies crashed nodes are excluded
+- `ClusterContinuesAfterSingleNodeCrash` - Cluster resilience
+- `CrashDuringIdleStateHandledGracefully` - Edge case handling
+- `TwoNodeFailuresInFiveNodeCluster` - Multiple failure handling
+- `SequentialFailuresHandled` - Sequential crash handling
+- `SimultaneousFailuresHandled` - Concurrent crash handling
+- `SeedNodeCrashDoesNotAffectExistingCluster` - Seed node failure
+- `JoinThroughCrashedSeedFails` - Join failure handling
+- `AlternativeSeedAllowsJoin` - Alternative seed usage
+- `NodeCrashDuringJoinProtocol` - (Skipped - complex race condition)
+- `NodeCrashDuringLeave` - Crash during leave handling
+
+**NodeRejoinTests.cs** (13 tests):
+- `NodeCanRejoinAfterGracefulLeave` - Basic rejoin
+- `NodeCanRejoinAfterCrashAndFailureDetection` - Crash recovery rejoin
+- `NodeCanRejoinMultipleTimes` - Multiple rejoin cycles
+- `SeedNodeCanLeaveAndNewNodeCanJoin` - Seed node replacement
+- `MultipleNodesCanRejoinAfterLeaving` - Multiple node rejoin
+- `NewNodeCanJoinDuringFailureConvergence` - Concurrent operations
+- `RapidLeaveRejoinCyclesSucceed` - Stress testing
+- `AlternatingJoinLeaveStabilizes` - Cluster stability
+- `IsolatedNodeCanRejoinAfterPartitionHeals` - Partition recovery
+- `RejoinThroughDifferentSeedAfterOriginalSeedCrashes` - Seed failover
+- `ClusterRecoversFromHalfNodeLoss` - Major failure recovery
+- `ClusterMaintainsConsistencyThroughFailureRecoveryCycles` - Consistency verification
+
+### Rationale
+
+1. **Simulation tests are deterministic** - Same seed produces identical results, making debugging reproducible
+2. **Fast execution** - No real I/O or network delays
+3. **Comprehensive coverage** - Can test edge cases like partitions, simultaneous failures, rapid cycles
+4. **Aspire tests serve different purpose** - Verify real-world deployment (HTTPS, health checks, service discovery)
+
+### Future Consideration
+
+Revisit this decision when:
+- `Aspire.Hosting.Testing` adds `StopResourceAsync`/`StartResourceAsync` APIs
+- Node failure/rejoin in Aspire environment becomes a critical CI/CD requirement
+
+**Status**: Closed - No action required

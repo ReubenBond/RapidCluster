@@ -59,8 +59,10 @@ public class SimpleCutDetectorTests
     [Fact]
     public void Constructor_K0_Throws()
     {
-        // Cannot create MembershipView with RingCount=0, so this test is no longer applicable
         // MembershipViewBuilder throws on creation with k <= 0
+        // This test verifies that the validation happens at the MembershipViewBuilder level,
+        // which prevents SimpleCutDetector from ever receiving a view with RingCount=0
+        Assert.Throws<ArgumentOutOfRangeException>(() => new MembershipViewBuilder(0));
     }
 
     [Fact]

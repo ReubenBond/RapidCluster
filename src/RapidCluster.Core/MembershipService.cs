@@ -363,7 +363,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
             _log.JoinAttemptWithSeed(attempt + 1, currentSeed);
 
-            var result = await TryJoinClusterAsync(currentSeed, cancellationToken).ConfigureAwait(true);
+            var result = await TryJoinClusterAsync(currentSeed, _nodeMetadata, cancellationToken).ConfigureAwait(true);
 
             switch (result.Status)
             {
@@ -484,8 +484,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     /// Returns a result indicating success, retry needed, or permanent failure.
     /// </summary>
     /// <param name="seedAddress">The seed node to contact for this join attempt.</param>
+    /// <param name="metadata">The metadata to include in the join request.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    private async Task<JoinAttemptResult> TryJoinClusterAsync(Endpoint seedAddress, CancellationToken cancellationToken)
+    private async Task<JoinAttemptResult> TryJoinClusterAsync(Endpoint seedAddress, Metadata metadata, CancellationToken cancellationToken)
     {
         // Phase 1: Contact seed for observers
         var preJoinMessage = new PreJoinMessage
@@ -517,7 +518,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         // We should redirect to the first (smallest) node in the returned endpoints
         if (joinResponse.StatusCode == JoinStatusCode.BootstrapInProgress)
         {
-            return HandleBootstrapInProgressResponse(joinResponse, seedAddress);
+            if (_isBootstrapping)
+            {
+                return HandleBootstrapInProgressResponse(joinResponse, seedAddress);
+            }
+            return JoinAttemptResult.RetryNeeded("Seed is bootstrapping");
         }
 
         if (joinResponse.StatusCode != JoinStatusCode.SafeToJoin &&
@@ -565,7 +570,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             var joinMessageForObserver = new JoinMessage
             {
                 Sender = _myAddr,
-                Metadata = _nodeMetadata,
+                Metadata = metadata,
                 ConfigurationId = joinResponse.ConfigurationId
             };
             joinMessageForObserver.RingNumber.AddRange(entry.Value);

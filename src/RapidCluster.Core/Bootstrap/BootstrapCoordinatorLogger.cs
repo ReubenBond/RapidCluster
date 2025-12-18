@@ -61,7 +61,33 @@ internal sealed partial class BootstrapCoordinatorLogger(ILogger logger)
     [LoggerMessage(Level = LogLevel.Debug, Message = "Waiting {Delay} before next gossip round")]
     public partial void WaitingForNextRound(TimeSpan delay);
 
-    [LoggerMessage(EventName = nameof(AgreedResponseFromFormedCluster), Level = LogLevel.Information, Message = "Received AGREED response from already-formed cluster member {Sender}, configurationId={ConfigId} - completing bootstrap")]
+[LoggerMessage(EventName = nameof(AgreedResponseFromFormedCluster), Level = LogLevel.Information, Message = "Received AGREED response from already-formed cluster member {Sender}, configurationId={ConfigId} - completing bootstrap")]
     private partial void AgreedResponseFromFormedClusterCore(LoggableEndpoint sender, LoggableConfigurationId configId);
     public void AgreedResponseFromFormedCluster(Endpoint sender, Pb.ConfigurationId configId) => AgreedResponseFromFormedClusterCore(new(sender), new(configId));
+
+    // New log methods for expanded BootstrapCoordinator functionality
+
+    [LoggerMessage(EventName = nameof(StartingStaticSeedBootstrap), Level = LogLevel.Information, Message = "Starting static seed bootstrap at {MyAddr} with {SeedCount} seeds, bootstrapExpect={BootstrapExpect}")]
+    private partial void StartingStaticSeedBootstrapCore(LoggableEndpoint myAddr, int seedCount, int bootstrapExpect);
+    public void StartingStaticSeedBootstrap(Endpoint myAddr, int seedCount, int bootstrapExpect) => StartingStaticSeedBootstrapCore(new(myAddr), seedCount, bootstrapExpect);
+
+    [LoggerMessage(EventName = nameof(StartingDynamicSeedBootstrap), Level = LogLevel.Information, Message = "Starting dynamic seed bootstrap at {MyAddr} with {SeedCount} initial seeds, bootstrapExpect={BootstrapExpect}")]
+    private partial void StartingDynamicSeedBootstrapCore(LoggableEndpoint myAddr, int seedCount, int bootstrapExpect);
+    public void StartingDynamicSeedBootstrap(Endpoint myAddr, int seedCount, int bootstrapExpect) => StartingDynamicSeedBootstrapCore(new(myAddr), seedCount, bootstrapExpect);
+
+    [LoggerMessage(EventName = nameof(BootstrapComplete), Level = LogLevel.Information, Message = "Bootstrap complete at {MyAddr}: {MemberCount} members, configurationId={ConfigId}")]
+    private partial void BootstrapCompleteCore(LoggableEndpoint myAddr, int memberCount, LoggableConfigurationId configId);
+    public void BootstrapComplete(Endpoint myAddr, int memberCount, ConfigurationId configId) => BootstrapCompleteCore(new(myAddr), memberCount, new(configId.ToProtobuf()));
+
+    [LoggerMessage(EventName = nameof(BootstrapProbeResult), Level = LogLevel.Debug, Message = "Bootstrap probe at {MyAddr}: {ReachableCount}/{ExpectedCount} seeds reachable")]
+    private partial void BootstrapProbeResultCore(LoggableEndpoint myAddr, int reachableCount, int expectedCount);
+    public void BootstrapProbeResult(Endpoint myAddr, int reachableCount, int expectedCount) => BootstrapProbeResultCore(new(myAddr), reachableCount, expectedCount);
+
+    [LoggerMessage(EventName = nameof(BootstrapSeedsReady), Level = LogLevel.Information, Message = "Bootstrap seeds ready at {MyAddr}: {ReachableCount} seeds reachable")]
+    private partial void BootstrapSeedsReadyCore(LoggableEndpoint myAddr, int reachableCount);
+    public void BootstrapSeedsReady(Endpoint myAddr, int reachableCount) => BootstrapSeedsReadyCore(new(myAddr), reachableCount);
+
+    [LoggerMessage(EventName = nameof(CreatedBootstrapProposal), Level = LogLevel.Debug, Message = "Created bootstrap proposal at {MyAddr}: {MemberCount} members, maxNodeId={MaxNodeId}")]
+    private partial void CreatedBootstrapProposalCore(LoggableEndpoint myAddr, int memberCount, long maxNodeId);
+    public void CreatedBootstrapProposal(Endpoint myAddr, int memberCount, long maxNodeId) => CreatedBootstrapProposalCore(new(myAddr), memberCount, maxNodeId);
 }

@@ -366,18 +366,30 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// </summary>
     private async Task BootstrapWithStaticSeedsAsync(CancellationToken cancellationToken)
     {
-        // Wait until enough seeds are reachable
-        await WaitForBootstrapSeedsAsync(cancellationToken).ConfigureAwait(true);
+        // Create the bootstrap coordinator
+        _bootstrapCoordinator = new BootstrapCoordinator(
+            _myAddr,
+            _bootstrapExpect,
+            _options.ObserversPerSubject,
+            _messagingClient,
+            _sharedResources,
+            _loggerFactory.CreateLogger<BootstrapCoordinator>(),
+            _options.BootstrapConsensusTimeout);
 
-        // Create deterministic membership view from sorted seed list
-        // All nodes create the same view because:
-        // 1. Seeds are normalized (sorted, truncated to BootstrapExpect)
-        // 2. NodeIds are assigned deterministically based on sorted order
-        var (view, maxNodeId) = CreateBootstrapMembershipView();
+        try
+        {
+            var result = await _bootstrapCoordinator.BootstrapWithStaticSeedsAsync(
+                _seedAddresses, cancellationToken).ConfigureAwait(true);
 
-        // Apply the view directly (no consensus needed)
-        _log.BootstrapConsensusDecided(_myAddr, view.Size, view.ConfigurationId.Version);
-        ApplyBootstrapView((view, maxNodeId));
+            // Apply the view directly (no consensus needed)
+            _log.BootstrapConsensusDecided(_myAddr, result.View.Size, result.View.ConfigurationId.Version);
+            ApplyBootstrapView(result);
+        }
+        finally
+        {
+            // Clear the coordinator when done (no longer in bootstrap phase)
+            _bootstrapCoordinator = null;
+        }
     }
 
     /// <summary>
@@ -390,28 +402,20 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _bootstrapCoordinator = new BootstrapCoordinator(
             _myAddr,
             _bootstrapExpect,
+            _options.ObserversPerSubject,
             _messagingClient,
             _sharedResources,
-            _loggerFactory.CreateLogger<BootstrapCoordinator>());
+            _loggerFactory.CreateLogger<BootstrapCoordinator>(),
+            _options.BootstrapConsensusTimeout);
 
         try
         {
-            // Negotiate with other seeds to agree on a common seed set
-            var agreedSeeds = await _bootstrapCoordinator.NegotiateSeedsAsync(
-                _seedAddresses,
-                cancellationToken).ConfigureAwait(true);
+            var result = await _bootstrapCoordinator.BootstrapWithDynamicSeedsAsync(
+                _seedAddresses, cancellationToken).ConfigureAwait(true);
 
-            // Update our seed list with the agreed-upon seeds (excluding self)
-            _seedAddresses = agreedSeeds
-                .Where(s => !EndpointAddressComparer.Instance.Equals(s, _myAddr))
-                .ToList();
-
-            // Now proceed with deterministic bootstrap using the agreed seeds
-            await WaitForBootstrapSeedsAsync(cancellationToken).ConfigureAwait(true);
-
-            var (view, maxNodeId) = CreateBootstrapMembershipView();
-            _log.BootstrapConsensusDecided(_myAddr, view.Size, view.ConfigurationId.Version);
-            ApplyBootstrapView((view, maxNodeId));
+            // Apply the view directly (no consensus needed)
+            _log.BootstrapConsensusDecided(_myAddr, result.View.Size, result.View.ConfigurationId.Version);
+            ApplyBootstrapView(result);
         }
         catch (BootstrapAlreadyCompleteException ex)
         {
@@ -430,126 +434,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
-    /// Creates a deterministic MembershipView from the seed list.
-    /// All nodes will create the same view since the seed list is sorted identically.
-    /// </summary>
-    private (MembershipView View, long MaxNodeId) CreateBootstrapMembershipView()
-    {
-        // Build the member list: self + all seeds (seeds already excludes self)
-        var allMembers = new List<Endpoint>(_seedAddresses) { _myAddr };
-
-        // Sort deterministically by address string to ensure all nodes create identical views
-        allMembers.Sort((a, b) =>
-        {
-            var aStr = $"{a.Hostname.ToStringUtf8()}:{a.Port}";
-            var bStr = $"{b.Hostname.ToStringUtf8()}:{b.Port}";
-            return string.Compare(aStr, bStr, StringComparison.Ordinal);
-        });
-
-        // Assign NodeIds deterministically: 1, 2, 3, ... based on sorted order
-        long nodeId = 0;
-        var membersWithNodeIds = new List<Endpoint>();
-        foreach (var member in allMembers)
-        {
-            nodeId++;
-            var endpointWithNodeId = new Endpoint
-            {
-                Hostname = member.Hostname,
-                Port = member.Port,
-                NodeId = nodeId
-            };
-            membersWithNodeIds.Add(endpointWithNodeId);
-        }
-
-        var maxNodeId = nodeId;
-
-        _log.CreatedBootstrapProposal(_myAddr, membersWithNodeIds.Count, maxNodeId);
-
-        // Build the membership view with deterministic ConfigurationId
-        var view = new MembershipViewBuilder(
-            _options.ObserversPerSubject,
-            membersWithNodeIds,
-            maxNodeId).Build();
-
-        return (view, maxNodeId);
-    }
-
-    /// <summary>
-    /// Waits until BootstrapExpect seeds are reachable.
-    /// Probes seeds periodically until enough respond.
-    /// </summary>
-    private async Task WaitForBootstrapSeedsAsync(CancellationToken cancellationToken)
-    {
-        var bootstrapTimeout = _options.BootstrapConsensusTimeout;
-        var probeInterval = TimeSpan.FromSeconds(1);
-        var stopwatch = Stopwatch.StartNew();
-
-        // Total expected count includes self
-        var expectedCount = _bootstrapExpect;
-        var allSeeds = new List<Endpoint>(_seedAddresses) { _myAddr };
-
-        while (stopwatch.Elapsed < bootstrapTimeout)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Count reachable seeds (self is always reachable)
-            var reachableCount = 1; // self
-
-            // Probe other seeds in parallel
-            var probeTasks = _seedAddresses.Select(seed => ProbeSeedAsync(seed, cancellationToken)).ToList();
-            var results = await Task.WhenAll(probeTasks).ConfigureAwait(true);
-            reachableCount += results.Count(r => r);
-
-            _log.BootstrapProbeResult(_myAddr, reachableCount, expectedCount);
-
-            if (reachableCount >= expectedCount)
-            {
-                _log.BootstrapSeedsReady(_myAddr, reachableCount);
-                return;
-            }
-
-            // Wait before next probe round
-            await Task.Delay(probeInterval, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
-        }
-
-        throw new TimeoutException($"Bootstrap timed out waiting for {expectedCount} seeds. Only {_seedAddresses.Count + 1} seeds configured (including self).");
-    }
-
-    /// <summary>
-    /// Probes a seed to check if it's reachable.
-    /// </summary>
-    private async Task<bool> ProbeSeedAsync(Endpoint seed, CancellationToken cancellationToken)
-    {
-#pragma warning disable CA1031 // Do not catch general exception types
-        try
-        {
-            // Use a simple probe request - we're just checking connectivity
-            var probeRequest = new RapidClusterRequest
-            {
-                ProbeMessage = new ProbeMessage { Sender = _myAddr }
-            };
-
-            var probeTimeout = TimeSpan.FromSeconds(2);
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(probeTimeout);
-
-            await _messagingClient.SendMessageAsync(seed, probeRequest, cts.Token).ConfigureAwait(true);
-            return true;
-        }
-        catch
-        {
-            // Seed not reachable
-            return false;
-        }
-#pragma warning restore CA1031 // Do not catch general exception types
-    }
-
-    /// <summary>
     /// Applies the bootstrap membership view to initialize the cluster.
     /// </summary>
-    private void ApplyBootstrapView((MembershipView View, long MaxNodeId) bootstrap)
+    private void ApplyBootstrapView(BootstrapResult bootstrap)
     {
-        var (view, _) = bootstrap;
+        var view = bootstrap.View;
 
         _membershipView = view;
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
@@ -571,7 +460,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _log.BootstrapComplete(_myAddr, _membershipView.Size, _membershipView.ConfigurationId);
     }
 
-    /// <summary>
+/// <summary>
     /// Joins an existing cluster through the configured seed nodes.
     /// Cycles through seeds in round-robin fashion until join succeeds or max retries exhausted.
     /// </summary>

@@ -9,32 +9,52 @@ using RapidCluster.Pb;
 namespace RapidCluster.Bootstrap;
 
 /// <summary>
-/// Coordinates the seed gossip protocol for dynamic seed discovery.
-/// When seeds are discovered dynamically (DNS, service discovery, etc.),
-/// different nodes may see different seed lists. This coordinator ensures
-/// all bootstrap nodes agree on the same seed set before forming a cluster.
+/// Result of a successful bootstrap operation.
+/// </summary>
+internal sealed class BootstrapResult
+{
+    /// <summary>
+    /// The membership view created during bootstrap.
+    /// The view contains all bootstrap state including MaxNodeId and members.
+    /// </summary>
+    public required MembershipView View { get; init; }
+}
+
+/// <summary>
+/// Coordinates the cluster bootstrap process.
+/// Handles both static seed bootstrap (deterministic, fast) and dynamic seed bootstrap
+/// (gossip-based agreement when seeds are discovered dynamically).
 /// </summary>
 /// <remarks>
 /// <para>
-/// The gossip protocol works as follows:
-/// 1. Each node starts with its initial set of discovered seeds
-/// 2. Nodes gossip their known seeds to other seeds they know about
-/// 3. When receiving gossip, nodes merge the seed sets (union)
-/// 4. Nodes sort seeds deterministically and take the first BootstrapExpect
-/// 5. Once all reachable seeds report the same hash, agreement is reached
-/// 6. If any seed reports an already-formed cluster, abort and join instead
+/// The bootstrap process ensures all initial cluster members create identical membership views:
+/// </para>
+/// <para>
+/// <b>Static Seeds (IsStatic = true):</b>
+/// All nodes have identical seed lists from configuration. Bootstrap proceeds directly
+/// by waiting for seeds to be reachable, then creating a deterministic membership view.
+/// </para>
+/// <para>
+/// <b>Dynamic Seeds (IsStatic = false):</b>
+/// Seeds are discovered dynamically (DNS, service discovery, etc.) and may differ across nodes.
+/// A gossip protocol ensures all nodes agree on the same seed set before forming the cluster,
+/// preventing split-brain scenarios.
 /// </para>
 /// </remarks>
 internal sealed class BootstrapCoordinator
 {
     private readonly Endpoint _myAddr;
     private readonly int _bootstrapExpect;
+    private readonly int _observersPerSubject;
     private readonly IMessagingClient _messagingClient;
     private readonly SharedResources _sharedResources;
     private readonly BootstrapCoordinatorLogger _log;
     private readonly TimeSpan _gossipInterval;
     private readonly TimeSpan _gossipTimeout;
     private readonly TimeSpan _gossipRpcTimeout;
+    private readonly TimeSpan _bootstrapTimeout;
+    private readonly TimeSpan _probeInterval;
+    private readonly TimeSpan _probeTimeout;
 
     // Mutable state during negotiation
     private readonly HashSet<Endpoint> _knownSeeds;
@@ -45,30 +65,42 @@ internal sealed class BootstrapCoordinator
     /// </summary>
     /// <param name="myAddr">This node's address.</param>
     /// <param name="bootstrapExpect">Expected number of nodes to bootstrap.</param>
+    /// <param name="observersPerSubject">Number of observers per subject for the membership view.</param>
     /// <param name="messagingClient">Client for sending messages to other nodes.</param>
     /// <param name="sharedResources">Shared resources (time provider, etc.).</param>
     /// <param name="logger">Logger for diagnostic output.</param>
-    /// <param name="gossipInterval">Interval between gossip rounds.</param>
-    /// <param name="gossipTimeout">Total timeout for seed gossip negotiation.</param>
-    /// <param name="gossipRpcTimeout">Timeout for individual gossip RPC calls.</param>
+    /// <param name="bootstrapTimeout">Total timeout for bootstrap (waiting for seeds). Default: 30 seconds.</param>
+    /// <param name="gossipInterval">Interval between gossip rounds. Default: 1 second.</param>
+    /// <param name="gossipTimeout">Total timeout for seed gossip negotiation. Default: 60 seconds.</param>
+    /// <param name="gossipRpcTimeout">Timeout for individual gossip RPC calls. Default: 5 seconds.</param>
+    /// <param name="probeInterval">Interval between seed probe rounds. Default: 1 second.</param>
+    /// <param name="probeTimeout">Timeout for individual seed probes. Default: 2 seconds.</param>
     public BootstrapCoordinator(
         Endpoint myAddr,
         int bootstrapExpect,
+        int observersPerSubject,
         IMessagingClient messagingClient,
         SharedResources sharedResources,
         ILogger logger,
+        TimeSpan? bootstrapTimeout = null,
         TimeSpan? gossipInterval = null,
         TimeSpan? gossipTimeout = null,
-        TimeSpan? gossipRpcTimeout = null)
+        TimeSpan? gossipRpcTimeout = null,
+        TimeSpan? probeInterval = null,
+        TimeSpan? probeTimeout = null)
     {
         _myAddr = myAddr;
         _bootstrapExpect = bootstrapExpect;
+        _observersPerSubject = observersPerSubject;
         _messagingClient = messagingClient;
         _sharedResources = sharedResources;
         _log = new BootstrapCoordinatorLogger(logger);
+        _bootstrapTimeout = bootstrapTimeout ?? TimeSpan.FromSeconds(30);
         _gossipInterval = gossipInterval ?? TimeSpan.FromSeconds(1);
         _gossipTimeout = gossipTimeout ?? TimeSpan.FromSeconds(60);
         _gossipRpcTimeout = gossipRpcTimeout ?? TimeSpan.FromSeconds(5);
+        _probeInterval = probeInterval ?? TimeSpan.FromSeconds(1);
+        _probeTimeout = probeTimeout ?? TimeSpan.FromSeconds(2);
 
         // Initialize with just self
         _knownSeeds = new HashSet<Endpoint>(EndpointAddressComparer.Instance) { _myAddr };
@@ -76,18 +108,132 @@ internal sealed class BootstrapCoordinator
     }
 
     /// <summary>
-    /// Negotiates with other seeds to agree on a common seed set.
+    /// Bootstraps the cluster with static seeds.
+    /// All nodes have identical seed lists, so they can create deterministic views directly.
+    /// </summary>
+    /// <param name="seedAddresses">The seed addresses (excluding self).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The bootstrap result containing the membership view.</returns>
+    /// <exception cref="TimeoutException">Thrown if seeds are not reachable within timeout.</exception>
+    public async Task<BootstrapResult> BootstrapWithStaticSeedsAsync(
+        IReadOnlyList<Endpoint> seedAddresses,
+        CancellationToken cancellationToken)
+    {
+        _log.StartingStaticSeedBootstrap(_myAddr, seedAddresses.Count, _bootstrapExpect);
+
+        // Initialize known seeds
+        foreach (var seed in seedAddresses)
+        {
+            _knownSeeds.Add(seed);
+        }
+
+        // Wait until enough seeds are reachable
+        await WaitForSeedsAsync(seedAddresses, cancellationToken).ConfigureAwait(true);
+
+        // Create deterministic membership view
+        var (view, _) = CreateMembershipView(seedAddresses);
+        _log.BootstrapComplete(_myAddr, view.Size, view.ConfigurationId);
+
+        return new BootstrapResult
+        {
+            View = view
+        };
+    }
+
+    /// <summary>
+    /// Bootstraps the cluster with dynamically discovered seeds.
+    /// Uses a gossip protocol to agree on a common seed set before forming the cluster.
     /// </summary>
     /// <param name="initialSeeds">Initial seeds discovered by this node (excluding self).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The agreed-upon seed set.</returns>
+    /// <returns>The bootstrap result containing the membership view.</returns>
     /// <exception cref="BootstrapAlreadyCompleteException">
-    /// Thrown if an already-formed cluster is detected. The node should fall back to joining.
+    /// Thrown if an already-formed cluster is detected. The caller should fall back to joining.
     /// </exception>
     /// <exception cref="TimeoutException">
     /// Thrown if agreement cannot be reached within the timeout period.
     /// </exception>
-    public async Task<IReadOnlyList<Endpoint>> NegotiateSeedsAsync(
+    public async Task<BootstrapResult> BootstrapWithDynamicSeedsAsync(
+        IReadOnlyList<Endpoint> initialSeeds,
+        CancellationToken cancellationToken)
+    {
+        _log.StartingDynamicSeedBootstrap(_myAddr, initialSeeds.Count, _bootstrapExpect);
+
+        // Negotiate with other seeds to agree on a common seed set
+        var agreedSeeds = await NegotiateSeedsAsync(initialSeeds, cancellationToken).ConfigureAwait(true);
+
+        // Get seeds excluding self for the wait phase
+        var seedsExcludingSelf = agreedSeeds
+            .Where(s => !EndpointAddressComparer.Instance.Equals(s, _myAddr))
+            .ToList();
+
+        // Wait until enough seeds are reachable
+        await WaitForSeedsAsync(seedsExcludingSelf, cancellationToken).ConfigureAwait(true);
+
+        // Create deterministic membership view using agreed seeds
+        var (view, _) = CreateMembershipView(seedsExcludingSelf);
+        _log.BootstrapComplete(_myAddr, view.Size, view.ConfigurationId);
+
+        return new BootstrapResult
+        {
+            View = view
+        };
+    }
+
+    /// <summary>
+    /// Handles an incoming seed gossip message from another node.
+    /// </summary>
+    /// <param name="gossip">The incoming gossip message.</param>
+    /// <returns>Response indicating our status and known seeds.</returns>
+    public BootstrapSeedGossipResponse HandleGossip(BootstrapSeedGossip gossip)
+    {
+        // Merge the sender's seeds into our known set
+        var addedCount = 0;
+        foreach (var seed in gossip.KnownSeeds)
+        {
+            if (_knownSeeds.Add(seed))
+            {
+                addedCount++;
+            }
+        }
+
+        if (addedCount > 0)
+        {
+            _log.MergedSeeds(gossip.Sender, addedCount, _knownSeeds.Count);
+            UpdateSeedSetHash();
+        }
+
+        // Build response with our current state
+        var response = new BootstrapSeedGossipResponse
+        {
+            Sender = _myAddr,
+            Status = BootstrapStatus.Negotiating,
+            SeedSetHash = ByteString.CopyFrom(_currentSeedSetHash)
+        };
+        response.KnownSeeds.AddRange(_knownSeeds);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Creates a response indicating this node is part of an already-formed cluster.
+    /// </summary>
+    /// <param name="configurationId">The configuration ID of the formed cluster.</param>
+    /// <returns>Response with ALREADY_FORMED status.</returns>
+    public BootstrapSeedGossipResponse CreateAlreadyFormedResponse(Pb.ConfigurationId configurationId)
+    {
+        return new BootstrapSeedGossipResponse
+        {
+            Sender = _myAddr,
+            Status = BootstrapStatus.AlreadyFormed,
+            ConfigurationId = configurationId
+        };
+    }
+
+    /// <summary>
+    /// Negotiates with other seeds to agree on a common seed set.
+    /// </summary>
+    private async Task<IReadOnlyList<Endpoint>> NegotiateSeedsAsync(
         IReadOnlyList<Endpoint> initialSeeds,
         CancellationToken cancellationToken)
     {
@@ -151,53 +297,119 @@ internal sealed class BootstrapCoordinator
     }
 
     /// <summary>
-    /// Handles an incoming seed gossip message from another node.
+    /// Waits until BootstrapExpect seeds are reachable.
     /// </summary>
-    /// <param name="gossip">The incoming gossip message.</param>
-    /// <returns>Response indicating our status and known seeds.</returns>
-    public BootstrapSeedGossipResponse HandleGossip(BootstrapSeedGossip gossip)
+    private async Task WaitForSeedsAsync(IReadOnlyList<Endpoint> seedAddresses, CancellationToken cancellationToken)
     {
-        // Merge the sender's seeds into our known set
-        var addedCount = 0;
-        foreach (var seed in gossip.KnownSeeds)
+        var startTime = _sharedResources.TimeProvider.GetTimestamp();
+
+        // Total expected count includes self
+        var expectedCount = _bootstrapExpect;
+
+        while (!cancellationToken.IsCancellationRequested)
         {
-            if (_knownSeeds.Add(seed))
+            var elapsed = _sharedResources.TimeProvider.GetElapsedTime(startTime);
+            if (elapsed >= _bootstrapTimeout)
             {
-                addedCount++;
+                throw new TimeoutException(
+                    $"Bootstrap timed out waiting for {expectedCount} seeds. " +
+                    $"Only {seedAddresses.Count + 1} seeds configured (including self).");
             }
+
+            // Count reachable seeds (self is always reachable)
+            var reachableCount = 1; // self
+
+            // Probe other seeds in parallel
+            var probeTasks = seedAddresses.Select(seed => ProbeSeedAsync(seed, cancellationToken)).ToList();
+            var results = await Task.WhenAll(probeTasks).ConfigureAwait(true);
+            reachableCount += results.Count(r => r);
+
+            _log.BootstrapProbeResult(_myAddr, reachableCount, expectedCount);
+
+            if (reachableCount >= expectedCount)
+            {
+                _log.BootstrapSeedsReady(_myAddr, reachableCount);
+                return;
+            }
+
+            // Wait before next probe round
+            await Task.Delay(_probeInterval, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
         }
 
-        if (addedCount > 0)
-        {
-            _log.MergedSeeds(gossip.Sender, addedCount, _knownSeeds.Count);
-            UpdateSeedSetHash();
-        }
-
-        // Build response with our current state
-        var response = new BootstrapSeedGossipResponse
-        {
-            Sender = _myAddr,
-            Status = BootstrapStatus.Negotiating,
-            SeedSetHash = ByteString.CopyFrom(_currentSeedSetHash)
-        };
-        response.KnownSeeds.AddRange(_knownSeeds);
-
-        return response;
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>
-    /// Creates a response indicating this node is part of an already-formed cluster.
+    /// Probes a seed to check if it's reachable.
     /// </summary>
-    /// <param name="configurationId">The configuration ID of the formed cluster.</param>
-    /// <returns>Response with ALREADY_FORMED status.</returns>
-    public BootstrapSeedGossipResponse CreateAlreadyFormedResponse(Pb.ConfigurationId configurationId)
+    private async Task<bool> ProbeSeedAsync(Endpoint seed, CancellationToken cancellationToken)
     {
-        return new BootstrapSeedGossipResponse
+#pragma warning disable CA1031 // Do not catch general exception types
+        try
         {
-            Sender = _myAddr,
-            Status = BootstrapStatus.AlreadyFormed,
-            ConfigurationId = configurationId
-        };
+            // Use a simple probe request - we're just checking connectivity
+            var probeRequest = new RapidClusterRequest
+            {
+                ProbeMessage = new ProbeMessage { Sender = _myAddr }
+            };
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(_probeTimeout);
+
+            await _messagingClient.SendMessageAsync(seed, probeRequest, cts.Token).ConfigureAwait(true);
+            return true;
+        }
+        catch
+        {
+            // Seed not reachable
+            return false;
+        }
+#pragma warning restore CA1031 // Do not catch general exception types
+    }
+
+    /// <summary>
+    /// Creates a deterministic MembershipView from the seed list.
+    /// All nodes will create the same view since the seed list is sorted identically.
+    /// </summary>
+    private (MembershipView View, long MaxNodeId) CreateMembershipView(IReadOnlyList<Endpoint> seedAddresses)
+    {
+        // Build the member list: self + all seeds (seeds already excludes self)
+        var allMembers = new List<Endpoint>(seedAddresses) { _myAddr };
+
+        // Sort deterministically by address string to ensure all nodes create identical views
+        allMembers.Sort((a, b) =>
+        {
+            var aStr = $"{a.Hostname.ToStringUtf8()}:{a.Port}";
+            var bStr = $"{b.Hostname.ToStringUtf8()}:{b.Port}";
+            return string.Compare(aStr, bStr, StringComparison.Ordinal);
+        });
+
+        // Assign NodeIds deterministically: 1, 2, 3, ... based on sorted order
+        long nodeId = 0;
+        var membersWithNodeIds = new List<Endpoint>();
+        foreach (var member in allMembers)
+        {
+            nodeId++;
+            var endpointWithNodeId = new Endpoint
+            {
+                Hostname = member.Hostname,
+                Port = member.Port,
+                NodeId = nodeId
+            };
+            membersWithNodeIds.Add(endpointWithNodeId);
+        }
+
+        var maxNodeId = nodeId;
+
+        _log.CreatedBootstrapProposal(_myAddr, membersWithNodeIds.Count, maxNodeId);
+
+        // Build the membership view with deterministic ConfigurationId
+        var view = new MembershipViewBuilder(
+            _observersPerSubject,
+            membersWithNodeIds,
+            maxNodeId).Build();
+
+        return (view, maxNodeId);
     }
 
     private List<Endpoint> GetSeedsToContact()

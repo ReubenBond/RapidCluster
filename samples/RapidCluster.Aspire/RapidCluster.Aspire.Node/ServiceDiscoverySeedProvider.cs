@@ -48,7 +48,7 @@ internal sealed partial class ServiceDiscoverySeedProvider : ISeedProvider
     }
 
     /// <inheritdoc/>
-    public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<SeedDiscoveryResult> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
         var endpoints = new List<EndPoint>();
         var clusterSize = _configuration.GetValue<int>("CLUSTER_SIZE", 1);
@@ -84,7 +84,10 @@ internal sealed partial class ServiceDiscoverySeedProvider : ISeedProvider
         }
 
         LogTotalSeedsDiscovered(_logger, endpoints.Count, _serviceNamePrefix);
-        return endpoints;
+
+        // Service discovery seeds are dynamic - different nodes may see different results
+        // due to DNS propagation, service registration timing, etc.
+        return SeedDiscoveryResult.Dynamic(endpoints);
     }
 
     /// <summary>

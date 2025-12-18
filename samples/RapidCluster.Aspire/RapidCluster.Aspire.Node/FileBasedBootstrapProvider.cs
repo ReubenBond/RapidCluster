@@ -82,7 +82,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     }
 
     /// <inheritdoc/>
-    public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<SeedDiscoveryResult> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
         if (_myAddress == null)
         {
@@ -101,7 +101,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         if (allSeeds == null || allSeeds.Count == 0)
         {
             LogSeedsTimeout(_logger, _clusterSize, _startupTimeout.TotalSeconds);
-            return [];
+            return SeedDiscoveryResult.Static([]);
         }
 
         // Return all seeds in sorted order - MembershipService will use this to determine
@@ -109,7 +109,10 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         // The sorting ensures all nodes see the same order, so they agree on who coordinates
         var seedsList = string.Join(", ", allSeeds.Select(EndpointToString));
         LogAllSeedsDiscovered(_logger, allSeeds.Count, seedsList);
-        return allSeeds;
+
+        // File-based coordination ensures all nodes see the same seed list,
+        // so seeds are effectively static once coordination is complete.
+        return SeedDiscoveryResult.Static(allSeeds);
     }
 
     private async Task RegisterNodeAsync(CancellationToken cancellationToken)

@@ -38,6 +38,7 @@ message RapidClusterRequest
         Phase2bMessage phase2bMessage = 9;
         LeaveMessage leaveMessage = 10;
         MembershipViewRequest membershipViewRequest = 11;
+        BootstrapSeedGossip bootstrapSeedGossip = 12;
    }
 }
 
@@ -49,6 +50,7 @@ message RapidClusterResponse
         ConsensusResponse consensusResponse = 3;
         ProbeResponse probeResponse = 4;
         MembershipViewResponse membershipViewResponse = 5;
+        BootstrapSeedGossipResponse bootstrapSeedGossipResponse = 6;
    }
 }
 
@@ -252,4 +254,38 @@ message MembershipViewResponse
     repeated Endpoint metadataKeys = 4;
     repeated Metadata metadataValues = 5;
     int64 max_node_id = 6;  // Highest node_id ever assigned (for Paxos correctness)
+}
+
+// ******* Bootstrap Seed Gossip Protocol *******
+//
+// When seeds are discovered dynamically (DNS, service discovery, etc.),
+// different nodes may see different seed lists. The seed gossip protocol
+// ensures all bootstrap nodes agree on the same seed set before forming
+// a cluster, preventing split-brain scenarios.
+
+// Bootstrap negotiation status
+enum BootstrapStatus {
+    BOOTSTRAP_STATUS_UNSPECIFIED = 0;
+    BOOTSTRAP_STATUS_NEGOTIATING = 1;    // Still collecting seeds
+    BOOTSTRAP_STATUS_AGREED = 2;         // Ready to form with this seed set
+    BOOTSTRAP_STATUS_ALREADY_FORMED = 3; // Cluster already exists, join instead
+}
+
+// Sent between seeds during bootstrap negotiation
+message BootstrapSeedGossip
+{
+    Endpoint sender = 1;
+    repeated Endpoint known_seeds = 2;   // All seeds this node knows about
+    bytes seed_set_hash = 3;             // SHA256 of sorted seed set (for agreement check)
+    int32 bootstrap_expect = 4;          // Expected cluster size
+}
+
+// Response to seed gossip
+message BootstrapSeedGossipResponse
+{
+    Endpoint sender = 1;
+    BootstrapStatus status = 2;
+    repeated Endpoint known_seeds = 3;   // Seeds known by responder
+    bytes seed_set_hash = 4;             // Responder's current seed set hash
+    ConfigurationId configuration_id = 5; // Set if ALREADY_FORMED
 }

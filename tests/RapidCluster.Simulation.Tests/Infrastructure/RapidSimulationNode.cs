@@ -126,7 +126,8 @@ internal sealed class RapidSimulationNode : SimulationNode
         int bootstrapExpect,
         Metadata? metadata,
         RapidClusterProtocolOptions? protocolOptions,
-        ILoggerFactory? loggerFactory)
+        ILoggerFactory? loggerFactory,
+        bool seedsAreStatic = true)
     {
         Address = address;
 
@@ -206,7 +207,12 @@ internal sealed class RapidSimulationNode : SimulationNode
             BootstrapExpect = bootstrapExpect
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
-        var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterOptions>(rapidClusterOptions));
+        var seedOptions = new RapidClusterSeedOptions
+        {
+            SeedAddresses = rapidClusterOptions.SeedAddresses,
+            IsStatic = seedsAreStatic
+        };
+        var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterSeedOptions>(seedOptions));
         var metadataManager = new MetadataManager();
         _membershipService = new MembershipService(
             Options.Create(rapidClusterOptions),
@@ -221,7 +227,8 @@ internal sealed class RapidSimulationNode : SimulationNode
             _metrics,
             seedProvider,
             metadataManager,
-            _membershipServiceLogger);
+            _membershipServiceLogger,
+            _loggerFactory);
     }
 
     /// <summary>

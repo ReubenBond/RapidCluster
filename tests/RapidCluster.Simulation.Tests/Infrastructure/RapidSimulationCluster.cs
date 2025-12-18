@@ -260,6 +260,87 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     }
 
     /// <summary>
+    /// Creates a cluster using BootstrapExpect mode with dynamic (non-static) seeds.
+    /// Each node can have a different subset of known seeds, simulating dynamic discovery
+    /// (DNS, service discovery, etc.) where seeds are not guaranteed identical across nodes.
+    /// The seed gossip protocol negotiates a common seed set before cluster formation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This tests the seed gossip protocol that prevents split-brain when seeds are
+    /// discovered dynamically. Nodes exchange their known seeds via gossip until all
+    /// nodes agree on the same normalized seed set (sorted, truncated to BootstrapExpect).
+    /// </para>
+    /// </remarks>
+    /// <param name="size">The number of nodes in the cluster.</param>
+    /// <param name="seedsPerNode">
+    /// Function that returns the seed indices for each node (by index).
+    /// If null, each node gets all seeds (same as static).
+    /// </param>
+    /// <param name="options">Optional protocol options.</param>
+    /// <returns>List of all nodes in the cluster.</returns>
+    public IReadOnlyList<RapidSimulationNode> CreateClusterWithDynamicSeeds(
+        int size,
+        Func<int, IReadOnlyList<int>>? seedsPerNode = null,
+        RapidClusterProtocolOptions? options = null)
+    {
+        if (size < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(size), "Cluster size must be at least 1");
+        }
+
+        var result = new List<RapidSimulationNode>(size);
+
+        // Create all node addresses first
+        var addresses = new List<Endpoint>(size);
+        for (var i = 0; i < size; i++)
+        {
+            addresses.Add(RapidClusterUtils.HostFromParts("node", i));
+        }
+
+        // Create all nodes with their specific seed lists and IsStatic=false
+        for (var i = 0; i < size; i++)
+        {
+            var nodeAddress = addresses[i];
+
+            // Determine which seeds this node knows about
+            IList<Endpoint> seedsForNode;
+            if (seedsPerNode != null)
+            {
+                var seedIndices = seedsPerNode(i);
+                seedsForNode = seedIndices.Select(idx => addresses[idx]).ToList();
+            }
+            else
+            {
+                // Default: all nodes know all seeds
+                seedsForNode = addresses.ToList();
+            }
+
+            var node = new RapidSimulationNode(
+                this,
+                nodeAddress,
+                seedsForNode,
+                bootstrapExpect: size,
+                metadata: null,
+                protocolOptions: options,
+                loggerFactory: LoggerFactory,
+                seedsAreStatic: false);  // Dynamic seeds - use gossip protocol
+            RegisterNode(node);
+            result.Add(node);
+        }
+
+        _log.BootstrapClusterCreating(size);
+
+        // Initialize all nodes in parallel - they will use seed gossip to agree
+        // on a common seed set before creating the deterministic membership view
+        Run(() => Task.WhenAll(result.Select(node => node.InitializeAsync())));
+
+        _log.BootstrapClusterCreated(size);
+
+        return result;
+    }
+
+    /// <summary>
     /// Creates a cluster of the specified size using parallel joins.
     /// Multiple nodes join concurrently, allowing the multi-node cut detection
     /// to batch them into fewer consensus rounds (O(log N) instead of O(N)).
@@ -747,8 +828,8 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
 
         if (passed)
         {
-            // CheckAll runs 6 invariant checks
-            _log.InvariantsPassed(6);
+            // CheckAll runs 7 invariant checks
+            _log.InvariantsPassed(7);
         }
         else
         {

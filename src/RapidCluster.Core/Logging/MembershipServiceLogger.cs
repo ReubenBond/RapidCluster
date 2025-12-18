@@ -114,6 +114,10 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Trace, Message = "HandleProbeMessage: responding to probe")]
     public partial void HandleProbeMessage();
 
+    [LoggerMessage(EventName = nameof(ProbeFromDifferentCluster), Level = LogLevel.Debug, Message = "HandleProbeMessage: ignoring probe from {Sender} with different ClusterId (theirs=0x{TheirClusterId:X8}, ours=0x{OurClusterId:X8})")]
+    private partial void ProbeFromDifferentClusterCore(LoggableEndpoint sender, long theirClusterId, long ourClusterId);
+    public void ProbeFromDifferentCluster(Endpoint sender, long theirClusterId, long ourClusterId) => ProbeFromDifferentClusterCore(new(sender), theirClusterId, ourClusterId);
+
     [LoggerMessage(EventName = nameof(HandleMembershipViewRequest), Level = LogLevel.Debug, Message = "HandleMembershipViewRequest: sender={Sender} requested view (their config={TheirConfig}, our config={OurConfig})")]
     private partial void HandleMembershipViewRequestCore(LoggableEndpoint sender, LoggableConfigurationId theirConfig, LoggableConfigurationId ourConfig);
     public void HandleMembershipViewRequest(Endpoint sender, Pb.ConfigurationId theirConfig, MembershipView view) => HandleMembershipViewRequestCore(new(sender), new(theirConfig), new(view));
@@ -288,6 +292,9 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Refreshed {Count} seeds from seed provider")]
     public partial void SeedsRefreshed(int count);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Normalizing seed set: {OriginalCount} seeds configured, taking first {NormalizedCount} (BootstrapExpect)")]
+    public partial void NormalizingSeedSet(int originalCount, int normalizedCount);
+
     [LoggerMessage(EventName = nameof(RefreshingSeedsForRejoin), Level = LogLevel.Information, Message = "Node {MyAddr} refreshing seeds from provider before retry")]
     private partial void RefreshingSeedsForRejoinCore(LoggableEndpoint myAddr);
     public void RefreshingSeedsForRejoin(Endpoint myAddr) => RefreshingSeedsForRejoinCore(new(myAddr));
@@ -319,4 +326,15 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(EventName = nameof(BootstrapComplete), Level = LogLevel.Information, Message = "Bootstrap complete at {MyAddr}: membership size={MembershipSize}, configId={ConfigId}")]
     private partial void BootstrapCompleteCore(LoggableEndpoint myAddr, int membershipSize, LoggableConfigurationId configId);
     public void BootstrapComplete(Endpoint myAddr, int membershipSize, ConfigurationId configId) => BootstrapCompleteCore(new(myAddr), membershipSize, new(configId));
+
+    [LoggerMessage(EventName = nameof(BroadcastingBootstrapProposal), Level = LogLevel.Debug, Message = "Broadcasting bootstrap proposal at {MyAddr}: {MemberCount} members")]
+    private partial void BroadcastingBootstrapProposalCore(LoggableEndpoint myAddr, int memberCount);
+    public void BroadcastingBootstrapProposal(Endpoint myAddr, int memberCount) => BroadcastingBootstrapProposalCore(new(myAddr), memberCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cluster already formed (configId={ConfigId}), falling back to join protocol")]
+    public partial void ClusterAlreadyFormedFallingBackToJoin(long configId);
+
+    [LoggerMessage(EventName = nameof(GossipSenderAlreadyInMembership), Level = LogLevel.Debug, Message = "Gossip sender {Sender} is already in our membership - responding with AGREED status")]
+    private partial void GossipSenderAlreadyInMembershipCore(LoggableEndpoint sender);
+    public void GossipSenderAlreadyInMembership(Endpoint sender) => GossipSenderAlreadyInMembershipCore(new(sender));
 }

@@ -73,7 +73,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     }
 
     /// <inheritdoc/>
-    public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<SeedDiscoveryResult> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
         if (_myAddress == null)
         {
@@ -92,7 +92,8 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         {
             var myAddressStr = EndpointToString(_myAddress);
             LogBootstrapCoordinator(_logger, _nodeIndex, myAddressStr);
-            return [];
+            // File-based bootstrap is static - all nodes read from the same file
+            return SeedDiscoveryResult.Static([]);
         }
 
         // Otherwise, wait for node 0 to register and use its address as seed
@@ -101,13 +102,14 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         {
             var node0AddressStr = EndpointToString(node0Address);
             LogUsingBootstrapCoordinator(_logger, _nodeIndex, node0AddressStr);
-            return [node0Address];
+            // File-based bootstrap is static - all nodes read from the same file
+            return SeedDiscoveryResult.Static([node0Address]);
         }
 
         // Timeout waiting for bootstrap coordinator - return empty list
         // This will cause the node to fail to join, which is the correct behavior
         LogBootstrapCoordinatorTimeout(_logger, _nodeIndex, _startupTimeout.TotalSeconds);
-        return [];
+        return SeedDiscoveryResult.Static([]);
     }
 
     private async Task RegisterNodeAsync(CancellationToken cancellationToken)

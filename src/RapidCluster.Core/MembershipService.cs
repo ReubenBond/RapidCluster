@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 using Microsoft.Extensions.Options;
+using RapidCluster.Bootstrap;
 using RapidCluster.Discovery;
 using RapidCluster.Exceptions;
 using RapidCluster.Logging;
@@ -64,6 +65,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // (before filtering self). Used to determine the bootstrap coordinator.
     private bool _wasFirstSeed;
 
+    // Tracks whether seeds are static (identical across all nodes) or dynamic.
+    // When false, seed gossip is required during bootstrap to prevent split-brain.
+    private bool _seedsAreStatic;
+
+    // Bootstrap coordinator for dynamic seed gossip protocol.
+    // Only non-null during the bootstrap negotiation phase when _seedsAreStatic is false.
+    private BootstrapCoordinator? _bootstrapCoordinator;
+
     // Buffer for consensus messages from future configurations
     // Key: configurationId, Value: list of messages waiting for that config
     private readonly Dictionary<long, List<RapidClusterRequest>> _pendingConsensusMessages = [];
@@ -90,6 +99,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Internal cancellation for background tasks - linked to SharedResources.ShuttingDownToken
     // Cancelled by StopAsync or when SharedResources signals shutdown
     private readonly CancellationTokenSource _stoppingCts;
+
+    // Logger factory for creating loggers for FastPaxos instances during bootstrap
+    private readonly ILoggerFactory _loggerFactory;
 
     /// <summary>
     /// Result of a single join attempt. Used to avoid exception-based control flow for retryable conditions.
@@ -135,7 +147,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         RapidClusterMetrics metrics,
         ISeedProvider seedProvider,
         MetadataManager metadataManager,
-        ILogger<MembershipService> logger)
+        ILogger<MembershipService> logger,
+        ILoggerFactory loggerFactory)
     {
         var opts = RapidClusterOptions.Value;
         _myAddr = opts.ListenAddress.ToProtobuf();
@@ -169,6 +182,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _viewAccessor = viewAccessor;
         _metrics = metrics;
         _log = new MembershipServiceLogger(logger);
+        _loggerFactory = loggerFactory;
         _sendQueue = Channel.CreateUnbounded<AlertMessage>();
 
         // Create linked CTS so background tasks stop on either StopAsync or SharedResources shutdown
@@ -239,50 +253,47 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     /// <summary>
     /// Refreshes the seed addresses from the seed provider.
-    /// Filters out self and duplicates while preserving order.
-    /// Also tracks whether self was the first seed (for bootstrap coordinator election).
+    /// Normalizes the seed set by sorting and taking the first BootstrapExpect nodes
+    /// to ensure all nodes have identical seed sets.
+    /// Also tracks whether self was in the normalized set (for bootstrap coordinator election).
     /// </summary>
     private async Task RefreshSeedsAsync(CancellationToken cancellationToken)
     {
-        var seeds = await _seedProvider.GetSeedsAsync(cancellationToken).ConfigureAwait(true);
+        var seedResult = await _seedProvider.GetSeedsAsync(cancellationToken).ConfigureAwait(true);
 
-        var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
-        _seedAddresses = [];
-        _wasFirstSeed = false;
-        var isFirstSeed = true;
-        Endpoint? firstSeed = null;
+        // Track whether seeds are static (for bootstrap mode selection)
+        _seedsAreStatic = seedResult.IsStatic;
 
-        // Get the string representation of our address for comparison
-        // This ensures consistent comparison when the seed list is sorted by string
-        var myAddrString = $"{_myAddr.Hostname.ToStringUtf8()}:{_myAddr.Port}";
+        // Convert to protobuf and sort deterministically by address string
+        // This ensures all nodes will have the same ordering regardless of input order
+        var allSeeds = seedResult.Seeds
+            .Select(s => s.ToProtobuf())
+            .DistinctBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}")
+            .OrderBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}", StringComparer.Ordinal)
+            .ToList();
 
-        foreach (var seed in seeds)
+        // If BootstrapExpect is set and we have more seeds than expected, take only the first N
+        // This ensures all nodes agree on the same seed set even if some have extra seeds configured
+        if (_bootstrapExpect > 0 && allSeeds.Count > _bootstrapExpect)
         {
-            var pbSeed = seed.ToProtobuf();
-            var seedString = $"{pbSeed.Hostname.ToStringUtf8()}:{pbSeed.Port}";
-
-            // Check if this is the first seed and if it matches self
-            if (isFirstSeed)
-            {
-                isFirstSeed = false;
-                firstSeed = pbSeed;
-
-                // Compare addresses as strings (same format used by FileBasedBootstrapProvider)
-                // This ensures consistency when bootstrap coordinator is determined by sorted order
-                if (string.Equals(seedString, myAddrString, StringComparison.Ordinal))
-                {
-                    _wasFirstSeed = true;
-                }
-            }
-
-            if (!EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr) && seen.Add(pbSeed))
-            {
-                _seedAddresses.Add(pbSeed);
-            }
+            _log.NormalizingSeedSet(allSeeds.Count, _bootstrapExpect);
+            allSeeds = allSeeds.Take(_bootstrapExpect).ToList();
         }
 
+        // Get the string representation of our address for comparison
+        var myAddrString = $"{_myAddr.Hostname.ToStringUtf8()}:{_myAddr.Port}";
+
+        // Check if self is the first seed (determines bootstrap coordinator)
+        _wasFirstSeed = allSeeds.Count > 0 &&
+                        string.Equals($"{allSeeds[0].Hostname.ToStringUtf8()}:{allSeeds[0].Port}", myAddrString, StringComparison.Ordinal);
+
+        // Build seed list excluding self (but preserving sorted order)
+        _seedAddresses = allSeeds
+            .Where(s => !EndpointAddressComparer.Instance.Equals(s, _myAddr))
+            .ToList();
+
         _log.SeedsRefreshed(_seedAddresses.Count);
-        _log.BootstrapCoordinatorCheck(_myAddr, firstSeed, _wasFirstSeed, _bootstrapExpect);
+        _log.BootstrapCoordinatorCheck(_myAddr, allSeeds.Count > 0 ? allSeeds[0] : null, _wasFirstSeed, _bootstrapExpect);
     }
 
     /// <summary>
@@ -310,35 +321,157 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     /// <summary>
     /// Bootstraps a new cluster when BootstrapExpect is configured.
-    /// All nodes create the same deterministic initial membership from the seed list.
+    /// All nodes create an identical deterministic membership view from the sorted seed list.
     /// </summary>
     /// <remarks>
     /// <para>
     /// The bootstrap process works as follows:
-    /// 1. Wait until BootstrapExpect seeds are reachable (including self)
-    /// 2. All nodes create the same deterministic MembershipView from the sorted seed list
-    /// 3. Each node applies this view directly - no consensus needed since the view is predetermined
-    /// 4. The cluster is now formed with ConfigurationId 1 containing all seeds
+    /// 1. Normalize seed set: sort and take first BootstrapExpect seeds (done in RefreshSeedsAsync)
+    /// 2. Wait until BootstrapExpect seeds are reachable (including self)
+    /// 3. All nodes create the same deterministic MembershipView from the sorted seed list
+    /// 4. The cluster is formed with ConfigurationId 1 containing all seeds
     /// </para>
     /// <para>
     /// This approach ensures:
-    /// - No race condition: all nodes wait for the same condition before proceeding
-    /// - Simple: no consensus protocol for initial formation
-    /// - Deterministic: same seeds produce identical membership across all nodes
+    /// - Safety: All nodes create identical views from the same normalized seed set
+    /// - Liveness: No consensus needed since all nodes agree by construction
+    /// - Deterministic: Same seeds produce identical membership views across all nodes
+    /// </para>
+    /// <para>
+    /// Note: We use deterministic view creation instead of consensus because:
+    /// - All nodes have the same seed set after normalization
+    /// - All nodes create the same view by construction (same sort order, same NodeId assignment)
+    /// - Consensus would add complexity without benefit when there's no disagreement
     /// </para>
     /// </remarks>
     private async Task BootstrapClusterAsync(CancellationToken cancellationToken)
     {
         _log.StartingBootstrapConsensus(_myAddr, _bootstrapExpect, _seedAddresses.Count);
 
+        if (_seedsAreStatic)
+        {
+            // Static seeds: all nodes have identical seed lists, proceed with deterministic bootstrap
+            await BootstrapWithStaticSeedsAsync(cancellationToken).ConfigureAwait(true);
+        }
+        else
+        {
+            // Dynamic seeds: use gossip protocol to agree on seed set before bootstrap
+            await BootstrapWithDynamicSeedsAsync(cancellationToken).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Bootstraps with statically configured seeds (the original fast path).
+    /// All nodes have identical seed lists, so they can create deterministic views directly.
+    /// </summary>
+    private async Task BootstrapWithStaticSeedsAsync(CancellationToken cancellationToken)
+    {
         // Wait until enough seeds are reachable
         await WaitForBootstrapSeedsAsync(cancellationToken).ConfigureAwait(true);
 
         // Create deterministic membership view from sorted seed list
-        var bootstrapView = CreateBootstrapMembershipView();
+        // All nodes create the same view because:
+        // 1. Seeds are normalized (sorted, truncated to BootstrapExpect)
+        // 2. NodeIds are assigned deterministically based on sorted order
+        var (view, maxNodeId) = CreateBootstrapMembershipView();
 
-        // Apply the bootstrap membership directly
-        ApplyBootstrapView(bootstrapView);
+        // Apply the view directly (no consensus needed)
+        _log.BootstrapConsensusDecided(_myAddr, view.Size, view.ConfigurationId.Version);
+        ApplyBootstrapView((view, maxNodeId));
+    }
+
+    /// <summary>
+    /// Bootstraps with dynamically discovered seeds using the gossip protocol.
+    /// Nodes may have different initial seed lists, so they must agree on a common set first.
+    /// </summary>
+    private async Task BootstrapWithDynamicSeedsAsync(CancellationToken cancellationToken)
+    {
+        // Create the bootstrap coordinator for seed gossip
+        _bootstrapCoordinator = new BootstrapCoordinator(
+            _myAddr,
+            _bootstrapExpect,
+            _messagingClient,
+            _sharedResources,
+            _loggerFactory.CreateLogger<BootstrapCoordinator>());
+
+        try
+        {
+            // Negotiate with other seeds to agree on a common seed set
+            var agreedSeeds = await _bootstrapCoordinator.NegotiateSeedsAsync(
+                _seedAddresses,
+                cancellationToken).ConfigureAwait(true);
+
+            // Update our seed list with the agreed-upon seeds (excluding self)
+            _seedAddresses = agreedSeeds
+                .Where(s => !EndpointAddressComparer.Instance.Equals(s, _myAddr))
+                .ToList();
+
+            // Now proceed with deterministic bootstrap using the agreed seeds
+            await WaitForBootstrapSeedsAsync(cancellationToken).ConfigureAwait(true);
+
+            var (view, maxNodeId) = CreateBootstrapMembershipView();
+            _log.BootstrapConsensusDecided(_myAddr, view.Size, view.ConfigurationId.Version);
+            ApplyBootstrapView((view, maxNodeId));
+        }
+        catch (BootstrapAlreadyCompleteException ex)
+        {
+            // A cluster already exists - fall back to normal join
+            _log.ClusterAlreadyFormedFallingBackToJoin(ex.ClusterConfigurationId?.Version ?? 0);
+
+            // Clear the bootstrap coordinator and join the existing cluster
+            _bootstrapCoordinator = null;
+            await JoinClusterAsync(cancellationToken).ConfigureAwait(true);
+        }
+        finally
+        {
+            // Clear the coordinator when done (no longer in bootstrap phase)
+            _bootstrapCoordinator = null;
+        }
+    }
+
+    /// <summary>
+    /// Creates a deterministic MembershipView from the seed list.
+    /// All nodes will create the same view since the seed list is sorted identically.
+    /// </summary>
+    private (MembershipView View, long MaxNodeId) CreateBootstrapMembershipView()
+    {
+        // Build the member list: self + all seeds (seeds already excludes self)
+        var allMembers = new List<Endpoint>(_seedAddresses) { _myAddr };
+
+        // Sort deterministically by address string to ensure all nodes create identical views
+        allMembers.Sort((a, b) =>
+        {
+            var aStr = $"{a.Hostname.ToStringUtf8()}:{a.Port}";
+            var bStr = $"{b.Hostname.ToStringUtf8()}:{b.Port}";
+            return string.Compare(aStr, bStr, StringComparison.Ordinal);
+        });
+
+        // Assign NodeIds deterministically: 1, 2, 3, ... based on sorted order
+        long nodeId = 0;
+        var membersWithNodeIds = new List<Endpoint>();
+        foreach (var member in allMembers)
+        {
+            nodeId++;
+            var endpointWithNodeId = new Endpoint
+            {
+                Hostname = member.Hostname,
+                Port = member.Port,
+                NodeId = nodeId
+            };
+            membersWithNodeIds.Add(endpointWithNodeId);
+        }
+
+        var maxNodeId = nodeId;
+
+        _log.CreatedBootstrapProposal(_myAddr, membersWithNodeIds.Count, maxNodeId);
+
+        // Build the membership view with deterministic ConfigurationId
+        var view = new MembershipViewBuilder(
+            _options.ObserversPerSubject,
+            membersWithNodeIds,
+            maxNodeId).Build();
+
+        return (view, maxNodeId);
     }
 
     /// <summary>
@@ -409,51 +542,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             return false;
         }
 #pragma warning restore CA1031 // Do not catch general exception types
-    }
-
-    /// <summary>
-    /// Creates a deterministic membership view from the seed list.
-    /// All nodes will create the same view since the seed list is sorted identically.
-    /// </summary>
-    private (MembershipView View, long MaxNodeId) CreateBootstrapMembershipView()
-    {
-        // Build the member list: self + all seeds (seeds already excludes self)
-        var allMembers = new List<Endpoint>(_seedAddresses) { _myAddr };
-
-        // Sort deterministically by address string to ensure all nodes create identical views
-        allMembers.Sort((a, b) =>
-        {
-            var aStr = $"{a.Hostname.ToStringUtf8()}:{a.Port}";
-            var bStr = $"{b.Hostname.ToStringUtf8()}:{b.Port}";
-            return string.Compare(aStr, bStr, StringComparison.Ordinal);
-        });
-
-        // Assign NodeIds deterministically: 1, 2, 3, ... based on sorted order
-        long nodeId = 0;
-        var membersWithNodeIds = new List<Endpoint>();
-        foreach (var member in allMembers)
-        {
-            nodeId++;
-            var endpointWithNodeId = new Endpoint
-            {
-                Hostname = member.Hostname,
-                Port = member.Port,
-                NodeId = nodeId
-            };
-            membersWithNodeIds.Add(endpointWithNodeId);
-        }
-
-        var maxNodeId = nodeId;
-
-        _log.CreatedBootstrapProposal(_myAddr, membersWithNodeIds.Count, maxNodeId);
-
-        // Build the membership view with ConfigurationId 1
-        var view = new MembershipViewBuilder(
-            _options.ObserversPerSubject,
-            membersWithNodeIds,
-            maxNodeId).Build();
-
-        return (view, maxNodeId);
     }
 
     /// <summary>
@@ -890,6 +978,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RapidClusterRequest.ContentOneofCase.Phase2BMessage => HandleConsensusMessages(msg, cancellationToken),
             RapidClusterRequest.ContentOneofCase.LeaveMessage => HandleLeaveMessage(msg, cancellationToken),
             RapidClusterRequest.ContentOneofCase.MembershipViewRequest => HandleMembershipViewRequest(msg.MembershipViewRequest, cancellationToken),
+            RapidClusterRequest.ContentOneofCase.BootstrapSeedGossip => HandleBootstrapSeedGossip(msg.BootstrapSeedGossip, cancellationToken),
             _ => throw new ArgumentException($"Unidentified RapidClusterRequest type {msg.ContentCase}")
         };
 
@@ -909,6 +998,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RapidClusterRequest.ContentOneofCase.Phase2BMessage => MetricNames.MessageTypes.Phase2b,
             RapidClusterRequest.ContentOneofCase.LeaveMessage => MetricNames.MessageTypes.LeaveMessage,
             RapidClusterRequest.ContentOneofCase.MembershipViewRequest => MetricNames.MessageTypes.MembershipViewRequest,
+            RapidClusterRequest.ContentOneofCase.BootstrapSeedGossip => "bootstrap_seed_gossip",
             _ => "unknown"
         };
     }
@@ -1112,7 +1202,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         lock (_membershipUpdateLock)
         {
-            if (!FilterAlertMessages(messageBatch, _membershipView.ConfigurationId.Version))
+            if (!FilterAlertMessages(messageBatch, _membershipView.ConfigurationId))
             {
                 _log.BatchedAlertFiltered(_membershipView);
                 return new ConsensusResponse().ToRapidClusterResponse();
@@ -1273,6 +1363,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// Also performs bidirectional stale view detection: if the prober has a higher
     /// configuration ID than us, we trigger the learner protocol to catch up.
     /// </summary>
+    /// <remarks>
+    /// Probes from nodes with a different ClusterId are ignored for stale view detection,
+    /// as they belong to a different cluster. We still respond with our configuration
+    /// to allow the sender to detect the cluster mismatch.
+    /// </remarks>
     private RapidClusterResponse HandleProbeMessage(ProbeMessage probeMessage, CancellationToken cancellationToken)
     {
         _log.HandleProbeMessage();
@@ -1283,9 +1378,19 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // nodes that have advanced past us (e.g., we missed a consensus round).
         var senderConfigId = ConfigurationId.FromProtobuf(probeMessage.ConfigurationId);
         var localConfigId = _membershipView.ConfigurationId;
-        if (senderConfigId > localConfigId && probeMessage.Sender != null)
+
+        // Only trigger stale view detection if the probe is from the same cluster.
+        // Probes from different clusters (different ClusterId) are ignored to prevent
+        // cross-cluster interference.
+        if (senderConfigId.ClusterId == localConfigId.ClusterId &&
+            senderConfigId.Version > localConfigId.Version &&
+            probeMessage.Sender != null)
         {
             OnStaleViewDetected(probeMessage.Sender, senderConfigId.Version, localConfigId.Version);
+        }
+        else if (senderConfigId.ClusterId != localConfigId.ClusterId && probeMessage.Sender != null)
+        {
+            _log.ProbeFromDifferentCluster(probeMessage.Sender, senderConfigId.ClusterId, localConfigId.ClusterId);
         }
 
         return new ProbeResponse
@@ -1328,6 +1433,71 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         return response.ToRapidClusterResponse();
+    }
+
+    /// <summary>
+    /// Handles incoming seed gossip messages during bootstrap negotiation.
+    /// If this node is currently bootstrapping with dynamic seeds, forwards to the coordinator.
+    /// If the cluster is already formed, responds appropriately based on whether the sender
+    /// is already in our membership.
+    /// </summary>
+    private RapidClusterResponse HandleBootstrapSeedGossip(BootstrapSeedGossip gossip, CancellationToken cancellationToken)
+    {
+        // If we have a bootstrap coordinator, we're in the negotiation phase
+        if (_bootstrapCoordinator != null)
+        {
+            var response = _bootstrapCoordinator.HandleGossip(gossip);
+            return new RapidClusterResponse { BootstrapSeedGossipResponse = response };
+        }
+
+        // If the cluster is already initialized (we have a valid membership view)
+        if (_initialized && _membershipView.ConfigurationId.Version > 0)
+        {
+            // Check if the sender is already in our membership view.
+            // This handles a race condition: when the first node completes bootstrap and forms
+            // the cluster, other nodes may still be in their gossip rounds. If they're already
+            // in our membership (because they were part of the bootstrap), we should tell them
+            // they're part of the cluster (AGREED status) rather than tell them to join.
+            // This prevents a scenario where nodes that are already members try to join again,
+            // which can cause consensus to remove them incorrectly.
+            var senderIsInMembership = _membershipView.Members.Any(m =>
+                EndpointAddressComparer.Instance.Equals(m, gossip.Sender));
+
+            if (senderIsInMembership)
+            {
+                // The sender is already in our membership - they should complete bootstrap,
+                // not fall back to join. Respond with AGREED status and include the full
+                // membership so they can finalize their view.
+                _log.GossipSenderAlreadyInMembership(gossip.Sender);
+                var agreedResponse = new BootstrapSeedGossipResponse
+                {
+                    Sender = _myAddr,
+                    Status = BootstrapStatus.Agreed,
+                    ConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
+                };
+                // Include our membership as the agreed seed set
+                agreedResponse.KnownSeeds.AddRange(_membershipView.Members);
+                return new RapidClusterResponse { BootstrapSeedGossipResponse = agreedResponse };
+            }
+
+            // Sender is not in our membership - they need to join normally
+            var response = new BootstrapSeedGossipResponse
+            {
+                Sender = _myAddr,
+                Status = BootstrapStatus.AlreadyFormed,
+                ConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
+            };
+            return new RapidClusterResponse { BootstrapSeedGossipResponse = response };
+        }
+
+        // Not initialized and no coordinator - we're probably in static bootstrap mode
+        // or haven't started bootstrap yet. Just respond with NEGOTIATING status.
+        var defaultResponse = new BootstrapSeedGossipResponse
+        {
+            Sender = _myAddr,
+            Status = BootstrapStatus.Negotiating
+        };
+        return new RapidClusterResponse { BootstrapSeedGossipResponse = defaultResponse };
     }
 
     /// <summary>
@@ -1533,7 +1703,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// configuration that the current node is not a part of, and messages that violate the semantics
     /// of a node being a part of a configuration.
     /// </summary>
-    private static bool FilterAlertMessages(BatchedAlertMessage batchedAlertMessage, long currentConfigurationId) => batchedAlertMessage.Messages.Any(m => m.ConfigurationId.Version == currentConfigurationId);
+    /// <remarks>
+    /// This method validates both the Version and ClusterId components of the ConfigurationId.
+    /// Messages from different clusters (different ClusterId) are rejected to prevent cross-cluster
+    /// interference, even if they happen to have the same Version number.
+    /// </remarks>
+    private static bool FilterAlertMessages(BatchedAlertMessage batchedAlertMessage, ConfigurationId currentConfigurationId) => batchedAlertMessage.Messages.Any(m => m.ConfigurationId.Version == currentConfigurationId.Version && m.ConfigurationId.ClusterId == currentConfigurationId.ClusterId);
 
     private AlertMessage ExtractJoinerMetadata(AlertMessage alertMessage)
     {

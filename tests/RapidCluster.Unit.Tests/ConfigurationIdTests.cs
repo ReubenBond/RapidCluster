@@ -146,4 +146,87 @@ public class ConfigurationIdTests
     }
 
     #endregion
+
+    #region ClusterId Tests
+
+    [Fact]
+    public void Constructor_With_ClusterId_Sets_Both()
+    {
+        var config = new ConfigurationId(42, 0x12345678);
+        Assert.Equal(42, config.Version);
+        Assert.Equal(0x12345678, config.ClusterId);
+    }
+
+    [Fact]
+    public void Next_Preserves_ClusterId()
+    {
+        var config = new ConfigurationId(10, 0xABCD1234);
+        var next = config.Next();
+        Assert.Equal(11, next.Version);
+        Assert.Equal(0xABCD1234, next.ClusterId);
+    }
+
+    [Fact]
+    public void Equality_Same_Version_Different_ClusterId_Returns_False()
+    {
+        var config1 = new ConfigurationId(5, 0x11111111);
+        var config2 = new ConfigurationId(5, 0x22222222);
+        Assert.False(config1 == config2);
+        Assert.True(config1 != config2);
+        Assert.False(config1.Equals(config2));
+    }
+
+    [Fact]
+    public void Equality_Same_Version_Same_ClusterId_Returns_True()
+    {
+        var config1 = new ConfigurationId(5, 0x12345678);
+        var config2 = new ConfigurationId(5, 0x12345678);
+        Assert.True(config1 == config2);
+        Assert.False(config1 != config2);
+        Assert.True(config1.Equals(config2));
+    }
+
+    [Fact]
+    public void Comparison_DifferentClusterId_Throws_InvalidOperationException()
+    {
+        var config1 = new ConfigurationId(5, 0x11111111);
+        var config2 = new ConfigurationId(10, 0x22222222);
+
+        Assert.Throws<InvalidOperationException>(() => config1 < config2);
+        Assert.Throws<InvalidOperationException>(() => config1 > config2);
+        Assert.Throws<InvalidOperationException>(() => config1 <= config2);
+        Assert.Throws<InvalidOperationException>(() => config1 >= config2);
+        Assert.Throws<InvalidOperationException>(() => config1.CompareTo(config2));
+    }
+
+    [Fact]
+    public void Comparison_SameClusterId_Works_Correctly()
+    {
+        var config1 = new ConfigurationId(5, 0x12345678);
+        var config2 = new ConfigurationId(10, 0x12345678);
+
+        Assert.True(config1 < config2);
+        Assert.False(config1 > config2);
+        Assert.True(config1 <= config2);
+        Assert.False(config1 >= config2);
+        Assert.True(config1.CompareTo(config2) < 0);
+    }
+
+    [Fact]
+    public void ToString_With_ClusterId_Includes_ClusterId()
+    {
+        var config = new ConfigurationId(789, 0x12345678);
+        Assert.Equal("ConfigurationId(v789, c12345678)", config.ToString());
+    }
+
+    [Fact]
+    public void GetHashCode_Different_ClusterId_Different_HashCode()
+    {
+        var config1 = new ConfigurationId(42, 0x11111111);
+        var config2 = new ConfigurationId(42, 0x22222222);
+        // Note: Not guaranteed to be different, but very likely for these values
+        Assert.NotEqual(config1.GetHashCode(), config2.GetHashCode());
+    }
+
+    #endregion
 }

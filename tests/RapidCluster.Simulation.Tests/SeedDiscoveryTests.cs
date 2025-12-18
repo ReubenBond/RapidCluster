@@ -275,17 +275,17 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
             new DnsEndPoint("host2", 5000)
         };
 
-        var options = new RapidClusterOptions { SeedAddresses = seeds };
-        var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
+        var options = new RapidClusterSeedOptions { SeedAddresses = seeds };
+        var optionsMonitor = new TestOptionsMonitor<RapidClusterSeedOptions>(options);
         var provider = new ConfigurationSeedProvider(optionsMonitor);
 
         var result1 = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
         var result2 = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
         var result3 = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(result1, result2);
-        Assert.Equal(result2, result3);
-        Assert.Equal(2, result1.Count);
+        Assert.Equal(result1.Seeds, result2.Seeds);
+        Assert.Equal(result2.Seeds, result3.Seeds);
+        Assert.Equal(2, result1.Seeds.Count);
     }
 
     /// <summary>
@@ -294,13 +294,13 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
     [Fact]
     public async Task ConfigurationSeedProvider_EmptyList_ReturnsEmpty()
     {
-        var options = new RapidClusterOptions { SeedAddresses = [] };
-        var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
+        var options = new RapidClusterSeedOptions { SeedAddresses = [] };
+        var optionsMonitor = new TestOptionsMonitor<RapidClusterSeedOptions>(options);
         var provider = new ConfigurationSeedProvider(optionsMonitor);
 
         var result = await provider.GetSeedsAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(result);
+        Assert.Empty(result.Seeds);
     }
 
     /// <summary>

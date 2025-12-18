@@ -1,36 +1,45 @@
-using System.Net;
 using Microsoft.Extensions.Options;
 
 namespace RapidCluster.Discovery;
 
 /// <summary>
-/// A seed provider that reads seed addresses from <see cref="RapidClusterOptions.SeedAddresses"/>.
-/// Seeds are re-read on each call via <see cref="IOptionsMonitor{TOptions}"/>, allowing for
-/// runtime configuration changes when using reloadable configuration sources.
+/// A seed provider that reads seed addresses from <see cref="RapidClusterSeedOptions"/>.
 /// </summary>
 /// <remarks>
-/// This is the default <see cref="ISeedProvider"/> implementation. It reads from the
-/// <see cref="RapidClusterOptions.SeedAddresses"/> property which can be configured
-/// via dependency injection options or bound to configuration sections.
+/// <para>
+/// This provider reads seed addresses and the <see cref="RapidClusterSeedOptions.IsStatic"/> flag
+/// from configuration. By default, <see cref="RapidClusterSeedOptions.IsStatic"/> is <c>false</c>,
+/// which triggers seed gossip during bootstrap to prevent split-brain scenarios.
+/// </para>
+/// <para>
+/// For static seeds that are guaranteed identical across all nodes,
+/// set <see cref="RapidClusterSeedOptions.IsStatic"/> to <c>true</c>.
+/// </para>
 /// </remarks>
 public sealed class ConfigurationSeedProvider : ISeedProvider
 {
-    private readonly IOptionsMonitor<RapidClusterOptions> _optionsMonitor;
+    private readonly IOptionsMonitor<RapidClusterSeedOptions> _optionsMonitor;
 
     /// <summary>
     /// Creates a new ConfigurationSeedProvider.
     /// </summary>
-    /// <param name="optionsMonitor">The options monitor to read seed addresses from.</param>
-    public ConfigurationSeedProvider(IOptionsMonitor<RapidClusterOptions> optionsMonitor)
+    /// <param name="optionsMonitor">The options monitor to read seed options from.</param>
+    public ConfigurationSeedProvider(IOptionsMonitor<RapidClusterSeedOptions> optionsMonitor)
     {
         ArgumentNullException.ThrowIfNull(optionsMonitor);
         _optionsMonitor = optionsMonitor;
     }
 
     /// <inheritdoc/>
-    public ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
+    public ValueTask<SeedDiscoveryResult> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
-        var seeds = _optionsMonitor.CurrentValue.SeedAddresses ?? [];
-        return ValueTask.FromResult(seeds);
+        var options = _optionsMonitor.CurrentValue;
+        var seeds = options.SeedAddresses ?? [];
+        var result = new SeedDiscoveryResult
+        {
+            Seeds = seeds,
+            IsStatic = options.IsStatic
+        };
+        return ValueTask.FromResult(result);
     }
 }

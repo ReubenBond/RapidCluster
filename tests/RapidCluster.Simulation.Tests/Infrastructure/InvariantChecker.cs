@@ -51,6 +51,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
         passed &= CheckMembershipConsistency();
         passed &= CheckNoSplitBrain();
         passed &= CheckConfigurationIdMonotonicity();
+        passed &= CheckClusterIdConsistency();
         passed &= CheckNodeIdValidity();
         passed &= CheckNodeIdUniqueness();
         passed &= CheckMaxNodeIdConsistency();
@@ -153,6 +154,43 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
                     $"Node {RapidClusterUtils.Loggable(node.Address)} has no membership view");
                 return false;
             }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Checks that all initialized nodes have the same ClusterId in their ConfigurationId.
+    /// All nodes in a cluster should have membership views from the same cluster.
+    /// </summary>
+    public bool CheckClusterIdConsistency()
+    {
+        var initializedNodes = _harness.Nodes.Where(n => n.IsInitialized && n.CurrentView != null).ToList();
+        if (initializedNodes.Count < 2)
+        {
+            return true;
+        }
+
+        // Get all distinct cluster IDs
+        var clusterIds = initializedNodes
+            .Select(n => n.CurrentView!.ConfigurationId.ClusterId)
+            .Distinct()
+            .ToList();
+
+        if (clusterIds.Count > 1)
+        {
+            // Find which nodes have which cluster IDs for detailed error message
+            var nodesByClusterId = initializedNodes
+                .GroupBy(n => n.CurrentView!.ConfigurationId.ClusterId)
+                .ToDictionary(g => g.Key, g => g.Select(n => RapidClusterUtils.Loggable(n.Address)).ToList());
+
+            var details = string.Join("; ", nodesByClusterId.Select(kvp =>
+                $"ClusterId=0x{kvp.Key:X8}: [{string.Join(", ", kvp.Value)}]"));
+
+            RecordViolation(
+                InvariantType.ClusterIdConsistency,
+                $"Nodes have different ClusterIds: {details}");
+            return false;
         }
 
         return true;
@@ -316,6 +354,7 @@ internal enum InvariantType
     MembershipConsistency,
     NoSplitBrain,
     ConfigurationIdMonotonicity,
+    ClusterIdConsistency,
     Liveness,
     ConsensusSafety,
     NodeIdValidity,

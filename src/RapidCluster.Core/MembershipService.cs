@@ -173,7 +173,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         // Configure the failure detector factory to detect stale views (learner role - missed consensus decisions)
         if (edgeFailureDetector is PingPongFailureDetectorFactory pingPongFactory)
         {
-            pingPongFactory.OnStaleViewDetected = _refreshCoordinator.OnStaleViewDetected;
+            pingPongFactory.OnStaleViewDetected = (endpoint, version) => _refreshCoordinator.OnStaleViewDetected(endpoint, version);
             pingPongFactory.GetLocalConfigurationId = () => _membershipView.ConfigurationId.Version;
         }
     }
@@ -759,10 +759,19 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     /// </summary>
     private void FinalizeInitialization()
     {
+        ConsensusCoordinator? oldConsensus;
         lock (_membershipUpdateLock)
         {
             // SetMembershipView handles all the setup including computing membership changes
-            SetMembershipView(_membershipView);
+            oldConsensus = SetMembershipView(_membershipView);
+        }
+
+        // Dispose the previous consensus instance if one existed.
+        // Since we are often called from synchronous contexts (or inside locks like in TriggerBootstrap),
+        // we cannot await this here. Fire-and-forget is acceptable for cleanup.
+        if (oldConsensus != null)
+        {
+            _ = oldConsensus.DisposeAsync();
         }
 
         _log.MembershipServiceInitialized(_myAddr, _membershipView);
@@ -1944,11 +1953,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
             try
             {
-                successfulResponse = await TryRejoinThroughSeedAsync(seed, metadata, cancellationToken).ConfigureAwait(true);
-                if (successfulResponse != null)
+                var result = await TryJoinClusterAsync(seed, metadata, cancellationToken).ConfigureAwait(true);
+                if (result.Status == JoinAttemptStatus.Success)
                 {
+                    successfulResponse = result.Response;
                     break;
                 }
+
+                _log.RejoinFailedThroughSeed(_myAddr, seed, result.FailureReason ?? "Unknown failure");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -1999,76 +2011,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         return true;
     }
 
-    /// <summary>
-    /// Attempts to rejoin the cluster through a specific seed node.
-    /// </summary>
-    private async Task<JoinResponse?> TryRejoinThroughSeedAsync(
-        Endpoint seed,
-        Metadata metadata,
-        CancellationToken cancellationToken)
-    {
-        _log.AttemptingRejoinThroughSeed(_myAddr, seed);
 
-        // Phase 1: PreJoin to get observers
-        var preJoinMessage = new PreJoinMessage
-        {
-            Sender = _myAddr
-        };
-
-        var preJoinResponse = await _messagingClient.SendMessageAsync(
-            seed,
-            preJoinMessage.ToRapidClusterRequest(),
-            cancellationToken).ConfigureAwait(true);
-
-        var joinResponse = preJoinResponse.JoinResponse;
-        _log.RejoinPreJoinResponse(
-            _myAddr,
-            joinResponse.StatusCode,
-            joinResponse.Endpoints.Count);
-
-        if (joinResponse.StatusCode != JoinStatusCode.SafeToJoin &&
-            joinResponse.StatusCode != JoinStatusCode.HostnameAlreadyInRing)
-        {
-            return null;
-        }
-
-        var observers = joinResponse.Endpoints.ToList();
-        if (observers.Count == 0)
-        {
-            return null;
-        }
-
-        // Phase 2: Contact observers
-        var ringNumbersPerObserver = new Dictionary<Endpoint, List<int>>(EndpointAddressComparer.Instance);
-        for (var ringNumber = 0; ringNumber < observers.Count; ringNumber++)
-        {
-            var observer = observers[ringNumber];
-            if (!ringNumbersPerObserver.TryGetValue(observer, out var value))
-            {
-                ringNumbersPerObserver[observer] = value = [];
-            }
-            value.Add(ringNumber);
-        }
-
-        var tasks = ringNumbersPerObserver.Select(async entry =>
-        {
-            var joinMessageForObserver = new JoinMessage
-            {
-                Sender = _myAddr,
-                Metadata = metadata,
-                ConfigurationId = joinResponse.ConfigurationId
-            };
-            joinMessageForObserver.RingNumber.AddRange(entry.Value);
-
-            return await _messagingClient.SendMessageBestEffortAsync(
-                entry.Key,
-                joinMessageForObserver.ToRapidClusterRequest(),
-                cancellationToken).ConfigureAwait(true);
-        });
-
-        var responses = await Task.WhenAll(tasks).ConfigureAwait(true);
-        return responses.FirstOrDefault(r => r?.JoinResponse?.StatusCode == JoinStatusCode.SafeToJoin)?.JoinResponse;
-    }
 
     /// <summary>
     /// Applies a learned membership view from a remote node.

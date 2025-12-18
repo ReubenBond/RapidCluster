@@ -330,4 +330,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(EventName = nameof(BootstrapModeExited), Level = LogLevel.Information, Message = "Node {MyAddr} exiting bootstrap mode - cluster was formed by another node")]
     private partial void BootstrapModeExitedCore(LoggableEndpoint myAddr);
     public void BootstrapModeExited(Endpoint myAddr) => BootstrapModeExitedCore(new(myAddr));
+
+    [LoggerMessage(EventName = nameof(FetchingMembershipAfterBootstrap), Level = LogLevel.Information, Message = "Node {MyAddr} received HOSTNAME_ALREADY_IN_RING with no observers from {Seed}, fetching membership via learner protocol")]
+    private partial void FetchingMembershipAfterBootstrapCore(LoggableEndpoint myAddr, LoggableEndpoint seed);
+    public void FetchingMembershipAfterBootstrap(Endpoint myAddr, Endpoint seed) => FetchingMembershipAfterBootstrapCore(new(myAddr), new(seed));
 }

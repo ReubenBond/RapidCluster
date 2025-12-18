@@ -516,6 +516,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         var observers = joinResponse.Endpoints.ToList();
         if (observers.Count == 0)
         {
+            // No observers returned. For HostnameAlreadyInRing, this means we're already in the
+            // cluster (e.g., from bootstrap) and should use the learner protocol to get the view.
+            // For SafeToJoin with no observers, this is an error.
+            if (joinResponse.StatusCode == JoinStatusCode.HostnameAlreadyInRing)
+            {
+                // Trigger learner protocol to fetch current membership view from the seed
+                return await HandleAlreadyInRingWithNoObserversAsync(seedAddress, cancellationToken).ConfigureAwait(true);
+            }
             return JoinAttemptResult.Failed("No observers returned from seed");
         }
 
@@ -609,6 +617,77 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
+    /// Handles the case where we received HOSTNAME_ALREADY_IN_RING with no observers.
+    /// This happens after bootstrap when the cluster was formed and we're already in it.
+    /// We need to fetch the current membership view via the learner protocol.
+    /// </summary>
+    /// <param name="seedAddress">The seed to fetch the membership from.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Success if we learned the membership, retry if something went wrong.</returns>
+    private async Task<JoinAttemptResult> HandleAlreadyInRingWithNoObserversAsync(Endpoint seedAddress, CancellationToken cancellationToken)
+    {
+        _log.FetchingMembershipAfterBootstrap(_myAddr, seedAddress);
+
+        // Request the current membership view from the seed
+        var request = new MembershipViewRequest
+        {
+            Sender = _myAddr,
+            CurrentConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
+        };
+
+        RapidClusterResponse response;
+        try
+        {
+            response = await _messagingClient.SendMessageAsync(
+                seedAddress,
+                request.ToRapidClusterRequest(),
+                cancellationToken).ConfigureAwait(true);
+        }
+        catch (TimeoutException)
+        {
+            return JoinAttemptResult.RetryNeeded($"Timeout fetching membership from {seedAddress.Hostname}:{seedAddress.Port}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return JoinAttemptResult.RetryNeeded($"Error fetching membership from {seedAddress.Hostname}:{seedAddress.Port}: {ex.Message}");
+        }
+
+        var viewResponse = response.MembershipViewResponse;
+        if (viewResponse == null)
+        {
+            return JoinAttemptResult.RetryNeeded("No MembershipViewResponse in reply");
+        }
+
+        // Apply the learned view - this will set up our membership
+        await ApplyLearnedMembershipViewAsync(viewResponse).ConfigureAwait(true);
+
+        // Check if we're now in the membership
+        if (_membershipView.IsHostPresent(_myAddr))
+        {
+            // Create a "successful" JoinResponse for the caller to use
+            var joinResponse = new JoinResponse
+            {
+                StatusCode = JoinStatusCode.SafeToJoin,
+                ConfigurationId = viewResponse.ConfigurationId
+            };
+            joinResponse.Endpoints.AddRange(viewResponse.Endpoints);
+
+            // Copy metadata from view response
+            for (var i = 0; i < viewResponse.MetadataKeys.Count && i < viewResponse.MetadataValues.Count; i++)
+            {
+                joinResponse.MetadataKeys.Add(viewResponse.MetadataKeys[i]);
+                joinResponse.MetadataValues.Add(viewResponse.MetadataValues[i]);
+            }
+            joinResponse.MaxNodeId = viewResponse.MaxNodeId;
+
+            return JoinAttemptResult.Success(joinResponse);
+        }
+
+        // We weren't in the view - retry (maybe cluster state changed)
+        return JoinAttemptResult.RetryNeeded("Learned membership view does not contain this node");
+    }
+
+    /// <summary>
     /// Gets the lexicographically smallest known node (used for bootstrap coordinator selection).
     /// </summary>
     private Endpoint GetSmallestKnownNode()
@@ -659,9 +738,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             // Get metadata map from the manager (was populated by StartNewCluster or JoinClusterAsync)
             var metadataMap = new Dictionary<Endpoint, Metadata>(_metadataManager.GetAllMetadata());
 
-            // SetMembershipView handles all the setup - for initial join, nodeStatusChanges is null
-            // which causes GetInitialViewChange() to be used (all nodes marked as Up)
-            SetMembershipView(_membershipView, metadataMap, nodeStatusChanges: null, addedNodes: null);
+            // SetMembershipView handles all the setup including computing membership changes
+            SetMembershipView(_membershipView, metadataMap);
         }
 
         _log.MembershipServiceInitialized(_myAddr, _membershipView);
@@ -671,30 +749,63 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     /// Centralized method for updating the membership view. All view changes flow through here.
     /// This method handles:
     /// - Updating the membership view
+    /// - Computing node status changes (added/removed nodes)
+    /// - Recording metrics for added/removed nodes
+    /// - Notifying waiting joiners
     /// - Recreating the cut detector
     /// - Updating the broadcaster
     /// - Disposing old and creating new failure detectors  
     /// - Creating new consensus instance
     /// - Publishing the view to the accessor
     /// - Publishing VIEW_CHANGE event
-    /// - Updating _memberNodeIds (either from nodeIdMap if provided, or incrementally)
     /// </summary>
     /// <param name="newView">The new membership view to apply.</param>
     /// <param name="metadataMap">Metadata for nodes in the view. If null, existing metadata is preserved.</param>
-    /// <param name="nodeStatusChanges">The status changes to publish. If null, all nodes are treated as Up (initial join).</param>
-    /// <param name="addedNodes">Nodes that were added (for notifying waiting joiners). Can be null.</param>
     /// <returns>The previous consensus instance that should be disposed by the caller.</returns>
     private ConsensusCoordinator? SetMembershipView(
         MembershipView newView,
-        Dictionary<Endpoint, Metadata>? metadataMap,
-        List<NodeStatusChange>? nodeStatusChanges,
-        List<Endpoint>? addedNodes)
+        Dictionary<Endpoint, Metadata>? metadataMap)
     {
         // Must be called under _membershipUpdateLock
         // Always capture the previous consensus instance to ensure it gets disposed.
         // This handles the case where SetMembershipView is called multiple times
         // during initialization (e.g., via ApplyLearnedMembershipView during join).
         var previousConsensusInstance = _consensusInstance;
+
+        // Compute membership changes for status notifications, metrics, and joiner notifications
+        var oldMembers = new HashSet<Endpoint>(_membershipView.Members, EndpointAddressComparer.Instance);
+        var newMembers = new HashSet<Endpoint>(newView.Members, EndpointAddressComparer.Instance);
+
+        var addedNodes = new List<Endpoint>();
+        var removedCount = 0;
+
+        // Nodes that left (in old but not in new)
+        foreach (var node in oldMembers)
+        {
+            if (!newMembers.Contains(node))
+            {
+                removedCount++;
+            }
+        }
+
+        // Nodes that joined (in new but not in old)
+        foreach (var node in newMembers)
+        {
+            if (!oldMembers.Contains(node))
+            {
+                addedNodes.Add(node);
+            }
+        }
+
+        // Record metrics for membership changes
+        if (removedCount > 0)
+        {
+            _metrics.RecordNodesRemoved(removedCount, MetricNames.RemovalReasons.FailureDetected);
+        }
+        if (addedNodes.Count > 0)
+        {
+            _metrics.RecordNodesAdded(addedNodes.Count);
+        }
 
         // Update the view
         _membershipView = newView;
@@ -730,8 +841,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         // Create new failure detectors
         CreateFailureDetectorsForCurrentConfiguration();
 
-        // Notify waiting joiners if any nodes were added
-        if (addedNodes != null)
+        // Notify waiting joiners for nodes that were added
+        if (addedNodes.Count > 0)
         {
             NotifyWaitingJoiners(addedNodes);
         }
@@ -1472,8 +1583,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     /// where nodes might not have received AlertMessages with joiner UUIDs.
     /// </summary>
     /// <param name="proposal">The decided membership proposal containing the complete new view state.</param>
-    /// <param name="decidingConfigurationId">The configuration ID when consensus was started.</param>
-    private async Task DecideViewChange(MembershipProposal proposal, ConfigurationId decidingConfigurationId)
+    /// <param name="startingConfigurationId">The configuration ID when consensus was started.</param>
+    private async Task DecideViewChange(MembershipProposal proposal, ConfigurationId startingConfigurationId)
     {
         _log.DecideViewChange(proposal.Members.Count);
 
@@ -1488,20 +1599,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             // 4. The old "add A" consensus completes later with a stale decision
             // In this case, we should ignore the stale decision. The stale consensus
             // instance has already been disposed when the view changed (via SetMembershipView).
-            if (_membershipView.ConfigurationId != decidingConfigurationId)
+            if (_membershipView.ConfigurationId != startingConfigurationId)
             {
                 _log.IgnoringStaleConsensusDecision(proposal.Members.Count);
                 return;
             }
 
             _announcedProposal = false;
-
-            // Track nodes that were added so we can notify their joiners after ALL nodes are processed
-            var addedNodes = new List<Endpoint>();
-
-            // Build status changes during the loop, capturing state BEFORE modifications
-            // This ensures consistent semantics: Up = joining, Down = leaving/failing
-            var nodeStatusChanges = new List<NodeStatusChange>(proposal.Members.Count);
 
             // Create a builder from the current view to make modifications
             // Use the protocol's ObserversPerSubject as the max ring count so the cluster
@@ -1529,22 +1633,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             var currentMembers = new HashSet<Endpoint>(_membershipView.Members, EndpointAddressComparer.Instance);
             var proposedMembers = new HashSet<Endpoint>(proposal.Members, EndpointAddressComparer.Instance);
 
-            // Track counts for metrics
-            var removedCount = 0;
-
             // Nodes to remove: in current but not in proposed
             foreach (var node in currentMembers.Except(proposedMembers, EndpointAddressComparer.Instance))
             {
                 _log.RemovingNode(node);
                 builder.RingDelete(node);
-                nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Down, _metadataManager.Get(node) ?? new Metadata()));
-                removedCount++;
-            }
-
-            // Record metrics for removed nodes
-            if (removedCount > 0)
-            {
-                _metrics.RecordNodesRemoved(removedCount, MetricNames.RemovalReasons.FailureDetected);
             }
 
             // Nodes to add: in proposed but not in current
@@ -1562,19 +1655,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 _log.AddingNode(endpointWithNodeId);
                 builder.RingAdd(endpointWithNodeId);
                 _metadataManager.Add(endpointWithNodeId, metadata);
-                nodeStatusChanges.Add(new NodeStatusChange(endpointWithNodeId, EdgeStatus.Up, metadata));
 
                 // Clean up joiner data (use original node key without node ID)
                 _joinerMetadata.Remove(node);
-
-                // Track this node for later notification (use endpoint with node ID)
-                addedNodes.Add(endpointWithNodeId);
-            }
-
-            // Record metrics for added nodes
-            if (addedNodes.Count > 0)
-            {
-                _metrics.RecordNodesAdded(addedNodes.Count);
             }
 
             // Build the new immutable view with incremented version
@@ -1582,8 +1665,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
             _log.DecideViewChangeCleanup();
 
-            // Use SetMembershipView to apply all changes - pass null for metadataMap to preserve existing
-            previousConsensusInstance = SetMembershipView(newView, metadataMap: null, nodeStatusChanges, addedNodes);
+            // SetMembershipView handles computing membership changes, metrics, and joiner notifications
+            previousConsensusInstance = SetMembershipView(newView, metadataMap: null);
         }
 
         if (previousConsensusInstance != null)
@@ -1854,8 +1937,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 [.. successfulResponse.Endpoints],
                 successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
 
-            // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
-            oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null);
+            // SetMembershipView handles computing membership changes, metrics, and joiner notifications
+            oldConsensus = SetMembershipView(newView, metadataMap);
         }
 
         // Dispose old consensus instance.
@@ -1951,7 +2034,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     public async ValueTask ApplyLearnedMembershipViewAsync(MembershipViewResponse viewResponse)
     {
         ConsensusCoordinator? oldConsensus;
-        bool isMemberOfView;
+        bool isJoined;
         lock (_membershipUpdateLock)
         {
             // Guard against config ID regression - never allow a stale view to replace a fresher one
@@ -1978,24 +2061,21 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             // Check if we were kicked (not in the new membership)
             // Use EndpointAddressComparer to ignore NodeId when checking membership
             var newMembers = new HashSet<Endpoint>(newView.Members, EndpointAddressComparer.Instance);
-            isMemberOfView = newMembers.Contains(_myAddr);
+            isJoined = newMembers.Contains(_myAddr);
 
             // If we're not initialized and not in the new view, don't apply it.
             // The ongoing join process will handle getting us into the cluster.
             // Applying a view where we're not a member would interfere with the join.
-            if (!_initialized && !isMemberOfView)
+            if (!_initialized && !isJoined)
             {
                 return;
             }
 
-            // Get old members (Members property safely returns empty for empty views)
-            var oldMembers = new HashSet<Endpoint>(_membershipView.Members, EndpointAddressComparer.Instance);
-
-            if (!isMemberOfView)
+            if (!isJoined)
             {
-                // If we had no previous membership (empty view), we weren't really "kicked" -
-                // we just haven't joined yet. Skip the kicked event in this case.
-                if (oldMembers.Count > 0)
+                // Check if we had previous membership (for kicked logging)
+                var hadPreviousMembership = _membershipView.Size > 0;
+                if (hadPreviousMembership)
                 {
                     // We were kicked - publish kicked event but don't apply the view
                     // (we'll rejoin with a new identity)
@@ -2008,30 +2088,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             }
             else
             {
-                // We're still in membership - compute status changes and apply the view
-                var nodeStatusChanges = new List<NodeStatusChange>();
-
-                // Nodes that left (in old but not in new)
-                foreach (var node in oldMembers)
-                {
-                    if (!newMembers.Contains(node))
-                    {
-                        nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Down, _metadataManager.Get(node) ?? new Metadata()));
-                    }
-                }
-
-                // Nodes that joined (in new but not in old)
-                foreach (var node in newMembers)
-                {
-                    if (!oldMembers.Contains(node))
-                    {
-                        var metadata = metadataMap.GetValueOrDefault(node, new Metadata());
-                        nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Up, metadata));
-                    }
-                }
-
-                // Apply the new view
-                oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges, addedNodes: null);
+                // We're still in membership - apply the view (SetMembershipView handles diff computation,
+                // metrics, and joiner notifications)
+                oldConsensus = SetMembershipView(newView, metadataMap);
             }
         }
 
@@ -2044,7 +2103,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         // If we were kicked, schedule rejoin outside the lock.
         // Note: If !_initialized && !isMemberOfView, we already returned early above,
         // so this only triggers for initialized nodes that were kicked.
-        if (!isMemberOfView)
+        if (!isJoined)
         {
             var rejoinTask = Task.Factory.StartNew(
                 () => RejoinClusterAsync(_stoppingCts.Token),

@@ -159,11 +159,7 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     /// </exception>
     public int CompareTo(ConfigurationId other)
     {
-        if (ClusterId != other.ClusterId)
-        {
-            throw new InvalidOperationException(
-                $"Cannot compare ConfigurationIds from different clusters: 0x{ClusterId:X} vs 0x{other.ClusterId:X}");
-        }
+        ValidateClusterId(this, other);
         return Version.CompareTo(other.Version);
     }
 
@@ -194,11 +190,7 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     /// </exception>
     public static bool operator <(ConfigurationId left, ConfigurationId right)
     {
-        if (left.ClusterId != right.ClusterId)
-        {
-            throw new InvalidOperationException(
-                $"Cannot compare ConfigurationIds from different clusters: 0x{left.ClusterId:X} vs 0x{right.ClusterId:X}");
-        }
+        ValidateClusterId(left, right);
         return left.Version < right.Version;
     }
 
@@ -210,11 +202,7 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     /// </exception>
     public static bool operator <=(ConfigurationId left, ConfigurationId right)
     {
-        if (left.ClusterId != right.ClusterId)
-        {
-            throw new InvalidOperationException(
-                $"Cannot compare ConfigurationIds from different clusters: 0x{left.ClusterId:X} vs 0x{right.ClusterId:X}");
-        }
+        ValidateClusterId(left, right);
         return left.Version <= right.Version;
     }
 
@@ -226,11 +214,7 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     /// </exception>
     public static bool operator >(ConfigurationId left, ConfigurationId right)
     {
-        if (left.ClusterId != right.ClusterId)
-        {
-            throw new InvalidOperationException(
-                $"Cannot compare ConfigurationIds from different clusters: 0x{left.ClusterId:X} vs 0x{right.ClusterId:X}");
-        }
+        ValidateClusterId(left, right);
         return left.Version > right.Version;
     }
 
@@ -242,12 +226,17 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     /// </exception>
     public static bool operator >=(ConfigurationId left, ConfigurationId right)
     {
+        ValidateClusterId(left, right);
+        return left.Version >= right.Version;
+    }
+
+    private static void ValidateClusterId(ConfigurationId left, ConfigurationId right)
+    {
         if (left.ClusterId != right.ClusterId)
         {
             throw new InvalidOperationException(
                 $"Cannot compare ConfigurationIds from different clusters: 0x{left.ClusterId:X} vs 0x{right.ClusterId:X}");
         }
-        return left.Version >= right.Version;
     }
 
 #pragma warning restore CA1065

@@ -229,18 +229,6 @@ public sealed class RapidClusterProtocolOptions
     public TimeSpan RejoinBackoffMax { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Minimum interval between stale view refresh attempts from the same remote endpoint. Default: 1 second.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// When a node detects it has a stale view (via probe responses with higher config IDs),
-    /// it requests the current membership from a remote node. This rate limit prevents
-    /// excessive refresh requests during rapid view changes or network instability.
-    /// </para>
-    /// </remarks>
-    public TimeSpan StaleViewRefreshInterval { get; set; } = TimeSpan.FromSeconds(1);
-
-    /// <summary>
     /// Timeout for unstable mode in the cut detector. Default: 5 seconds.
     /// </summary>
     /// <remarks>

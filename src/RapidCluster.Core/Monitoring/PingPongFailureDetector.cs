@@ -34,7 +34,7 @@ public sealed partial class PingPongFailureDetectorFactory(
     /// local node was kicked (not in view) or just missed consensus rounds (still in view).
     /// Parameters: (remoteEndpoint, remoteConfigId, localConfigId)
     /// </summary>
-    public Action<Endpoint, long, long>? OnStaleViewDetected { get; set; }
+    public Action<Endpoint, long>? OnStaleViewDetected { get; set; }
 
     /// <summary>
     /// Gets or sets a function that returns the current local configuration ID.
@@ -72,7 +72,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     private readonly Action _notifier;
     private readonly int _consecutiveFailuresThreshold;
     private readonly TimeSpan _probeInterval;
-    private readonly Action<Endpoint, long, long>? _onStaleViewDetected;
+    private readonly Action<Endpoint, long>? _onStaleViewDetected;
     private readonly Func<long>? _getLocalConfigurationId;
     private readonly RapidClusterMetrics _metrics;
     private readonly ILogger<PingPongFailureDetector> _logger;
@@ -103,7 +103,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         Action notifier,
         int consecutiveFailuresThreshold = 3,
         TimeSpan probeInterval = default,
-        Action<Endpoint, long, long>? onStaleViewDetected = null,
+        Action<Endpoint, long>? onStaleViewDetected = null,
         Func<long>? getLocalConfigurationId = null,
         RapidClusterMetrics? metrics = null,
         ILogger<PingPongFailureDetector>? logger = null)
@@ -225,7 +225,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
             if (remoteConfigId > localConfigId)
             {
                 LogStaleViewDetected(new LoggableEndpoint(_subject), remoteConfigId, localConfigId);
-                _onStaleViewDetected(_subject, remoteConfigId, localConfigId);
+                _onStaleViewDetected(_subject, remoteConfigId);
             }
         }
     }

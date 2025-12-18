@@ -260,7 +260,6 @@ public sealed class PingPongFailureDetectorTests
         using var client = new TestMessagingClient();
         var staleViewDetected = false;
         long detectedRemoteConfigId = 0;
-        long detectedLocalConfigId = 0;
 
         client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(10).ToProtobuf() }.ToRapidClusterResponse();
 
@@ -270,11 +269,10 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => { },
-            onStaleViewDetected: (remote, remoteConfig, localConfig) =>
+            onStaleViewDetected: (remote, remoteConfig) =>
             {
                 staleViewDetected = true;
                 detectedRemoteConfigId = remoteConfig;
-                detectedLocalConfigId = localConfig;
             },
             getLocalConfigurationId: () => 5,
             metrics: CreateMetrics(),
@@ -287,7 +285,6 @@ public sealed class PingPongFailureDetectorTests
 
         Assert.True(staleViewDetected);
         Assert.Equal(10, detectedRemoteConfigId);
-        Assert.Equal(5, detectedLocalConfigId);
     }
 
     [Fact]
@@ -308,7 +305,7 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => { },
-            onStaleViewDetected: (_, _, _) => staleViewDetected = true,
+            onStaleViewDetected: (_, _) => staleViewDetected = true,
             getLocalConfigurationId: () => 10,
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);

@@ -19,7 +19,7 @@ namespace RapidCluster;
 /// Note: This class is not thread-safe yet. RpcServer.start() uses a single threaded messagingExecutor during the server
 /// initialization to make sure that only a single thread runs the process* methods.
 /// </summary>
-internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDisposable
+internal sealed class MembershipService : IMembershipServiceHandler, ILearnedViewHandler, IAsyncDisposable
 {
     private readonly MembershipServiceLogger _log;
     private ICutDetector _cutDetection = null!;
@@ -73,12 +73,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Flag to track if a rejoin is in progress
     private bool _isRejoining;
 
-    // Flag to track if a stale view refresh is in progress (to prevent concurrent refreshes)
-    private bool _isRefreshingView;
-
-    // Last time a stale view refresh was completed (for rate limiting)
-    private long _lastStaleViewRefreshTicks;
-
     // Background task tracking for graceful shutdown
     private readonly List<Task> _backgroundTasks = [];
     private readonly Lock _backgroundTasksLock = new();
@@ -95,6 +89,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Task completion source for signaling when bootstrap should complete
     private TaskCompletionSource<bool>? _bootstrapCompletionSource;
     private Task? _alertBatcherTask;
+
+    // Membership refresh coordinator for handling stale view detection (learner role)
+    private readonly MembershipRefreshCoordinator _refreshCoordinator;
 
     /// <summary>
     /// Result of a single join attempt. Used to avoid exception-based control flow for retryable conditions.
@@ -140,7 +137,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         RapidClusterMetrics metrics,
         ISeedProvider seedProvider,
         MetadataManager metadataManager,
-        ILogger<MembershipService> logger)
+        ILogger<MembershipService> logger,
+        ILogger<MembershipRefreshCoordinator> refreshCoordinatorLogger)
     {
         var opts = rapidClusterOptions.Value;
         _clusterOptions = opts;
@@ -165,10 +163,19 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Create linked CTS so background tasks stop on either StopAsync or SharedResources shutdown
         _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(sharedResources.ShuttingDownToken);
 
+        // Create the refresh coordinator, passing this as the learned view handler
+        _refreshCoordinator = new MembershipRefreshCoordinator(
+            _myAddr,
+            viewAccessor,
+            messagingClient,
+            sharedResources,
+            this,
+            refreshCoordinatorLogger);
+
         // Configure the failure detector factory to detect stale views (learner role - missed consensus decisions)
         if (edgeFailureDetector is PingPongFailureDetectorFactory pingPongFactory)
         {
-            pingPongFactory.OnStaleViewDetected = OnStaleViewDetected;
+            pingPongFactory.OnStaleViewDetected = _refreshCoordinator.OnStaleViewDetected;
             pingPongFactory.GetLocalConfigurationId = () => _membershipView.ConfigurationId.Version;
         }
     }
@@ -228,6 +235,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private void StartBackgroundTasks()
     {
         _alertBatcherTask = Task.Factory.StartNew(AlertBatcherAsync, _stoppingCts.Token, TaskCreationOptions.None, _sharedResources.TaskScheduler).Unwrap();
+
+        // Start the refresh coordinator for handling stale view detection
+        _refreshCoordinator.Start();
     }
 
     /// <summary>
@@ -1405,7 +1415,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             senderConfigId.Version > localConfigId.Version &&
             probeMessage.Sender != null)
         {
-            OnStaleViewDetected(probeMessage.Sender, senderConfigId.Version, localConfigId.Version);
+            _refreshCoordinator.OnStaleViewDetected(probeMessage.Sender, senderConfigId.Version);
         }
         else if (senderConfigId.ClusterId != localConfigId.ClusterId && probeMessage.Sender != null)
         {
@@ -1934,120 +1944,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
-    /// Called by the failure detector when a probe response indicates this node
-    /// has a stale view (remote has higher config ID, but we're still in membership).
-    /// This is the Paxos "learner" role - requesting missed consensus decisions.
-    /// </summary>
-    /// <param name="remoteEndpoint">The endpoint that reported the higher config ID.</param>
-    /// <param name="remoteConfigVersion">The configuration version from the probe response.</param>
-    /// <param name="localConfigVersion">The local configuration version when the stale view was detected.</param>
-    private void OnStaleViewDetected(Endpoint remoteEndpoint, long remoteConfigVersion, long localConfigVersion)
-    {
-        _log.StaleViewDetected(remoteEndpoint, remoteConfigVersion, localConfigVersion);
-
-        // Schedule refresh on the background task scheduler
-        var refreshTask = Task.Factory.StartNew(
-            () => RefreshMembershipViewAsync(remoteEndpoint, remoteConfigVersion, _stoppingCts.Token),
-            _stoppingCts.Token,
-            TaskCreationOptions.None,
-            _sharedResources.TaskScheduler).Unwrap();
-        TrackBackgroundTask(refreshTask);
-    }
-
-    /// <summary>
-    /// Requests an updated membership view from a remote node.
-    /// This implements the Paxos "learner" role - catching up on missed consensus decisions.
-    /// </summary>
-    private async Task RefreshMembershipViewAsync(Endpoint remoteEndpoint, long expectedConfigVersion, CancellationToken cancellationToken)
-    {
-        var didStartRefresh = false;
-        try
-        {
-            // Prevent concurrent refresh attempts
-            if (_isRefreshingView || _disposed != 0)
-            {
-                _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
-                return;
-            }
-
-            // Rate limit refresh attempts
-            var now = _sharedResources.TimeProvider.GetTimestamp();
-            var lastRefresh = Interlocked.Read(ref _lastStaleViewRefreshTicks);
-            var elapsed = _sharedResources.TimeProvider.GetElapsedTime(lastRefresh, now);
-            if (elapsed < _options.StaleViewRefreshInterval)
-            {
-                _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
-                return;
-            }
-
-            // Double-check we still need to refresh (config may have been updated by another mechanism)
-            if (expectedConfigVersion <= _membershipView.ConfigurationId.Version)
-            {
-                _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
-                return;
-            }
-
-            _isRefreshingView = true;
-            didStartRefresh = true;
-            _log.RequestingMembershipView(remoteEndpoint);
-
-            var request = new MembershipViewRequest
-            {
-                Sender = _myAddr,
-                CurrentConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
-            };
-
-            var response = await _messagingClient.SendMessageAsync(
-                remoteEndpoint,
-                request.ToRapidClusterRequest(),
-                cancellationToken).ConfigureAwait(true);
-
-            var viewResponse = response.MembershipViewResponse;
-            if (viewResponse == null)
-            {
-                _log.MembershipViewRefreshFailed(remoteEndpoint, "No MembershipViewResponse in reply");
-                return;
-            }
-
-            // Only apply if the response is newer than our current view
-            // Use IsOlderThanOrDifferentCluster to handle the bootstrap case where local ClusterId is 0
-            var responseConfigId = ConfigurationId.FromProtobuf(viewResponse.ConfigurationId);
-            if (!_membershipView.ConfigurationId.IsOlderThanOrDifferentCluster(responseConfigId))
-            {
-                _log.SkippingStaleViewRefresh(responseConfigId.Version, _membershipView.ConfigurationId.Version);
-                return;
-            }
-
-            // Apply the learned view
-            await ApplyLearnedMembershipViewAsync(viewResponse).ConfigureAwait(true);
-
-            // Update last refresh timestamp on success
-            Interlocked.Exchange(ref _lastStaleViewRefreshTicks, _sharedResources.TimeProvider.GetTimestamp());
-
-            _log.MembershipViewRefreshed(
-                remoteEndpoint,
-                viewResponse.ConfigurationId,
-                viewResponse.Endpoints.Count);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _log.MembershipViewRefreshFailed(remoteEndpoint, ex.Message);
-        }
-        finally
-        {
-            if (didStartRefresh)
-            {
-                _isRefreshingView = false;
-            }
-        }
-    }
-
-    /// <summary>
     /// Applies a learned membership view from a remote node.
     /// This is used by the Paxos learner mechanism to catch up on missed consensus decisions.
     /// If the local node is not in the new view, it triggers a kicked event and rejoin.
     /// </summary>
-    private async ValueTask ApplyLearnedMembershipViewAsync(MembershipViewResponse viewResponse)
+    public async ValueTask ApplyLearnedMembershipViewAsync(MembershipViewResponse viewResponse)
     {
         ConsensusCoordinator? oldConsensus;
         bool isMemberOfView;
@@ -2137,7 +2038,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Dispose old consensus - track it so we await it during shutdown
         if (oldConsensus != null)
         {
-            await oldConsensus.DisposeAsync().ConfigureAwait(false);
+            await oldConsensus.DisposeAsync().ConfigureAwait(true);
         }
 
         // If we were kicked, schedule rejoin outside the lock.
@@ -2370,6 +2271,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Cancel background tasks
         _stoppingCts.SafeCancel(_log.Logger);
 
+        // Stop the refresh coordinator
+        await _refreshCoordinator.StopAsync().ConfigureAwait(true);
+
         if (_alertBatcherTask is { } alertBatcherTask)
         {
             await _alertBatcherTask.WaitAsync(cancellationToken).ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
@@ -2430,6 +2334,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             await _consensusInstance.DisposeAsync().ConfigureAwait(true);
         }
+
+        // Dispose the refresh coordinator
+        await _refreshCoordinator.DisposeAsync().ConfigureAwait(true);
     }
 
 }

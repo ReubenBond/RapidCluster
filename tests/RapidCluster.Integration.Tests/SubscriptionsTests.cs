@@ -100,16 +100,6 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
     }
 
     /// <summary>
-    /// Starts consuming view updates from a cluster's ViewUpdates (IObservable) and adds them to a bag.
-    /// Uses Rx.NET's Subscribe method.
-    /// </summary>
-    private void StartObservableConsumer(IRapidCluster cluster, ConcurrentBag<ClusterMembershipView> bag)
-    {
-        var subscription = cluster.ViewUpdates.Subscribe(bag.Add);
-        _observableSubscriptions.Add(subscription);
-    }
-
-    /// <summary>
     /// Two node cluster, one subscription each.
     /// With IAsyncEnumerable, subscribers only receive views published AFTER they subscribe.
     /// The seed's consumer is started before the join, so it receives the join view update.

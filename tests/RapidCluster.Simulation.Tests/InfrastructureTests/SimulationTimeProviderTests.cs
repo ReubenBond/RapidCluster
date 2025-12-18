@@ -217,7 +217,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var start = p.GetUtcNow();
 
-        for (int i = 0; i < 100; i++)
+        for (var i = 0; i < 100; i++)
         {
             p.Advance(TimeSpan.FromMilliseconds(10));
         }

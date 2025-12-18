@@ -133,7 +133,7 @@ public static class HostAddressResolver
                 continue;
             }
 
-            bool isLoopbackInterface = netInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback;
+            var isLoopbackInterface = netInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback;
 
             foreach (UnicastIPAddressInformation ip in netInterface.GetIPProperties().UnicastAddresses)
             {
@@ -170,8 +170,8 @@ public static class HostAddressResolver
             {
                 // Check if the address matches the subnet prefix
                 var ipBytes = nodeIp.GetAddressBytes();
-                bool matches = true;
-                for (int i = 0; i < subnet.Length && i < ipBytes.Length; i++)
+                var matches = true;
+                for (var i = 0; i < subnet.Length && i < ipBytes.Length; i++)
                 {
                     if (ipBytes[i] != subnet[i])
                     {
@@ -218,8 +218,8 @@ public static class HostAddressResolver
     /// </summary>
     private static bool CompareIPAddresses(IPAddress lhs, IPAddress rhs)
     {
-        byte[] lbytes = lhs.GetAddressBytes();
-        byte[] rbytes = rhs.GetAddressBytes();
+        var lbytes = lhs.GetAddressBytes();
+        var rbytes = rhs.GetAddressBytes();
 
         if (lbytes.Length != rbytes.Length)
         {
@@ -228,7 +228,7 @@ public static class HostAddressResolver
 
         // Compare starting from most significant octet
         // e.g., 10.68.20.21 < 10.98.05.04
-        for (int i = 0; i < lbytes.Length; i++)
+        for (var i = 0; i < lbytes.Length; i++)
         {
             if (lbytes[i] != rbytes[i])
             {

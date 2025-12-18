@@ -46,9 +46,6 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     [LoggerMessage(Level = LogLevel.Debug, Message = "Consensus loop cancelled")]
     public partial void ConsensusCancelled();
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Consensus failed: exhausted all {MaxRounds} rounds without reaching decision")]
-    public partial void ConsensusExhausted(int maxRounds);
-
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandleMessages: received {MessageType}")]
     public partial void HandleMessages(RapidClusterRequest.ContentOneofCase messageType);
 

@@ -353,8 +353,8 @@ public class PaxosTests
     public void RankQuorumThresholdCalculation()
     {
         // Threshold = n - f for Fast Paxos
-        int n = 5;
-        int f = (int)Math.Floor((n - 1) / 4.0);
+        var n = 5;
+        var f = (int)Math.Floor((n - 1) / 4.0);
         Assert.Equal(4, n - f);
 
         n = 10;

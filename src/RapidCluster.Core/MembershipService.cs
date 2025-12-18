@@ -862,6 +862,80 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             .ForEach(k => _pendingConsensusMessages.Remove(k));
 
         return previousConsensusInstance;
+
+        // Creates and schedules failure detector instances based on the fdFactory instance.
+        void CreateFailureDetectorsForCurrentConfiguration()
+        {
+            // Check if this node is still in the ring - it may have been removed during a view change
+            if (!_membershipView.IsHostPresent(_myAddr))
+            {
+                _log.SkippingFailureDetectorsNotInRing();
+                return;
+            }
+
+            var subjects = _membershipView.GetSubjectsOf(_myAddr);
+            var configurationId = _membershipView.ConfigurationId;
+
+            _log.CreateFailureDetectors(subjects.Length);
+            _log.CreateFailureDetectorsSummary(subjects, configurationId);
+
+            for (var i = 0; i < subjects.Length; i++)
+            {
+                var subject = subjects[i];
+                var ringNumber = i;
+                var fd = _fdFactory.CreateInstance(subject, () => EdgeFailureNotification(subject, configurationId));
+
+                _log.CreatedFailureDetector(subject, ringNumber);
+
+                fd.Start();
+                _failureDetectors.Add(fd);
+            }
+        }
+
+        // Replays buffered consensus messages for the given configuration.
+        // Called after a view change to process any messages that arrived before we transitioned.
+        // Also cleans up messages for old configurations.
+        void ReplayBufferedConsensusMessages(long currentConfigId, CancellationToken cancellationToken)
+        {
+            // Clean up messages for old configurations (they're no longer relevant)
+            var keysToRemove = _pendingConsensusMessages.Keys.Where(k => k < currentConfigId).ToList();
+            foreach (var key in keysToRemove)
+            {
+                _pendingConsensusMessages.Remove(key);
+            }
+
+            // Replay messages for the current configuration
+            if (_pendingConsensusMessages.TryGetValue(currentConfigId, out var pendingMessages))
+            {
+                _pendingConsensusMessages.Remove(currentConfigId);
+
+                if (pendingMessages.Count > 0)
+                {
+                    _log.ReplayingBufferedMessages(pendingMessages.Count, currentConfigId);
+
+                    foreach (var message in pendingMessages)
+                    {
+                        _consensusInstance.HandleMessages(message, cancellationToken);
+                    }
+                }
+            }
+        }
+
+        // Registers a continuation on ConsensusCoordinator.Decided that handles the result and checks for shutdown.
+        // The continuation is tracked as a background task to ensure proper cleanup during shutdown.
+        void RegisterConsensusDecidedContinuation(ConsensusCoordinator consensusInstance, ConfigurationId configurationId)
+        {
+            consensusInstance.Decided.ContinueWith(async decision =>
+            {
+                if (decision.IsCanceled)
+                {
+                    // Consensus was cancelled (e.g., during shutdown or view change) - nothing to do
+                    return;
+                }
+
+                await DecideViewChange(await decision.ConfigureAwait(true), configurationId).ConfigureAwait(true);
+            }, CancellationToken.None, TaskContinuationOptions.None, _sharedResources.TaskScheduler);
+        }
     }
 
     /// <summary>
@@ -1769,42 +1843,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
-    /// Formats a proposal or view change for application subscriptions.
-    /// Determines status based on current view state:
-    /// - Nodes NOT in view → EdgeStatus.Up (joining)
-    /// - Nodes IN view → EdgeStatus.Down (leaving/failing)
-    ///
-    /// For ViewChangeProposal: called BEFORE view update, so joining nodes aren't in view yet.
-    /// For ViewChange: status is captured inline BEFORE each node is added/removed.
-    /// Both cases produce consistent semantics: Up = joining, Down = leaving.
-    /// </summary>
-    private List<NodeStatusChange> CreateNodeStatusChangeList(IEnumerable<Endpoint> proposal)
-    {
-        var list = new List<NodeStatusChange>();
-        foreach (var node in proposal)
-        {
-            var status = _membershipView.IsHostPresent(node) ? EdgeStatus.Down : EdgeStatus.Up;
-            list.Add(new NodeStatusChange(node, status, _metadataManager.Get(node) ?? new Metadata()));
-        }
-        return list;
-    }
-
-    /// <summary>
-    /// Prepares a view change notification for a node that has just become part of a cluster. This is invoked when the
-    /// membership service is first initialized by a new node, which only happens on a Cluster.join() or Cluster.start().
-    /// Therefore, all EdgeStatus values will be UP.
-    /// </summary>
-    private List<NodeStatusChange> GetInitialViewChange()
-    {
-        var list = new List<NodeStatusChange>();
-        foreach (var node in _membershipView.Members)
-        {
-            list.Add(new NodeStatusChange(node, EdgeStatus.Up, _metadataManager.Get(node) ?? new Metadata()));
-        }
-        return list;
-    }
-
-    /// <summary>
     /// Attempts to rejoin the cluster after being kicked.
     /// Combines configured seed nodes with members from the last known view,
     /// trying configured seeds first, then last known members.
@@ -2115,37 +2153,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
-    /// Creates and schedules failure detector instances based on the fdFactory instance.
-    /// </summary>
-    private void CreateFailureDetectorsForCurrentConfiguration()
-    {
-        // Check if this node is still in the ring - it may have been removed during a view change
-        if (!_membershipView.IsHostPresent(_myAddr))
-        {
-            _log.SkippingFailureDetectorsNotInRing();
-            return;
-        }
-
-        var subjects = _membershipView.GetSubjectsOf(_myAddr);
-        var configurationId = _membershipView.ConfigurationId;
-
-        _log.CreateFailureDetectors(subjects.Length);
-        _log.CreateFailureDetectorsSummary(subjects, configurationId);
-
-        for (var i = 0; i < subjects.Length; i++)
-        {
-            var subject = subjects[i];
-            var ringNumber = i;
-            var fd = _fdFactory.CreateInstance(subject, () => EdgeFailureNotification(subject, configurationId));
-
-            _log.CreatedFailureDetector(subject, ringNumber);
-
-            fd.Start();
-            _failureDetectors.Add(fd);
-        }
-    }
-
-    /// <summary>
     /// This is a notification from a local edge failure detector at an observer. This changes
     /// the status of the edge between the observer and the subject to DOWN.
     /// </summary>
@@ -2184,94 +2191,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         {
             _log.ErrorInEdgeFailureNotification(ex, subject);
             throw;
-        }
-    }
-
-    /// <summary>
-    /// Registers a continuation on ConsensusCoordinator.Decided that handles the result and checks for shutdown.
-    /// The continuation is tracked as a background task to ensure proper cleanup during shutdown.
-    /// </summary>
-    private void RegisterConsensusDecidedContinuation(ConsensusCoordinator consensusInstance, ConfigurationId configurationId)
-    {
-        var continuationTask = consensusInstance.Decided.ContinueWith(async decision =>
-        {
-            if (decision.IsCanceled)
-            {
-                // Consensus was cancelled (e.g., during shutdown or view change) - nothing to do
-                return;
-            }
-
-            if (decision.IsFaulted)
-            {
-                _log.ConsensusDecidedFaulted(decision.Exception!);
-                // Consensus failed (e.g., exhausted all rounds during a partition).
-                // Reset state to allow new proposals when alerts arrive.
-                await ResetConsensusStateAfterFailure(consensusInstance).ConfigureAwait(true);
-                return;
-            }
-
-            await DecideViewChange(await decision.ConfigureAwait(true), configurationId).ConfigureAwait(true);
-        }, CancellationToken.None, TaskContinuationOptions.None, _sharedResources.TaskScheduler);
-        continuationTask.Unwrap().Ignore();
-    }
-
-    /// <summary>
-    /// Resets consensus state after a failure to allow new proposals.
-    /// Called when consensus exhausts all rounds without reaching a decision.
-    /// </summary>
-    private async Task ResetConsensusStateAfterFailure(ConsensusCoordinator failedInstance)
-    {
-        lock (_membershipUpdateLock)
-        {
-            // Only reset if this is still the current consensus instance
-            if (!ReferenceEquals(_consensusInstance, failedInstance))
-            {
-                return;
-            }
-
-            // Reset the announced proposal flag so new alerts can trigger consensus
-            _announcedProposal = false;
-
-            // Create a fresh consensus coordinator for the same configuration
-            _consensusInstance = _consensusCoordinatorFactory.Create(
-                _myAddr,
-                _membershipView.ConfigurationId,
-                _membershipView.Size,
-                _broadcaster);
-            RegisterConsensusDecidedContinuation(_consensusInstance, _membershipView.ConfigurationId);
-        }
-
-        await failedInstance.DisposeAsync().ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Replays buffered consensus messages for the given configuration.
-    /// Called after a view change to process any messages that arrived before we transitioned.
-    /// Also cleans up messages for old configurations.
-    /// </summary>
-    private void ReplayBufferedConsensusMessages(long currentConfigId, CancellationToken cancellationToken)
-    {
-        // Clean up messages for old configurations (they're no longer relevant)
-        var keysToRemove = _pendingConsensusMessages.Keys.Where(k => k < currentConfigId).ToList();
-        foreach (var key in keysToRemove)
-        {
-            _pendingConsensusMessages.Remove(key);
-        }
-
-        // Replay messages for the current configuration
-        if (_pendingConsensusMessages.TryGetValue(currentConfigId, out var pendingMessages))
-        {
-            _pendingConsensusMessages.Remove(currentConfigId);
-
-            if (pendingMessages.Count > 0)
-            {
-                _log.ReplayingBufferedMessages(pendingMessages.Count, currentConfigId);
-
-                foreach (var message in pendingMessages)
-                {
-                    _consensusInstance.HandleMessages(message, cancellationToken);
-                }
-            }
         }
     }
 

@@ -22,15 +22,10 @@ namespace RapidCluster;
 internal sealed class ConsensusCoordinator : IAsyncDisposable
 {
     private readonly ConsensusCoordinatorLogger _log;
-    private readonly ILogger<FastPaxos> _fastPaxosLogger;
-    private readonly ILogger<Paxos> _paxosLogger;
     private readonly RapidClusterMetrics _metrics;
     private readonly double _jitterRate;
     private readonly Endpoint _myAddr;
     private readonly ConfigurationId _configurationId;
-    private readonly int _membershipSize;
-    private readonly IMessagingClient _client;
-    private readonly IBroadcaster _broadcaster;
     private readonly IMembershipViewAccessor _membershipViewAccessor;
     private readonly RapidClusterProtocolOptions _options;
     private readonly SharedResources _sharedResources;
@@ -74,16 +69,11 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     {
         _myAddr = myAddr;
         _configurationId = configurationId;
-        _membershipSize = membershipSize;
-        _client = client;
-        _broadcaster = broadcaster;
         _membershipViewAccessor = membershipViewAccessor;
         _options = options.Value;
         _sharedResources = sharedResources;
         _metrics = metrics;
         _log = new ConsensusCoordinatorLogger(logger);
-        _fastPaxosLogger = fastPaxosLogger;
-        _paxosLogger = paxosLogger;
 
         // The rate of a random expovariate variable, used to determine jitter
         _jitterRate = 1 / (double)membershipSize;
@@ -195,12 +185,11 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
             // Phase 2+: Classic Paxos rounds
             var roundNumber = 2;
-            var maxRounds = _options.MaxConsensusRounds;
 
-            while (!cancellationToken.IsCancellationRequested && roundNumber <= maxRounds)
+            while (true)
             {
                 // Check if Paxos already decided (from a previous round's messages arriving late)
-                if (_paxos!.Decided.IsCompletedSuccessfully)
+                if (_paxos.Decided.IsCompletedSuccessfully)
                 {
                     var paxosResult = await _paxos.Decided.WaitAsync(cancellationToken).ConfigureAwait(true);
                     if (paxosResult is ConsensusResult.Decided decided)
@@ -248,24 +237,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                 _log.ClassicRoundTimeout(roundNumber, delay);
                 _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Timeout);
                 roundNumber++;
-            }
-
-            // Exhausted all rounds without decision
-            if (cancellationToken.IsCancellationRequested)
-            {
-                _log.ConsensusCancelled();
-                _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted, consensusStopwatch);
-                _onDecidedTcs.TrySetCanceled(cancellationToken);
-            }
-            else
-            {
-                // All rounds exhausted without reaching consensus - this can happen during
-                // network partitions where this node can't communicate with enough peers.
-                // Signal failure so MembershipService can handle appropriately.
-                _log.ConsensusExhausted(maxRounds);
-                _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Failed, consensusStopwatch);
-                _onDecidedTcs.TrySetException(new InvalidOperationException(
-                    $"Consensus failed: exhausted all {maxRounds} rounds without reaching decision for configId={_configurationId}"));
             }
         }
         catch (OperationCanceledException)

@@ -97,7 +97,7 @@ internal sealed class FastPaxos
         var fastPaxosThreshold = _membershipSize - f;
 
         // Track delivery failures to notify coordinator
-        int failureCount = 0;
+        var failureCount = 0;
 
         // Broadcast with failure callback to detect when fast round cannot succeed
         _broadcaster.Broadcast(proposalMessage, failedEndpoint =>

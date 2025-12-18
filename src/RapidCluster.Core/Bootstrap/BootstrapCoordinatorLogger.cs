@@ -90,4 +90,22 @@ internal sealed partial class BootstrapCoordinatorLogger(ILogger logger)
     [LoggerMessage(EventName = nameof(CreatedBootstrapProposal), Level = LogLevel.Debug, Message = "Created bootstrap proposal at {MyAddr}: {MemberCount} members, maxNodeId={MaxNodeId}")]
     private partial void CreatedBootstrapProposalCore(LoggableEndpoint myAddr, int memberCount, long maxNodeId);
     public void CreatedBootstrapProposal(Endpoint myAddr, int memberCount, long maxNodeId) => CreatedBootstrapProposalCore(new(myAddr), memberCount, maxNodeId);
+
+    // Log methods for TryBootstrapAsync
+
+    [LoggerMessage(EventName = nameof(BootstrapNotApplicable), Level = LogLevel.Debug, Message = "Bootstrap not applicable at {MyAddr}: bootstrapExpect={BootstrapExpect}")]
+    private partial void BootstrapNotApplicableCore(LoggableEndpoint myAddr, int bootstrapExpect);
+    public void BootstrapNotApplicable(Endpoint myAddr, int bootstrapExpect) => BootstrapNotApplicableCore(new(myAddr), bootstrapExpect);
+
+    [LoggerMessage(EventName = nameof(NoSeedsAvailable), Level = LogLevel.Debug, Message = "No seeds available at {MyAddr} after filtering self")]
+    private partial void NoSeedsAvailableCore(LoggableEndpoint myAddr);
+    public void NoSeedsAvailable(Endpoint myAddr) => NoSeedsAvailableCore(new(myAddr));
+
+    [LoggerMessage(EventName = nameof(SeedsRefreshed), Level = LogLevel.Debug, Message = "Seeds refreshed at {MyAddr}: {SeedCount} seeds (excluding self), isStatic={IsStatic}")]
+    private partial void SeedsRefreshedCore(LoggableEndpoint myAddr, int seedCount, bool isStatic);
+    public void SeedsRefreshed(Endpoint myAddr, int seedCount, bool isStatic) => SeedsRefreshedCore(new(myAddr), seedCount, isStatic);
+
+    [LoggerMessage(EventName = nameof(NormalizingSeedSet), Level = LogLevel.Debug, Message = "Normalizing seed set at {MyAddr}: {OriginalCount} seeds -> {NormalizedCount} seeds (bootstrapExpect limit)")]
+    private partial void NormalizingSeedSetCore(LoggableEndpoint myAddr, int originalCount, int normalizedCount);
+    public void NormalizingSeedSet(Endpoint myAddr, int originalCount, int normalizedCount) => NormalizingSeedSetCore(new(myAddr), originalCount, normalizedCount);
 }

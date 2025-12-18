@@ -84,6 +84,15 @@ public static class RapidClusterServiceCollectionExtensions
         // Configure options
         services.Configure(configure);
 
+        // Configure seed options from cluster options (for backward compatibility)
+        // This copies SeedAddresses from RapidClusterOptions to RapidClusterSeedOptions
+        services.AddOptions<Discovery.RapidClusterSeedOptions>()
+            .Configure<Microsoft.Extensions.Options.IOptions<RapidClusterOptions>>((seedOptions, clusterOptions) =>
+            {
+                // Only copy if seed options doesn't already have seeds configured
+                seedOptions.SeedAddresses ??= clusterOptions.Value.SeedAddresses;
+            });
+
         // Configure protocol options
         if (configureProtocol != null)
         {

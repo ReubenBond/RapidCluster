@@ -292,32 +292,13 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Refreshed {Count} seeds from seed provider")]
     public partial void SeedsRefreshed(int count);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Normalizing seed set: {OriginalCount} seeds configured, taking first {NormalizedCount} (BootstrapExpect)")]
-    public partial void NormalizingSeedSet(int originalCount, int normalizedCount);
-
     [LoggerMessage(EventName = nameof(RefreshingSeedsForRejoin), Level = LogLevel.Information, Message = "Node {MyAddr} refreshing seeds from provider before retry")]
     private partial void RefreshingSeedsForRejoinCore(LoggableEndpoint myAddr);
     public void RefreshingSeedsForRejoin(Endpoint myAddr) => RefreshingSeedsForRejoinCore(new(myAddr));
 
-    [LoggerMessage(EventName = nameof(BootstrapCoordinatorCheck), Level = LogLevel.Information, Message = "Bootstrap coordinator check: myAddr={MyAddr}, firstSeed={FirstSeed}, wasFirstSeed={WasFirstSeed}, bootstrapExpect={BootstrapExpect}")]
-    private partial void BootstrapCoordinatorCheckCore(LoggableEndpoint myAddr, LoggableEndpoint firstSeed, bool wasFirstSeed, int bootstrapExpect);
-    public void BootstrapCoordinatorCheck(Endpoint myAddr, Endpoint? firstSeed, bool wasFirstSeed, int bootstrapExpect) => BootstrapCoordinatorCheckCore(new(myAddr), firstSeed != null ? new(firstSeed) : new(new Endpoint()), wasFirstSeed, bootstrapExpect);
-
     [LoggerMessage(EventName = nameof(StartingBootstrapConsensus), Level = LogLevel.Information, Message = "Starting bootstrap consensus at {MyAddr} (BootstrapExpect={BootstrapExpect}, seeds={SeedCount})")]
     private partial void StartingBootstrapConsensusCore(LoggableEndpoint myAddr, int bootstrapExpect, int seedCount);
     public void StartingBootstrapConsensus(Endpoint myAddr, int bootstrapExpect, int seedCount) => StartingBootstrapConsensusCore(new(myAddr), bootstrapExpect, seedCount);
-
-    [LoggerMessage(EventName = nameof(BootstrapProbeResult), Level = LogLevel.Debug, Message = "Bootstrap probe at {MyAddr}: {ReachableCount}/{ExpectedCount} seeds reachable")]
-    private partial void BootstrapProbeResultCore(LoggableEndpoint myAddr, int reachableCount, int expectedCount);
-    public void BootstrapProbeResult(Endpoint myAddr, int reachableCount, int expectedCount) => BootstrapProbeResultCore(new(myAddr), reachableCount, expectedCount);
-
-    [LoggerMessage(EventName = nameof(BootstrapSeedsReady), Level = LogLevel.Information, Message = "Bootstrap seeds ready at {MyAddr}: {ReachableCount} seeds reachable")]
-    private partial void BootstrapSeedsReadyCore(LoggableEndpoint myAddr, int reachableCount);
-    public void BootstrapSeedsReady(Endpoint myAddr, int reachableCount) => BootstrapSeedsReadyCore(new(myAddr), reachableCount);
-
-    [LoggerMessage(EventName = nameof(CreatedBootstrapProposal), Level = LogLevel.Debug, Message = "Created bootstrap proposal at {MyAddr}: {MemberCount} members, maxNodeId={MaxNodeId}")]
-    private partial void CreatedBootstrapProposalCore(LoggableEndpoint myAddr, int memberCount, long maxNodeId);
-    public void CreatedBootstrapProposal(Endpoint myAddr, int memberCount, long maxNodeId) => CreatedBootstrapProposalCore(new(myAddr), memberCount, maxNodeId);
 
     [LoggerMessage(EventName = nameof(BootstrapConsensusDecided), Level = LogLevel.Information, Message = "Bootstrap consensus decided at {MyAddr}: {MemberCount} members, configId={ConfigId}")]
     private partial void BootstrapConsensusDecidedCore(LoggableEndpoint myAddr, int memberCount, long configId);

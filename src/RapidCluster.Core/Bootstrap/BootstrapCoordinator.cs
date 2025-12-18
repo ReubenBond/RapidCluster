@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
+using RapidCluster.Discovery;
 using RapidCluster.Exceptions;
 using RapidCluster.Messaging;
 using RapidCluster.Pb;
@@ -105,6 +106,110 @@ internal sealed class BootstrapCoordinator
         // Initialize with just self
         _knownSeeds = new HashSet<Endpoint>(EndpointAddressComparer.Instance) { _myAddr };
         _currentSeedSetHash = ComputeSeedSetHash(_knownSeeds);
+    }
+
+    /// <summary>
+    /// Attempts to bootstrap the cluster using the provided seed provider.
+    /// This is the main entry point for bootstrap that handles the full flow:
+    /// fetching seeds, normalizing them, and running the appropriate bootstrap protocol.
+    /// </summary>
+    /// <param name="seedProvider">The seed provider to fetch seeds from.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// The bootstrap result if bootstrap was performed, or <c>null</c> if bootstrap doesn't apply
+    /// (no seeds available after filtering self).
+    /// </returns>
+    /// <exception cref="BootstrapAlreadyCompleteException">
+    /// Thrown if an already-formed cluster is detected during dynamic seed bootstrap.
+    /// The caller should fall back to joining the cluster.
+    /// </exception>
+    /// <exception cref="TimeoutException">
+    /// Thrown if seeds are not reachable or agreement cannot be reached within timeout.
+    /// </exception>
+    /// <remarks>
+    /// <para>
+    /// Returns <c>null</c> in these cases (caller should start a new single-node cluster):
+    /// <list type="bullet">
+    /// <item>No seeds were discovered</item>
+    /// <item>All discovered seeds are self (only this node in seed list)</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// The method handles seed normalization internally:
+    /// <list type="bullet">
+    /// <item>Seeds are sorted deterministically by address</item>
+    /// <item>If more seeds than <c>bootstrapExpect</c>, only the first N are used</item>
+    /// <item>Self is filtered from the seed list for probing</item>
+    /// </list>
+    /// </para>
+    /// </remarks>
+    public async Task<BootstrapResult?> TryBootstrapAsync(
+        ISeedProvider seedProvider,
+        CancellationToken cancellationToken)
+    {
+        // Bootstrap only applies when BootstrapExpect > 0
+        if (_bootstrapExpect <= 0)
+        {
+            _log.BootstrapNotApplicable(_myAddr, _bootstrapExpect);
+            return null;
+        }
+
+        // Fetch seeds from the provider
+        var seedResult = await seedProvider.GetSeedsAsync(cancellationToken).ConfigureAwait(true);
+
+        // Normalize seeds: convert to protobuf, deduplicate, and sort deterministically
+        var allSeeds = NormalizeSeeds(seedResult.Seeds);
+
+        // Filter out self to get the list of seeds to contact
+        var seedsExcludingSelf = allSeeds
+            .Where(s => !EndpointAddressComparer.Instance.Equals(s, _myAddr))
+            .ToList();
+
+        _log.SeedsRefreshed(_myAddr, seedsExcludingSelf.Count, seedResult.IsStatic);
+
+        // If no seeds remain after filtering self, bootstrap doesn't apply
+        // (caller should start a new single-node cluster)
+        if (seedsExcludingSelf.Count == 0)
+        {
+            _log.NoSeedsAvailable(_myAddr);
+            return null;
+        }
+
+        // Execute the appropriate bootstrap protocol
+        if (seedResult.IsStatic)
+        {
+            return await BootstrapWithStaticSeedsAsync(seedsExcludingSelf, cancellationToken).ConfigureAwait(true);
+        }
+        else
+        {
+            return await BootstrapWithDynamicSeedsAsync(seedsExcludingSelf, cancellationToken).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Normalizes a list of seed endpoints by converting to protobuf, deduplicating,
+    /// sorting deterministically, and limiting to <c>bootstrapExpect</c> count.
+    /// </summary>
+    /// <param name="seeds">The raw seed endpoints from the provider.</param>
+    /// <returns>Normalized list of seed endpoints as protobuf.</returns>
+    private List<Endpoint> NormalizeSeeds(IReadOnlyList<System.Net.EndPoint> seeds)
+    {
+        // Convert to protobuf, deduplicate by address string, and sort deterministically
+        var allSeeds = seeds
+            .Select(s => s.ToProtobuf())
+            .DistinctBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}")
+            .OrderBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}", StringComparer.Ordinal)
+            .ToList();
+
+        // If we have more seeds than bootstrapExpect, take only the first N
+        // This ensures all nodes agree on the same seed set
+        if (allSeeds.Count > _bootstrapExpect)
+        {
+            _log.NormalizingSeedSet(_myAddr, allSeeds.Count, _bootstrapExpect);
+            allSeeds = allSeeds.Take(_bootstrapExpect).ToList();
+        }
+
+        return allSeeds;
     }
 
     /// <summary>

@@ -94,6 +94,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private bool _isBootstrapping;
     // Task completion source for signaling when bootstrap should complete
     private TaskCompletionSource<bool>? _bootstrapCompletionSource;
+    private Task? _alertBatcherTask;
 
     /// <summary>
     /// Result of a single join attempt. Used to avoid exception-based control flow for retryable conditions.
@@ -127,7 +128,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// Call <see cref="InitializeAsync"/> after construction to start or join a cluster.
     /// </summary>
     public MembershipService(
-        IOptions<RapidClusterOptions> RapidClusterOptions,
+        IOptions<RapidClusterOptions> rapidClusterOptions,
         IOptions<RapidClusterProtocolOptions> protocolOptions,
         IMessagingClient messagingClient,
         IBroadcasterFactory broadcasterFactory,
@@ -141,7 +142,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         MetadataManager metadataManager,
         ILogger<MembershipService> logger)
     {
-        var opts = RapidClusterOptions.Value;
+        var opts = rapidClusterOptions.Value;
         _clusterOptions = opts;
         _myAddr = opts.ListenAddress.ToProtobuf();
         _nodeMetadata = opts.Metadata.ToProtobuf();
@@ -226,8 +227,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// </summary>
     private void StartBackgroundTasks()
     {
-        var alertBatcherTask = Task.Factory.StartNew(AlertBatcherAsync, _stoppingCts.Token, TaskCreationOptions.None, _sharedResources.TaskScheduler).Unwrap();
-        TrackBackgroundTask(alertBatcherTask);
+        _alertBatcherTask = Task.Factory.StartNew(AlertBatcherAsync, _stoppingCts.Token, TaskCreationOptions.None, _sharedResources.TaskScheduler).Unwrap();
     }
 
     /// <summary>
@@ -1578,7 +1578,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         if (previousConsensusInstance != null)
         {
-            await previousConsensusInstance.DisposeAsync();
+            await previousConsensusInstance.DisposeAsync().ConfigureAwait(true);
         }
     }
 
@@ -1624,7 +1624,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             try
             {
                 await Task.Delay(_options.BatchingWindow, _sharedResources.TimeProvider, stoppingToken).ConfigureAwait(true);
-                await _sendQueue.Reader.WaitToReadAsync(stoppingToken);
+                await _sendQueue.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(true);
                 while (_sendQueue.Reader.TryRead(out var msg))
                 {
                     buffer.Add(msg);
@@ -1960,33 +1960,35 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// </summary>
     private async Task RefreshMembershipViewAsync(Endpoint remoteEndpoint, long expectedConfigVersion, CancellationToken cancellationToken)
     {
-        // Prevent concurrent refresh attempts
-        if (_isRefreshingView || _disposed != 0)
-        {
-            _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
-            return;
-        }
-
-        // Rate limit refresh attempts
-        var now = _sharedResources.TimeProvider.GetTimestamp();
-        var lastRefresh = Interlocked.Read(ref _lastStaleViewRefreshTicks);
-        var elapsed = _sharedResources.TimeProvider.GetElapsedTime(lastRefresh, now);
-        if (elapsed < _options.StaleViewRefreshInterval)
-        {
-            _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
-            return;
-        }
-
-        // Double-check we still need to refresh (config may have been updated by another mechanism)
-        if (expectedConfigVersion <= _membershipView.ConfigurationId.Version)
-        {
-            _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
-            return;
-        }
-
-        _isRefreshingView = true;
+        var didStartRefresh = false;
         try
         {
+            // Prevent concurrent refresh attempts
+            if (_isRefreshingView || _disposed != 0)
+            {
+                _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
+                return;
+            }
+
+            // Rate limit refresh attempts
+            var now = _sharedResources.TimeProvider.GetTimestamp();
+            var lastRefresh = Interlocked.Read(ref _lastStaleViewRefreshTicks);
+            var elapsed = _sharedResources.TimeProvider.GetElapsedTime(lastRefresh, now);
+            if (elapsed < _options.StaleViewRefreshInterval)
+            {
+                _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
+                return;
+            }
+
+            // Double-check we still need to refresh (config may have been updated by another mechanism)
+            if (expectedConfigVersion <= _membershipView.ConfigurationId.Version)
+            {
+                _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
+                return;
+            }
+
+            _isRefreshingView = true;
+            didStartRefresh = true;
             _log.RequestingMembershipView(remoteEndpoint);
 
             var request = new MembershipViewRequest
@@ -2017,7 +2019,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
 
             // Apply the learned view
-            ApplyLearnedMembershipView(viewResponse);
+            await ApplyLearnedMembershipViewAsync(viewResponse).ConfigureAwait(true);
 
             // Update last refresh timestamp on success
             Interlocked.Exchange(ref _lastStaleViewRefreshTicks, _sharedResources.TimeProvider.GetTimestamp());
@@ -2033,7 +2035,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
         finally
         {
-            _isRefreshingView = false;
+            if (didStartRefresh)
+            {
+                _isRefreshingView = false;
+            }
         }
     }
 
@@ -2042,10 +2047,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// This is used by the Paxos learner mechanism to catch up on missed consensus decisions.
     /// If the local node is not in the new view, it triggers a kicked event and rejoin.
     /// </summary>
-    private void ApplyLearnedMembershipView(MembershipViewResponse viewResponse)
+    private async ValueTask ApplyLearnedMembershipViewAsync(MembershipViewResponse viewResponse)
     {
         ConsensusCoordinator? oldConsensus;
-        bool wasKicked;
+        bool isMemberOfView;
         lock (_membershipUpdateLock)
         {
             // Guard against config ID regression - never allow a stale view to replace a fresher one
@@ -2072,12 +2077,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // Check if we were kicked (not in the new membership)
             // Use EndpointAddressComparer to ignore NodeId when checking membership
             var newMembers = new HashSet<Endpoint>(newView.Members, EndpointAddressComparer.Instance);
-            wasKicked = !newMembers.Contains(_myAddr);
+            isMemberOfView = newMembers.Contains(_myAddr);
 
             // If we're not initialized and not in the new view, don't apply it.
             // The ongoing join process will handle getting us into the cluster.
             // Applying a view where we're not a member would interfere with the join.
-            if (!_initialized && wasKicked)
+            if (!_initialized && !isMemberOfView)
             {
                 return;
             }
@@ -2085,7 +2090,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // Get old members (Members property safely returns empty for empty views)
             var oldMembers = new HashSet<Endpoint>(_membershipView.Members, EndpointAddressComparer.Instance);
 
-            if (wasKicked)
+            if (!isMemberOfView)
             {
                 // If we had no previous membership (empty view), we weren't really "kicked" -
                 // we just haven't joined yet. Skip the kicked event in this case.
@@ -2132,13 +2137,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Dispose old consensus - track it so we await it during shutdown
         if (oldConsensus != null)
         {
-            TrackBackgroundTask(oldConsensus.DisposeAsync().AsTask());
+            await oldConsensus.DisposeAsync().ConfigureAwait(false);
         }
 
         // If we were kicked, schedule rejoin outside the lock.
-        // Note: If !_initialized && wasKicked, we already returned early above,
+        // Note: If !_initialized && !isMemberOfView, we already returned early above,
         // so this only triggers for initialized nodes that were kicked.
-        if (wasKicked)
+        if (!isMemberOfView)
         {
             var rejoinTask = Task.Factory.StartNew(
                 () => RejoinClusterAsync(_stoppingCts.Token),
@@ -2241,11 +2246,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _log.ConsensusDecidedFaulted(decision.Exception!);
                 // Consensus failed (e.g., exhausted all rounds during a partition).
                 // Reset state to allow new proposals when alerts arrive.
-                await ResetConsensusStateAfterFailure(consensusInstance);
+                await ResetConsensusStateAfterFailure(consensusInstance).ConfigureAwait(true);
                 return;
             }
 
-            await DecideViewChange(await decision, configurationId);
+            await DecideViewChange(await decision.ConfigureAwait(true), configurationId).ConfigureAwait(true);
         }, CancellationToken.None, TaskContinuationOptions.None, _sharedResources.TaskScheduler);
         continuationTask.Unwrap().Ignore();
     }
@@ -2276,7 +2281,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RegisterConsensusDecidedContinuation(_consensusInstance, _membershipView.ConfigurationId);
         }
 
-        await failedInstance.DisposeAsync();
+        await failedInstance.DisposeAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -2365,6 +2370,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Cancel background tasks
         _stoppingCts.SafeCancel(_log.Logger);
 
+        if (_alertBatcherTask is { } alertBatcherTask)
+        {
+            await _alertBatcherTask.WaitAsync(cancellationToken).ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
+        }
+
         // Wait for background tasks to complete
         Task[] backgroundTasks;
         lock (_backgroundTasksLock)
@@ -2418,7 +2428,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Dispose consensus instance (may be null if initialization failed)
         if (_consensusInstance is not null)
         {
-            await _consensusInstance.DisposeAsync();
+            await _consensusInstance.DisposeAsync().ConfigureAwait(true);
         }
     }
 

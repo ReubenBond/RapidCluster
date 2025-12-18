@@ -226,8 +226,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             _metrics,
             seedProvider,
             metadataManager,
-            _membershipServiceLogger,
-            _loggerFactory);
+            _membershipServiceLogger);
     }
 
     /// <summary>

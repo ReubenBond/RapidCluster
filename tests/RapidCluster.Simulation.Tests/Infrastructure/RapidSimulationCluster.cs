@@ -703,6 +703,9 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         if (_disposed) return;
         _disposed = true;
 
+        // Check invariants BEFORE disposing nodes (they need valid state for checking)
+        CheckInvariantsOnShutdown();
+
         // Dispose all nodes to cancel in-flight tasks and release resources.
         // This triggers cancellation of each node's _disposeCts, which propagates
         // to MembershipService and MessagingClient, allowing pending tasks to complete.
@@ -713,11 +716,48 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
             UnregisterNode(node);
         }
 
+        // Log elapsed simulation time before attaching logs
+        _log.SimulationCompleted($"{Clock.CurrentTime}");
+
         // Attach logs to test context BEFORE disposing the provider
         _logManager.AttachLogsToTestContext(TestContext.Current);
 
         // Dispose the log manager (disposes logger factory and provider)
         _logManager.Dispose();
+    }
+
+    /// <summary>
+    /// Checks cluster invariants before shutdown and logs the results.
+    /// Violations are logged but do not throw - they appear in the test log for debugging.
+    /// </summary>
+    private void CheckInvariantsOnShutdown()
+    {
+        // Skip if no initialized nodes to check
+        var initializedNodes = Nodes.Where(n => n.IsInitialized).ToList();
+        if (initializedNodes.Count == 0)
+        {
+            _log.InvariantCheckSkippedNoNodes();
+            return;
+        }
+
+        _log.CheckingInvariants();
+
+        var checker = new InvariantChecker(this);
+        var passed = checker.CheckAll();
+
+        if (passed)
+        {
+            // CheckAll runs 6 invariant checks
+            _log.InvariantsPassed(6);
+        }
+        else
+        {
+            // Log each violation
+            foreach (var violation in checker.Violations)
+            {
+                _log.InvariantViolationDetected(violation.Type.ToString(), violation.Message);
+            }
+        }
     }
 
     private string DebuggerDisplay => $"SimulationHarness(Seed={Seed}, Nodes={Nodes.Count}, Time={Clock.CurrentTime:hh\\:mm\\:ss\\.fff})";

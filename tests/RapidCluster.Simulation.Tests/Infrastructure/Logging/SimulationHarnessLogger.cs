@@ -97,4 +97,19 @@ internal sealed partial class SimulationHarnessLogger(ILogger<RapidSimulationClu
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Bootstrap cluster created with {Size} nodes")]
     public partial void BootstrapClusterCreated(int size);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Simulation completed. Elapsed simulated time: {ElapsedTime}")]
+    public partial void SimulationCompleted(string elapsedTime);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Checking cluster invariants before shutdown...")]
+    public partial void CheckingInvariants();
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "All cluster invariants passed ({InvariantCount} checks)")]
+    public partial void InvariantsPassed(int invariantCount);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Cluster invariant violation detected: {ViolationType} - {ViolationMessage}")]
+    public partial void InvariantViolationDetected(string violationType, string violationMessage);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Invariant check skipped: no initialized nodes to check")]
+    public partial void InvariantCheckSkippedNoNodes();
 }

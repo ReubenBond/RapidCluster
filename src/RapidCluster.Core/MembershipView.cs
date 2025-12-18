@@ -20,18 +20,18 @@ public sealed class MembershipView
     /// </summary>
     public static MembershipView Empty { get; } = new(0, ConfigurationId.Empty, [], 0);
 
-    private readonly ImmutableArray<ImmutableArray<Endpoint>> _rings;
-    private readonly ImmutableSortedSet<Endpoint> _allNodes;
-    private readonly ImmutableDictionary<Endpoint, long> _nodeIdByEndpoint;
+    private readonly ImmutableArray<ImmutableArray<MemberInfo>> _rings;
+    private readonly ImmutableSortedSet<MemberInfo> _allNodes;
+    private readonly ImmutableDictionary<Endpoint, MemberInfo> _memberByEndpoint;
 
     /// <summary>
     /// Initializes a new immutable MembershipView instance.
     /// </summary>
     /// <param name="ringCount">Number of monitoring rings.</param>
     /// <param name="configurationId">The configuration identifier for this view.</param>
-    /// <param name="rings">The rings of endpoints (each ring is sorted by its comparator).</param>
+    /// <param name="rings">The rings of members (each ring is sorted by its comparator).</param>
     /// <param name="maxNodeId">The highest node ID ever assigned.</param>
-    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<Endpoint>> rings, long maxNodeId)
+    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<MemberInfo>> rings, long maxNodeId)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(ringCount);
         ArgumentOutOfRangeException.ThrowIfNotEqual(rings.Length, ringCount, "Number of rings does not match ring count");
@@ -39,19 +39,20 @@ public sealed class MembershipView
         ConfigurationId = configurationId;
         _rings = rings;
         MaxNodeId = maxNodeId;
-        // Use ProtobufEndpointComparer to ignore NodeId when checking membership
-        _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(ProtobufEndpointComparer.Instance) : ImmutableSortedSet<Endpoint>.Empty;
 
-        // Build endpoint -> node ID lookup from the first ring (all rings have the same endpoints)
-        var builder = ImmutableDictionary.CreateBuilder<Endpoint, long>(EndpointAddressComparer.Instance);
+        // Use MemberInfoComparer for consistent ordering
+        _allNodes = rings.Length > 0 ? rings[0].ToImmutableSortedSet(MemberInfoComparer.Instance) : ImmutableSortedSet<MemberInfo>.Empty;
+
+        // Build endpoint -> MemberInfo lookup from the first ring (all rings have the same members)
+        var builder = ImmutableDictionary.CreateBuilder<Endpoint, MemberInfo>(EndpointAddressComparer.Instance);
         if (rings.Length > 0)
         {
-            foreach (var endpoint in rings[0])
+            foreach (var member in rings[0])
             {
-                builder[endpoint] = endpoint.NodeId;
+                builder[member.Endpoint] = member;
             }
         }
-        _nodeIdByEndpoint = builder.ToImmutable();
+        _memberByEndpoint = builder.ToImmutable();
     }
 
     /// <summary>
@@ -68,12 +69,19 @@ public sealed class MembershipView
     /// <summary>
     /// Gets the list of member endpoints in the cluster.
     /// </summary>
-    public ImmutableArray<Endpoint> Members => _rings.Length > 0 ? _rings[0] : [];
+    public ImmutableArray<Endpoint> Members => _rings.Length > 0
+        ? [.. _rings[0].Select(m => m.Endpoint)]
+        : [];
+
+    /// <summary>
+    /// Gets the list of members (with metadata) in the cluster.
+    /// </summary>
+    public ImmutableArray<MemberInfo> MemberInfos => _rings.Length > 0 ? _rings[0] : [];
 
     /// <summary>
     /// Gets the number of members in the cluster.
     /// </summary>
-    public int Size => Members.Length;
+    public int Size => _rings.Length > 0 ? _rings[0].Length : 0;
 
     /// <summary>
     /// Gets the highest node ID ever assigned in this cluster.
@@ -85,21 +93,41 @@ public sealed class MembershipView
     /// <summary>
     /// Gets the configuration for this view, which can be used to bootstrap a new MembershipViewBuilder.
     /// </summary>
-    public MembershipViewConfiguration Configuration => new(Members, MaxNodeId);
+    public MembershipViewConfiguration Configuration => new(MemberInfos, MaxNodeId);
 
     /// <summary>
     /// Checks if a specific endpoint is a member of this view.
     /// </summary>
     /// <param name="endpoint">The endpoint to check.</param>
     /// <returns>True if the endpoint is a member, false otherwise.</returns>
-    public bool IsMember(Endpoint endpoint) => _allNodes.Contains(endpoint);
+    public bool IsMember(Endpoint endpoint) => _memberByEndpoint.ContainsKey(endpoint);
 
     /// <summary>
     /// Query if a host is part of the current membership set.
     /// </summary>
     /// <param name="address">The host.</param>
     /// <returns>True if the node is present in the membership view and false otherwise.</returns>
-    public bool IsHostPresent(Endpoint address) => _allNodes.Contains(address);
+    public bool IsHostPresent(Endpoint address) => _memberByEndpoint.ContainsKey(address);
+
+    /// <summary>
+    /// Gets the MemberInfo for a specific endpoint.
+    /// </summary>
+    /// <param name="endpoint">The endpoint to look up.</param>
+    /// <returns>The MemberInfo for the endpoint, or null if not found.</returns>
+    public MemberInfo? GetMember(Endpoint endpoint)
+    {
+        return _memberByEndpoint.GetValueOrDefault(endpoint);
+    }
+
+    /// <summary>
+    /// Gets the metadata for a specific endpoint.
+    /// </summary>
+    /// <param name="endpoint">The endpoint to look up.</param>
+    /// <returns>The metadata for the endpoint, or null if not found.</returns>
+    public Metadata? GetMetadata(Endpoint endpoint)
+    {
+        return _memberByEndpoint.TryGetValue(endpoint, out var member) ? member.Metadata : null;
+    }
 
     /// <summary>
     /// Gets the monotonic node ID for a specific endpoint.
@@ -111,11 +139,11 @@ public sealed class MembershipView
     public long GetNodeId(Endpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        if (!_nodeIdByEndpoint.TryGetValue(endpoint, out var nodeId))
+        if (!_memberByEndpoint.TryGetValue(endpoint, out var member))
         {
             throw new NodeNotInRingException(endpoint);
         }
-        return nodeId;
+        return member.NodeId;
     }
 
     /// <summary>
@@ -128,7 +156,7 @@ public sealed class MembershipView
     /// </returns>
     public JoinStatusCode IsSafeToJoin(Endpoint node)
     {
-        if (_allNodes.Contains(node))
+        if (_memberByEndpoint.ContainsKey(node))
         {
             return JoinStatusCode.HostnameAlreadyInRing;
         }
@@ -146,6 +174,19 @@ public sealed class MembershipView
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(ringIndex, 0);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(ringIndex, RingCount);
+        return [.. _rings[ringIndex].Select(m => m.Endpoint)];
+    }
+
+    /// <summary>
+    /// Get the list of members (with metadata) in the k'th ring.
+    /// </summary>
+    /// <param name="ringIndex">The index of the ring to query.</param>
+    /// <returns>The list of members in the k'th ring.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if k is out of range.</exception>
+    public ImmutableArray<MemberInfo> GetRingMembers(int ringIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(ringIndex, 0);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(ringIndex, RingCount);
         return _rings[ringIndex];
     }
 
@@ -159,7 +200,7 @@ public sealed class MembershipView
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!_allNodes.Contains(node))
+        if (!_memberByEndpoint.ContainsKey(node))
         {
             throw new NodeNotInRingException(node);
         }
@@ -176,7 +217,7 @@ public sealed class MembershipView
             var index = FindIndex(ring, node);
             // Successor wraps around
             var successorIndex = (index + 1) % ring.Length;
-            observers.Add(ring[successorIndex]);
+            observers.Add(ring[successorIndex].Endpoint);
         }
         return observers.MoveToImmutable();
     }
@@ -191,7 +232,7 @@ public sealed class MembershipView
     {
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!_allNodes.Contains(node))
+        if (!_memberByEndpoint.ContainsKey(node))
         {
             throw new NodeNotInRingException(node);
         }
@@ -228,7 +269,7 @@ public sealed class MembershipView
             var insertionPoint = FindInsertionPoint(ring, node, k);
             // Predecessor wraps around
             var predecessorIndex = (insertionPoint - 1 + ring.Length) % ring.Length;
-            subjects.Add(ring[predecessorIndex]);
+            subjects.Add(ring[predecessorIndex].Endpoint);
         }
         return subjects.MoveToImmutable();
     }
@@ -300,17 +341,17 @@ public sealed class MembershipView
             var index = FindIndex(ring, node);
             // Predecessor wraps around
             var predecessorIndex = (index - 1 + ring.Length) % ring.Length;
-            subjects.Add(ring[predecessorIndex]);
+            subjects.Add(ring[predecessorIndex].Endpoint);
         }
         return subjects.MoveToImmutable();
     }
 
-    private static int FindIndex(ImmutableArray<Endpoint> ring, Endpoint node)
+    private static int FindIndex(ImmutableArray<MemberInfo> ring, Endpoint node)
     {
         for (var i = 0; i < ring.Length; i++)
         {
             // Use EndpointAddressComparer to ignore NodeId when comparing
-            if (EndpointAddressComparer.Instance.Equals(ring[i], node))
+            if (EndpointAddressComparer.Instance.Equals(ring[i].Endpoint, node))
             {
                 return i;
             }
@@ -318,7 +359,7 @@ public sealed class MembershipView
         return -1;
     }
 
-    private static int FindInsertionPoint(ImmutableArray<Endpoint> ring, Endpoint node, int ringIndex)
+    private static int FindInsertionPoint(ImmutableArray<MemberInfo> ring, Endpoint node, int ringIndex)
     {
         // Compute hash for the new node
         var nodeHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, node);
@@ -329,7 +370,7 @@ public sealed class MembershipView
         while (left < right)
         {
             var mid = (left + right) / 2;
-            var midHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, ring[mid]);
+            var midHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, ring[mid].Endpoint);
             if (midHash < nodeHash)
             {
                 left = mid + 1;
@@ -351,14 +392,22 @@ public sealed class MembershipView
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed class MembershipViewConfiguration
 {
-    public MembershipViewConfiguration(IEnumerable<Endpoint> endpoints, long maxNodeId)
+    public MembershipViewConfiguration(IEnumerable<MemberInfo> members, long maxNodeId)
     {
-        ArgumentNullException.ThrowIfNull(endpoints);
-        Endpoints = [.. endpoints];
+        ArgumentNullException.ThrowIfNull(members);
+        Members = [.. members];
         MaxNodeId = maxNodeId;
     }
 
-    public ImmutableArray<Endpoint> Endpoints { get; }
+    /// <summary>
+    /// Gets the members (with metadata) in this configuration.
+    /// </summary>
+    public ImmutableArray<MemberInfo> Members { get; }
+
+    /// <summary>
+    /// Gets the endpoints in this configuration.
+    /// </summary>
+    public ImmutableArray<Endpoint> Endpoints => [.. Members.Select(m => m.Endpoint)];
 
     /// <summary>
     /// Gets the highest node ID ever assigned.
@@ -370,7 +419,7 @@ public sealed class MembershipViewConfiguration
     /// </summary>
     public ConfigurationId ConfigurationId => new(0);
 
-    private string DebuggerDisplay => $"MembershipViewConfiguration(Endpoints={Endpoints.Length}, MaxNodeId={MaxNodeId})";
+    private string DebuggerDisplay => $"MembershipViewConfiguration(Members={Members.Length}, MaxNodeId={MaxNodeId})";
 }
 
 internal sealed class MembershipViewDebugView(MembershipView view)
@@ -380,5 +429,5 @@ internal sealed class MembershipViewDebugView(MembershipView view)
     public int RingCount => view.RingCount;
 
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-    public Endpoint[] Members => [.. view.Members];
+    public MemberInfo[] Members => [.. view.MemberInfos];
 }

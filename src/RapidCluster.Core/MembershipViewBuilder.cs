@@ -15,9 +15,9 @@ namespace RapidCluster;
 internal sealed class MembershipViewBuilder
 {
     private readonly int _maxRingCount;
-    private readonly List<AddressComparator> _addressComparators;
-    private readonly List<SortedSet<Endpoint>> _rings;
-    private readonly HashSet<Endpoint> _allNodes = new(EndpointAddressComparer.Instance);
+    private readonly List<MemberInfoComparator> _memberComparators;
+    private readonly List<SortedSet<MemberInfo>> _rings;
+    private readonly Dictionary<Endpoint, MemberInfo> _memberByEndpoint = new(EndpointAddressComparer.Instance);
     private long _maxNodeId;
     private bool _isSealed;
 
@@ -33,15 +33,15 @@ internal sealed class MembershipViewBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
-        _rings = new List<SortedSet<Endpoint>>(maxRingCount);
-        _addressComparators = new List<AddressComparator>(maxRingCount);
+        _rings = new List<SortedSet<MemberInfo>>(maxRingCount);
+        _memberComparators = new List<MemberInfoComparator>(maxRingCount);
         _maxNodeId = 0;
 
         for (var i = 0; i < maxRingCount; i++)
         {
-            var comparator = new AddressComparator(i);
-            _addressComparators.Add(comparator);
-            _rings.Add(new SortedSet<Endpoint>(comparator));
+            var comparator = new MemberInfoComparator(i);
+            _memberComparators.Add(comparator);
+            _rings.Add(new SortedSet<MemberInfo>(comparator));
         }
     }
 
@@ -68,19 +68,19 @@ internal sealed class MembershipViewBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
-        _rings = new List<SortedSet<Endpoint>>(_maxRingCount);
-        _addressComparators = new List<AddressComparator>(_maxRingCount);
+        _rings = new List<SortedSet<MemberInfo>>(_maxRingCount);
+        _memberComparators = new List<MemberInfoComparator>(_maxRingCount);
         _maxNodeId = view.MaxNodeId;
 
         for (var i = 0; i < _maxRingCount; i++)
         {
-            var comparator = new AddressComparator(i);
-            _addressComparators.Add(comparator);
-            var set = new SortedSet<Endpoint>(comparator);
-            foreach (var endpoint in view.Members)
+            var comparator = new MemberInfoComparator(i);
+            _memberComparators.Add(comparator);
+            var set = new SortedSet<MemberInfo>(comparator);
+            foreach (var member in view.MemberInfos)
             {
-                set.Add(endpoint);
-                _allNodes.Add(endpoint);
+                set.Add(member);
+                _memberByEndpoint[member.Endpoint] = member;
             }
             _rings.Add(set);
         }
@@ -92,31 +92,44 @@ internal sealed class MembershipViewBuilder
     /// <param name="maxRingCount">Maximum number of monitoring rings to maintain. Must be positive.
     /// The actual ring count in the built view may be less if there are insufficient nodes
     /// (at most nodes-1 rings, minimum 1).</param>
-    /// <param name="endpoints">Collection of endpoints to add.</param>
-    /// <param name="maxNodeId">The highest node ID ever assigned. If not provided, computed from endpoints.</param>
-    public MembershipViewBuilder(int maxRingCount, ICollection<Endpoint> endpoints, long? maxNodeId = null)
+    /// <param name="members">Collection of members to add.</param>
+    /// <param name="maxNodeId">The highest node ID ever assigned. If not provided, computed from members.</param>
+    public MembershipViewBuilder(int maxRingCount, ICollection<MemberInfo> members, long? maxNodeId = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
-        _rings = new List<SortedSet<Endpoint>>(maxRingCount);
-        _addressComparators = new List<AddressComparator>(maxRingCount);
+        _rings = new List<SortedSet<MemberInfo>>(maxRingCount);
+        _memberComparators = new List<MemberInfoComparator>(maxRingCount);
 
-        // Compute maxNodeId from endpoints if not provided
-        _maxNodeId = maxNodeId ?? endpoints.Select(e => e.NodeId).DefaultIfEmpty(0).Max();
+        // Compute maxNodeId from members if not provided
+        _maxNodeId = maxNodeId ?? members.Select(m => m.NodeId).DefaultIfEmpty(0).Max();
 
         for (var i = 0; i < maxRingCount; i++)
         {
-            var comparator = new AddressComparator(i);
-            _addressComparators.Add(comparator);
-            var set = new SortedSet<Endpoint>(comparator);
-            foreach (var endpoint in endpoints)
+            var comparator = new MemberInfoComparator(i);
+            _memberComparators.Add(comparator);
+            var set = new SortedSet<MemberInfo>(comparator);
+            foreach (var member in members)
             {
-                set.Add(endpoint);
-                _allNodes.Add(endpoint);
+                set.Add(member);
+                _memberByEndpoint[member.Endpoint] = member;
             }
             _rings.Add(set);
         }
+    }
+
+    /// <summary>
+    /// Used to bootstrap a membership view from endpoints (with empty metadata).
+    /// </summary>
+    /// <param name="maxRingCount">Maximum number of monitoring rings to maintain. Must be positive.
+    /// The actual ring count in the built view may be less if there are insufficient nodes
+    /// (at most nodes-1 rings, minimum 1).</param>
+    /// <param name="endpoints">Collection of endpoints to add.</param>
+    /// <param name="maxNodeId">The highest node ID ever assigned. If not provided, computed from endpoints.</param>
+    public MembershipViewBuilder(int maxRingCount, ICollection<Endpoint> endpoints, long? maxNodeId = null)
+        : this(maxRingCount, endpoints.Select(e => new MemberInfo(e)).ToList(), maxNodeId ?? endpoints.Select(e => e.NodeId).DefaultIfEmpty(0).Max())
+    {
     }
 
     private static int ComputeRingCount(int ringCount, int nodeCount)
@@ -190,7 +203,7 @@ internal sealed class MembershipViewBuilder
     {
         ThrowIfSealed();
 
-        if (_allNodes.Contains(node))
+        if (_memberByEndpoint.ContainsKey(node))
         {
             return JoinStatusCode.HostnameAlreadyInRing;
         }
@@ -199,7 +212,51 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
-    /// Add a node to all K rings.
+    /// Add a member to all K rings.
+    /// </summary>
+    /// <param name="member">The member to be added.</param>
+    /// <exception cref="NodeAlreadyInRingException">Thrown if the member is already in the ring.</exception>
+    /// <returns>This builder for method chaining.</returns>
+    public MembershipViewBuilder RingAdd(MemberInfo member)
+    {
+        ThrowIfSealed();
+        ArgumentNullException.ThrowIfNull(member);
+
+        if (_memberByEndpoint.ContainsKey(member.Endpoint))
+        {
+            throw new NodeAlreadyInRingException(member.Endpoint);
+        }
+
+        for (var k = 0; k < _maxRingCount; k++)
+        {
+            _rings[k].Add(member);
+        }
+        _memberByEndpoint[member.Endpoint] = member;
+
+        // Update max node ID if this node's ID is higher
+        if (member.NodeId > _maxNodeId)
+        {
+            _maxNodeId = member.NodeId;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Add a node to all K rings with the specified metadata.
+    /// The endpoint must have its NodeId already set.
+    /// </summary>
+    /// <param name="node">The node to be added (must have NodeId set).</param>
+    /// <param name="metadata">The metadata for the node.</param>
+    /// <exception cref="NodeAlreadyInRingException">Thrown if the node is already in the ring.</exception>
+    /// <returns>This builder for method chaining.</returns>
+    public MembershipViewBuilder RingAdd(Endpoint node, Metadata metadata)
+    {
+        return RingAdd(new MemberInfo(node, metadata));
+    }
+
+    /// <summary>
+    /// Add a node to all K rings with empty metadata.
     /// The endpoint must have its NodeId already set.
     /// </summary>
     /// <param name="node">The node to be added (must have NodeId set).</param>
@@ -207,27 +264,7 @@ internal sealed class MembershipViewBuilder
     /// <returns>This builder for method chaining.</returns>
     public MembershipViewBuilder RingAdd(Endpoint node)
     {
-        ThrowIfSealed();
-        ArgumentNullException.ThrowIfNull(node);
-
-        if (_rings[0].Contains(node))
-        {
-            throw new NodeAlreadyInRingException(node);
-        }
-
-        for (var k = 0; k < _maxRingCount; k++)
-        {
-            _rings[k].Add(node);
-        }
-        _allNodes.Add(node);
-
-        // Update max node ID if this node's ID is higher
-        if (node.NodeId > _maxNodeId)
-        {
-            _maxNodeId = node.NodeId;
-        }
-
-        return this;
+        return RingAdd(new MemberInfo(node));
     }
 
     /// <summary>
@@ -241,17 +278,17 @@ internal sealed class MembershipViewBuilder
         ThrowIfSealed();
         ArgumentNullException.ThrowIfNull(node);
 
-        if (!_rings[0].Contains(node))
+        if (!_memberByEndpoint.TryGetValue(node, out var member))
         {
             throw new NodeNotInRingException(node);
         }
 
         for (var k = 0; k < _maxRingCount; k++)
         {
-            _rings[k].Remove(node);
-            _addressComparators[k].RemoveEndpoint(node);
+            _rings[k].Remove(member);
+            _memberComparators[k].RemoveMember(member);
         }
-        _allNodes.Remove(node);
+        _memberByEndpoint.Remove(node);
 
         return this;
     }
@@ -264,7 +301,18 @@ internal sealed class MembershipViewBuilder
     public bool IsHostPresent(Endpoint address)
     {
         ThrowIfSealed();
-        return _allNodes.Contains(address);
+        return _memberByEndpoint.ContainsKey(address);
+    }
+
+    /// <summary>
+    /// Get the MemberInfo for a specific endpoint.
+    /// </summary>
+    /// <param name="endpoint">The endpoint to look up.</param>
+    /// <returns>The MemberInfo, or null if not found.</returns>
+    public MemberInfo? GetMember(Endpoint endpoint)
+    {
+        ThrowIfSealed();
+        return _memberByEndpoint.GetValueOrDefault(endpoint);
     }
 
     /// <summary>
@@ -274,6 +322,19 @@ internal sealed class MembershipViewBuilder
     /// <returns>The list of endpoints in the k'th ring.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if k is out of range.</exception>
     public List<Endpoint> GetRing(int k)
+    {
+        ThrowIfSealed();
+        if (k < 0 || k >= _maxRingCount) throw new ArgumentOutOfRangeException(nameof(k));
+        return [.. _rings[k].Select(m => m.Endpoint)];
+    }
+
+    /// <summary>
+    /// Get the list of members in the k'th ring.
+    /// </summary>
+    /// <param name="k">The index of the ring to query.</param>
+    /// <returns>The list of members in the k'th ring.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if k is out of range.</exception>
+    public List<MemberInfo> GetRingMembers(int k)
     {
         ThrowIfSealed();
         if (k < 0 || k >= _maxRingCount) throw new ArgumentOutOfRangeException(nameof(k));
@@ -317,8 +378,8 @@ internal sealed class MembershipViewBuilder
         _isSealed = true;
 
         // Create immutable ring copies
-        var ringCount = ComputeRingCount(_maxRingCount, _allNodes.Count);
-        var ringsBuilder = ImmutableArray.CreateBuilder<ImmutableArray<Endpoint>>(ringCount);
+        var ringCount = ComputeRingCount(_maxRingCount, _memberByEndpoint.Count);
+        var ringsBuilder = ImmutableArray.CreateBuilder<ImmutableArray<MemberInfo>>(ringCount);
         for (var i = 0; i < ringCount; i++)
         {
             ringsBuilder.Add([.. _rings[i]]);
@@ -359,25 +420,25 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
-    /// Used to order endpoints in the different rings.
+    /// Used to order members in the different rings based on their endpoint hash.
     /// </summary>
-    private sealed class AddressComparator(int seed) : IComparer<Endpoint>
+    private sealed class MemberInfoComparator(int seed) : IComparer<MemberInfo>
     {
         private readonly int _seed = seed;
         private readonly Dictionary<Endpoint, long> _hashCache = new(EndpointAddressComparer.Instance);
 
-        public int Compare(Endpoint? x, Endpoint? y)
+        public int Compare(MemberInfo? x, MemberInfo? y)
         {
             if (x == null && y == null) return 0;
             if (x == null) return -1;
             if (y == null) return 1;
 
-            var hash1 = GetCachedHash(x);
-            var hash2 = GetCachedHash(y);
+            var hash1 = GetCachedHash(x.Endpoint);
+            var hash2 = GetCachedHash(y.Endpoint);
             return hash1.CompareTo(hash2);
         }
 
-        public void RemoveEndpoint(Endpoint endpoint) => _hashCache.Remove(endpoint, out _);
+        public void RemoveMember(MemberInfo member) => _hashCache.Remove(member.Endpoint, out _);
 
         private long GetCachedHash(Endpoint endpoint)
         {
@@ -389,5 +450,4 @@ internal sealed class MembershipViewBuilder
             return hash;
         }
     }
-
 }

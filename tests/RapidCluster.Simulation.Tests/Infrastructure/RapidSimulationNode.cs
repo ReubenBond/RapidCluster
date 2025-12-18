@@ -212,7 +212,6 @@ internal sealed class RapidSimulationNode : SimulationNode
             IsStatic = seedsAreStatic
         };
         var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterSeedOptions>(seedOptions));
-        var metadataManager = new MetadataManager();
         var refreshCoordinatorLogger = _loggerFactory.CreateLogger<MembershipRefreshCoordinator>();
         _membershipService = new MembershipService(
             Options.Create(rapidClusterOptions),
@@ -226,7 +225,6 @@ internal sealed class RapidSimulationNode : SimulationNode
             _sharedResources,
             _metrics,
             seedProvider,
-            metadataManager,
             _membershipServiceLogger,
             refreshCoordinatorLogger);
     }

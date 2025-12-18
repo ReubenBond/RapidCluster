@@ -9,14 +9,12 @@ namespace RapidCluster;
 internal sealed class RapidClusterImpl : IRapidCluster, IDisposable
 {
     private readonly MembershipViewAccessor _viewAccessor;
-    private readonly MetadataManager _metadataManager;
     private readonly BroadcastChannel<ClusterMembershipView> _publicViewChannel = new();
     private readonly CancellationTokenSource _cts = new();
 
-    public RapidClusterImpl(MembershipViewAccessor viewAccessor, MetadataManager metadataManager)
+    public RapidClusterImpl(MembershipViewAccessor viewAccessor)
     {
         _viewAccessor = viewAccessor;
-        _metadataManager = metadataManager;
 
         // Publish initial empty view
         _publicViewChannel.Publish(ClusterMembershipView.Empty);
@@ -37,8 +35,8 @@ internal sealed class RapidClusterImpl : IRapidCluster, IDisposable
         {
             await foreach (var internalView in _viewAccessor.Updates.WithCancellation(cancellationToken))
             {
-                var metadata = _metadataManager.GetAllMetadata();
-                var publicView = internalView.ToClusterMembershipView(metadata);
+                // MembershipView now stores metadata directly in MemberInfos
+                var publicView = internalView.ToClusterMembershipView();
                 _publicViewChannel.Publish(publicView);
             }
         }

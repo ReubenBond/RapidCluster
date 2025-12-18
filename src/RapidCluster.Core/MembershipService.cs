@@ -30,7 +30,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     private readonly Dictionary<Endpoint, Metadata> _joinerMetadata = new(EndpointAddressComparer.Instance);
 
     private readonly IMessagingClient _messagingClient;
-    private readonly MetadataManager _metadataManager;
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
     private MembershipView _membershipView = null!;
 
@@ -136,7 +135,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         SharedResources sharedResources,
         RapidClusterMetrics metrics,
         ISeedProvider seedProvider,
-        MetadataManager metadataManager,
         ILogger<MembershipService> logger,
         ILogger<MembershipRefreshCoordinator> refreshCoordinatorLogger)
     {
@@ -150,7 +148,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         _membershipView = MembershipView.Empty;
         _cutDetectorFactory = cutDetectorFactory;
         _sharedResources = sharedResources;
-        _metadataManager = metadataManager;
         _messagingClient = messagingClient;
         _broadcaster = broadcasterFactory.Create();
         _fdFactory = edgeFailureDetector;
@@ -279,10 +276,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             NodeId = 1
         };
 
-        _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [seedEndpoint], maxNodeId: 1).Build();
+        // Create MemberInfo with endpoint and metadata - stores metadata directly in the view
+        var seedMember = new MemberInfo(seedEndpoint, _nodeMetadata);
+        _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [seedMember], maxNodeId: 1).Build();
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
-
-        _metadataManager.Add(seedEndpoint, _nodeMetadata);
 
         FinalizeInitialization();
     }
@@ -388,7 +385,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             throw new JoinException(lastFailureReason ?? $"Failed to join cluster after {maxRetries + 1} attempts");
         }
 
-        // Initialize membership from response
+        // Initialize membership from response - build MemberInfo with endpoints and metadata
         var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
         for (var i = 0; i < successfulResponse.MetadataKeys.Count && i < successfulResponse.MetadataValues.Count; i++)
         {
@@ -397,13 +394,16 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             metadataMap[endpoint] = metadata;
         }
 
+        // Create MemberInfo for each endpoint with its metadata
+        var memberInfos = successfulResponse.Endpoints.Select(e =>
+            new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata()))).ToList();
+
         // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
         _membershipView = new MembershipViewBuilder(
             _options.ObserversPerSubject,
-            [.. successfulResponse.Endpoints],
+            memberInfos,
             successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
-        _metadataManager.AddMetadata(metadataMap);
 
         FinalizeInitialization();
         _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
@@ -735,11 +735,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     {
         lock (_membershipUpdateLock)
         {
-            // Get metadata map from the manager (was populated by StartNewCluster or JoinClusterAsync)
-            var metadataMap = new Dictionary<Endpoint, Metadata>(_metadataManager.GetAllMetadata());
-
             // SetMembershipView handles all the setup including computing membership changes
-            SetMembershipView(_membershipView, metadataMap);
+            SetMembershipView(_membershipView);
         }
 
         _log.MembershipServiceInitialized(_myAddr, _membershipView);
@@ -760,11 +757,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     /// - Publishing VIEW_CHANGE event
     /// </summary>
     /// <param name="newView">The new membership view to apply.</param>
-    /// <param name="metadataMap">Metadata for nodes in the view. If null, existing metadata is preserved.</param>
     /// <returns>The previous consensus instance that should be disposed by the caller.</returns>
-    private ConsensusCoordinator? SetMembershipView(
-        MembershipView newView,
-        Dictionary<Endpoint, Metadata>? metadataMap)
+    private ConsensusCoordinator? SetMembershipView(MembershipView newView)
     {
         // Must be called under _membershipUpdateLock
         // Always capture the previous consensus instance to ensure it gets disposed.
@@ -809,13 +803,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
         // Update the view
         _membershipView = newView;
-
-        // Update metadata if provided
-        if (metadataMap != null)
-        {
-            _metadataManager.Clear();
-            _metadataManager.AddMetadata(metadataMap);
-        }
 
         // Recreate cut detector for the new cluster size
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
@@ -960,9 +947,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                     MaxNodeId = _membershipView.MaxNodeId
                 };
                 response.Endpoints.AddRange(config.Endpoints);
-                var allMetadata = _metadataManager.GetAllMetadata();
-                response.MetadataKeys.AddRange(allMetadata.Keys);
-                response.MetadataValues.AddRange(allMetadata.Values);
+                // Get metadata from the membership view's MemberInfos
+                foreach (var member in _membershipView.MemberInfos)
+                {
+                    response.MetadataKeys.Add(member.Endpoint);
+                    response.MetadataValues.Add(member.Metadata);
+                }
 
                 var RapidClusterResponse = response.ToRapidClusterResponse();
 
@@ -1176,8 +1166,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             .OrderBy(e => $"{e.Hostname.ToStringUtf8()}:{e.Port}", StringComparer.Ordinal)
             .ToList();
 
-        // Assign monotonically increasing node IDs starting from 1
-        var membersWithIds = new List<Endpoint>();
+        // Assign monotonically increasing node IDs starting from 1 and create MemberInfo with metadata
+        var memberInfos = new List<MemberInfo>();
         for (var i = 0; i < sortedNodes.Count; i++)
         {
             var node = sortedNodes[i];
@@ -1187,33 +1177,22 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 Port = node.Port,
                 NodeId = i + 1  // Node IDs start at 1
             };
-            membersWithIds.Add(endpointWithId);
+            // Use own metadata for self, empty metadata for other nodes (metadata arrives with JoinMessage)
+            var metadata = EndpointAddressComparer.Instance.Equals(node, _myAddr) ? _nodeMetadata : new Metadata();
+            memberInfos.Add(new MemberInfo(endpointWithId, metadata));
         }
 
         // Create the initial configuration ID with cluster ID computed from the seed set
-        var initialConfigId = ConfigurationId.CreateInitial(membersWithIds);
+        var initialConfigId = ConfigurationId.CreateInitial([.. memberInfos.Select(m => m.Endpoint)]);
 
-        // Create the initial membership view
+        // Create the initial membership view with MemberInfo (includes metadata)
         _membershipView = new MembershipViewBuilder(
             _options.ObserversPerSubject,
-            membersWithIds,
-            maxNodeId: membersWithIds.Count)
+            memberInfos,
+            maxNodeId: memberInfos.Count)
             .BuildWithConfigurationId(initialConfigId);
 
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
-
-        // Add metadata for all members (empty metadata for now, own metadata for self)
-        foreach (var member in _membershipView.Members)
-        {
-            if (EndpointAddressComparer.Instance.Equals(member, _myAddr))
-            {
-                _metadataManager.Add(member, _nodeMetadata);
-            }
-            else
-            {
-                _metadataManager.Add(member, new Metadata());
-            }
-        }
 
         // Exit bootstrap mode
         _isBootstrapping = false;
@@ -1312,9 +1291,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                     _log.JoinerAlreadyInRing();
                     responseBuilder.StatusCode = JoinStatusCode.SafeToJoin;
                     responseBuilder.Endpoints.AddRange(configuration.Endpoints);
-                    var allMetadata = _metadataManager.GetAllMetadata();
-                    responseBuilder.MetadataKeys.AddRange(allMetadata.Keys);
-                    responseBuilder.MetadataValues.AddRange(allMetadata.Values);
+                    // Get metadata from the membership view's MemberInfos
+                    foreach (var member in _membershipView.MemberInfos)
+                    {
+                        responseBuilder.MetadataKeys.Add(member.Endpoint);
+                        responseBuilder.MetadataValues.Add(member.Metadata);
+                    }
                 }
                 else
                 {
@@ -1391,8 +1373,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
             proposal.Members.Add(endpointWithNodeId);
 
-            // Add metadata for this member
-            var metadata = _metadataManager.Get(endpoint) ?? _joinerMetadata.GetValueOrDefault(endpoint, new Metadata());
+            // Add metadata for this member - try membership view first, then joiner metadata for nodes not yet in view
+            var metadata = _membershipView.GetMetadata(endpoint) ?? _joinerMetadata.GetValueOrDefault(endpoint, new Metadata());
             proposal.MemberMetadata.Add(metadata);
         }
 
@@ -1638,12 +1620,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         var members = _membershipView.Members;
         response.Endpoints.AddRange(members);
 
-        // Add metadata for all nodes
-        foreach (var endpoint in members)
+        // Add metadata from the membership view's MemberInfos
+        foreach (var member in _membershipView.MemberInfos)
         {
-            var metadata = _metadataManager.Get(endpoint) ?? new Metadata();
-            response.MetadataKeys.Add(endpoint);
-            response.MetadataValues.Add(metadata);
+            response.MetadataKeys.Add(member.Endpoint);
+            response.MetadataValues.Add(member.Metadata);
         }
 
         return response.ToRapidClusterResponse();
@@ -1727,8 +1708,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 var metadata = proposalMetadataLookup.GetValueOrDefault(node) ?? _joinerMetadata.GetValueOrDefault(node, new Metadata());
 
                 _log.AddingNode(endpointWithNodeId);
-                builder.RingAdd(endpointWithNodeId);
-                _metadataManager.Add(endpointWithNodeId, metadata);
+                // Create MemberInfo with endpoint and metadata - this stores metadata directly in the view
+                var memberInfo = new MemberInfo(endpointWithNodeId, metadata);
+                builder.RingAdd(memberInfo);
 
                 // Clean up joiner data (use original node key without node ID)
                 _joinerMetadata.Remove(node);
@@ -1740,7 +1722,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             _log.DecideViewChangeCleanup();
 
             // SetMembershipView handles computing membership changes, metrics, and joiner notifications
-            previousConsensusInstance = SetMembershipView(newView, metadataMap: null);
+            previousConsensusInstance = SetMembershipView(newView);
         }
 
         if (previousConsensusInstance != null)
@@ -1762,10 +1744,18 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     public int GetMembershipSize() => _membershipView.Size;
 
     /// <summary>
-    /// Gets the list of endpoints currently in the membership view.
+    /// Gets the metadata for all members in the membership view.
     /// </summary>
-    /// <returns>list of endpoints in the membership view</returns>
-    public Dictionary<Endpoint, Metadata> GetMetadata() => new(_metadataManager.GetAllMetadata(), EndpointAddressComparer.Instance);
+    /// <returns>Dictionary mapping endpoints to their metadata.</returns>
+    public Dictionary<Endpoint, Metadata> GetMetadata()
+    {
+        var result = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
+        foreach (var member in _membershipView.MemberInfos)
+        {
+            result[member.Endpoint] = member.Metadata;
+        }
+        return result;
+    }
 
     /// <summary>
     /// Queues a AlertMessage to be broadcasted after potentially being batched.
@@ -1922,7 +1912,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
         _log.RejoinWithCandidateSeeds(candidateSeeds.Count, _seedAddresses.Count);
 
-        var metadata = _metadataManager.Get(_myAddr) ?? new Metadata();
+        // Get our own metadata from the view, or use node metadata if not in view (we were kicked)
+        var metadata = _membershipView.GetMetadata(_myAddr) ?? _nodeMetadata;
 
         JoinResponse? successfulResponse = null;
 
@@ -1969,14 +1960,18 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 metadataMap[successfulResponse.MetadataKeys[i]] = successfulResponse.MetadataValues[i];
             }
 
+            // Create MemberInfo for each endpoint with its metadata
+            var memberInfos = successfulResponse.Endpoints.Select(e =>
+                new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata()))).ToList();
+
             // Build the new view - endpoints in the response already contain node_id
             var newView = new MembershipViewBuilder(
                 _options.ObserversPerSubject,
-                [.. successfulResponse.Endpoints],
+                memberInfos,
                 successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
 
             // SetMembershipView handles computing membership changes, metrics, and joiner notifications
-            oldConsensus = SetMembershipView(newView, metadataMap);
+            oldConsensus = SetMembershipView(newView);
         }
 
         // Dispose old consensus instance.
@@ -2090,10 +2085,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 metadataMap[viewResponse.MetadataKeys[i]] = viewResponse.MetadataValues[i];
             }
 
+            // Create MemberInfo for each endpoint with its metadata
+            var memberInfos = viewResponse.Endpoints.Select(e =>
+                new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata()))).ToList();
+
             // Build the new view from the response - endpoints already contain node_id
             var newView = new MembershipViewBuilder(
                 _options.ObserversPerSubject,
-                [.. viewResponse.Endpoints],
+                memberInfos,
                 viewResponse.MaxNodeId).BuildWithConfigurationId(responseConfigId);
 
             // Check if we were kicked (not in the new membership)
@@ -2128,7 +2127,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             {
                 // We're still in membership - apply the view (SetMembershipView handles diff computation,
                 // metrics, and joiner notifications)
-                oldConsensus = SetMembershipView(newView, metadataMap);
+                oldConsensus = SetMembershipView(newView);
             }
         }
 

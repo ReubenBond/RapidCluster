@@ -66,8 +66,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public void EnqueueingSafeToJoin(Endpoint sender, MembershipView view) => EnqueueingSafeToJoinCore(new(sender), new(view), new(view));
 
     [LoggerMessage(EventName = nameof(WrongConfiguration), Level = LogLevel.Information, Message = "Wrong configuration for {{sender:{Sender}, config:{Config}, myConfig:{MyConfig}, size:{Size}}}")]
-    private partial void WrongConfigurationCore(LoggableEndpoint sender, long config, LoggableConfigurationId myConfig, LoggableMembershipSize size);
-    public void WrongConfiguration(Endpoint sender, long config, MembershipView view) => WrongConfigurationCore(new(sender), config, new(view), new(view));
+    private partial void WrongConfigurationCore(LoggableEndpoint sender, LoggableConfigurationId config, LoggableConfigurationId myConfig, LoggableMembershipSize size);
+    public void WrongConfiguration(Endpoint sender, Pb.ConfigurationId config, MembershipView view) => WrongConfigurationCore(new(sender), new(config), new(view), new(view));
 
     [LoggerMessage(EventName = nameof(MembershipServiceInitialized), Level = LogLevel.Debug, Message = "MembershipService initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
     private partial void MembershipServiceInitializedCore(LoggableEndpoint myAddr, LoggableConfigurationId configId, LoggableMembershipSize membershipSize);
@@ -84,8 +84,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public void HandlePreJoinResult(Endpoint joiner, JoinStatusCode statusCode, int observersCount) => HandlePreJoinResultCore(new(joiner), statusCode, observersCount);
 
     [LoggerMessage(EventName = nameof(HandleJoinMessage), Level = LogLevel.Debug, Message = "HandleJoinMessageAsync: processing join from {Sender}, configId={ConfigId}")]
-    private partial void HandleJoinMessageCore(LoggableEndpoint sender, long configId);
-    public void HandleJoinMessage(Endpoint sender, long configId) => HandleJoinMessageCore(new(sender), configId);
+    private partial void HandleJoinMessageCore(LoggableEndpoint sender, LoggableConfigurationId configId);
+    public void HandleJoinMessage(Endpoint sender, Pb.ConfigurationId configId) => HandleJoinMessageCore(new(sender), new(configId));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandleJoinMessageAsync: joiner already in ring, responding SAFE_TO_JOIN")]
     public partial void JoinerAlreadyInRing();
@@ -115,8 +115,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public partial void HandleProbeMessage();
 
     [LoggerMessage(EventName = nameof(HandleMembershipViewRequest), Level = LogLevel.Debug, Message = "HandleMembershipViewRequest: sender={Sender} requested view (their config={TheirConfig}, our config={OurConfig})")]
-    private partial void HandleMembershipViewRequestCore(LoggableEndpoint sender, long theirConfig, LoggableConfigurationId ourConfig);
-    public void HandleMembershipViewRequest(Endpoint sender, long theirConfig, MembershipView view) => HandleMembershipViewRequestCore(new(sender), theirConfig, new(view));
+    private partial void HandleMembershipViewRequestCore(LoggableEndpoint sender, LoggableConfigurationId theirConfig, LoggableConfigurationId ourConfig);
+    public void HandleMembershipViewRequest(Endpoint sender, Pb.ConfigurationId theirConfig, MembershipView view) => HandleMembershipViewRequestCore(new(sender), new(theirConfig), new(view));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "DecideViewChange: processing {Count} nodes in proposal")]
     public partial void DecideViewChange(int count);
@@ -159,8 +159,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public partial void CreateFailureDetectors(int count);
 
     [LoggerMessage(EventName = nameof(CreateFailureDetectorsSummary), Level = LogLevel.Debug, Message = "CreateFailureDetectorsForCurrentConfiguration: monitoring subjects={Subjects}, configId={ConfigId}")]
-    private partial void CreateFailureDetectorsSummaryCore(LoggableEndpoints subjects, long configId);
-    public void CreateFailureDetectorsSummary(IEnumerable<Endpoint> subjects, long configId) => CreateFailureDetectorsSummaryCore(new(subjects), configId);
+    private partial void CreateFailureDetectorsSummaryCore(LoggableEndpoints subjects, LoggableConfigurationId configId);
+    public void CreateFailureDetectorsSummary(IEnumerable<Endpoint> subjects, ConfigurationId configId) => CreateFailureDetectorsSummaryCore(new(subjects), new(configId));
 
     [LoggerMessage(EventName = nameof(CreatedFailureDetector), Level = LogLevel.Debug, Message = "CreateFailureDetectorsForCurrentConfiguration: created detector for subject {Subject}, ringNumber={RingNumber}")]
     private partial void CreatedFailureDetectorCore(LoggableEndpoint subject, int ringNumber);
@@ -173,8 +173,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public partial void ConsensusDecidedFaulted(Exception ex);
 
     [LoggerMessage(EventName = nameof(EdgeFailureNotificationScheduled), Level = LogLevel.Debug, Message = "EdgeFailureNotification: scheduling callback for subject {Subject}, configId={ConfigId}")]
-    private partial void EdgeFailureNotificationScheduledCore(LoggableEndpoint subject, long configId);
-    public void EdgeFailureNotificationScheduled(Endpoint subject, long configId) => EdgeFailureNotificationScheduledCore(new(subject), configId);
+    private partial void EdgeFailureNotificationScheduledCore(LoggableEndpoint subject, LoggableConfigurationId configId);
+    public void EdgeFailureNotificationScheduled(Endpoint subject, ConfigurationId configId) => EdgeFailureNotificationScheduledCore(new(subject), new(configId));
 
     [LoggerMessage(EventName = nameof(EdgeFailureNotificationEnqueued), Level = LogLevel.Debug, Message = "EdgeFailureNotification: enqueueing DOWN alert for subject {Subject}, ringNumbers={RingNumbers}")]
     private partial void EdgeFailureNotificationEnqueuedCore(LoggableEndpoint subject, LoggableRingNumbers ringNumbers);
@@ -187,7 +187,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public partial void ConsensusDecidedSkippedShutdown();
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Buffering consensus message {MessageType} for future config {FutureConfigId}, current config is {CurrentConfigId}")]
-    public partial void BufferingFutureConsensusMessage(RapidClusterRequest.ContentOneofCase messageType, long futureConfigId, long currentConfigId);
+    private partial void BufferingFutureConsensusMessageCore(RapidClusterRequest.ContentOneofCase messageType, long futureConfigId, LoggableConfigurationId currentConfigId);
+    public void BufferingFutureConsensusMessage(RapidClusterRequest.ContentOneofCase messageType, long futureConfigId, ConfigurationId currentConfigId) => BufferingFutureConsensusMessageCore(messageType, futureConfigId, new(currentConfigId));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Replaying {Count} buffered consensus messages for config {ConfigId}")]
     public partial void ReplayingBufferedMessages(int count, long configId);
@@ -209,8 +210,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public void RejoinPreJoinResponse(Endpoint myAddr, JoinStatusCode statusCode, int observerCount) => RejoinPreJoinResponseCore(new(myAddr), statusCode, observerCount);
 
     [LoggerMessage(EventName = nameof(RejoinSuccessful), Level = LogLevel.Information, Message = "Node {MyAddr} successfully rejoined cluster with {MemberCount} members, configId={ConfigId}")]
-    private partial void RejoinSuccessfulCore(LoggableEndpoint myAddr, int memberCount, long configId);
-    public void RejoinSuccessful(Endpoint myAddr, int memberCount, long configId) => RejoinSuccessfulCore(new(myAddr), memberCount, configId);
+    private partial void RejoinSuccessfulCore(LoggableEndpoint myAddr, int memberCount, LoggableConfigurationId configId);
+    public void RejoinSuccessful(Endpoint myAddr, int memberCount, Pb.ConfigurationId configId) => RejoinSuccessfulCore(new(myAddr), memberCount, new(configId));
 
     [LoggerMessage(EventName = nameof(RejoinFailedThroughSeed), Level = LogLevel.Warning, Message = "Node {MyAddr} failed to rejoin through seed {Seed}: {Message}")]
     private partial void RejoinFailedThroughSeedCore(LoggableEndpoint myAddr, LoggableEndpoint seed, string message);
@@ -262,16 +263,17 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     public partial void RejoinWithCandidateSeeds(int totalCandidates, int configuredCount);
 
     [LoggerMessage(EventName = nameof(StaleViewDetected), Level = LogLevel.Information, Message = "Stale view detected from {RemoteEndpoint}: remote config {RemoteConfigId} > local config {LocalConfigId}. Requesting updated view.")]
-    private partial void StaleViewDetectedCore(LoggableEndpoint remoteEndpoint, long remoteConfigId, long localConfigId);
-    public void StaleViewDetected(Endpoint remoteEndpoint, long remoteConfigId, long localConfigId) => StaleViewDetectedCore(new(remoteEndpoint), remoteConfigId, localConfigId);
+    private partial void StaleViewDetectedCore(LoggableEndpoint remoteEndpoint, LoggableConfigurationId remoteConfigId, LoggableConfigurationId localConfigId);
+    public void StaleViewDetected(Endpoint remoteEndpoint, Pb.ConfigurationId remoteConfigId, ConfigurationId localConfigId) => StaleViewDetectedCore(new(remoteEndpoint), new(remoteConfigId), new(localConfigId));
+    public void StaleViewDetected(Endpoint remoteEndpoint, long remoteConfigVersion, long localConfigVersion) => StaleViewDetectedCore(new(remoteEndpoint), new(remoteConfigVersion), new(localConfigVersion));
 
     [LoggerMessage(EventName = nameof(RequestingMembershipView), Level = LogLevel.Debug, Message = "Requesting membership view from {RemoteEndpoint}")]
     private partial void RequestingMembershipViewCore(LoggableEndpoint remoteEndpoint);
     public void RequestingMembershipView(Endpoint remoteEndpoint) => RequestingMembershipViewCore(new(remoteEndpoint));
 
     [LoggerMessage(EventName = nameof(MembershipViewRefreshed), Level = LogLevel.Information, Message = "Successfully refreshed membership view from {RemoteEndpoint}: new config {NewConfigId}, {MemberCount} members")]
-    private partial void MembershipViewRefreshedCore(LoggableEndpoint remoteEndpoint, long newConfigId, int memberCount);
-    public void MembershipViewRefreshed(Endpoint remoteEndpoint, long newConfigId, int memberCount) => MembershipViewRefreshedCore(new(remoteEndpoint), newConfigId, memberCount);
+    private partial void MembershipViewRefreshedCore(LoggableEndpoint remoteEndpoint, LoggableConfigurationId newConfigId, int memberCount);
+    public void MembershipViewRefreshed(Endpoint remoteEndpoint, Pb.ConfigurationId newConfigId, int memberCount) => MembershipViewRefreshedCore(new(remoteEndpoint), new(newConfigId), memberCount);
 
     [LoggerMessage(EventName = nameof(MembershipViewRefreshFailed), Level = LogLevel.Warning, Message = "Failed to refresh membership view from {RemoteEndpoint}: {Message}")]
     private partial void MembershipViewRefreshFailedCore(LoggableEndpoint remoteEndpoint, string message);
@@ -293,4 +295,28 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(EventName = nameof(BootstrapCoordinatorCheck), Level = LogLevel.Information, Message = "Bootstrap coordinator check: myAddr={MyAddr}, firstSeed={FirstSeed}, wasFirstSeed={WasFirstSeed}, bootstrapExpect={BootstrapExpect}")]
     private partial void BootstrapCoordinatorCheckCore(LoggableEndpoint myAddr, LoggableEndpoint firstSeed, bool wasFirstSeed, int bootstrapExpect);
     public void BootstrapCoordinatorCheck(Endpoint myAddr, Endpoint? firstSeed, bool wasFirstSeed, int bootstrapExpect) => BootstrapCoordinatorCheckCore(new(myAddr), firstSeed != null ? new(firstSeed) : new(new Endpoint()), wasFirstSeed, bootstrapExpect);
+
+    [LoggerMessage(EventName = nameof(StartingBootstrapConsensus), Level = LogLevel.Information, Message = "Starting bootstrap consensus at {MyAddr} (BootstrapExpect={BootstrapExpect}, seeds={SeedCount})")]
+    private partial void StartingBootstrapConsensusCore(LoggableEndpoint myAddr, int bootstrapExpect, int seedCount);
+    public void StartingBootstrapConsensus(Endpoint myAddr, int bootstrapExpect, int seedCount) => StartingBootstrapConsensusCore(new(myAddr), bootstrapExpect, seedCount);
+
+    [LoggerMessage(EventName = nameof(BootstrapProbeResult), Level = LogLevel.Debug, Message = "Bootstrap probe at {MyAddr}: {ReachableCount}/{ExpectedCount} seeds reachable")]
+    private partial void BootstrapProbeResultCore(LoggableEndpoint myAddr, int reachableCount, int expectedCount);
+    public void BootstrapProbeResult(Endpoint myAddr, int reachableCount, int expectedCount) => BootstrapProbeResultCore(new(myAddr), reachableCount, expectedCount);
+
+    [LoggerMessage(EventName = nameof(BootstrapSeedsReady), Level = LogLevel.Information, Message = "Bootstrap seeds ready at {MyAddr}: {ReachableCount} seeds reachable")]
+    private partial void BootstrapSeedsReadyCore(LoggableEndpoint myAddr, int reachableCount);
+    public void BootstrapSeedsReady(Endpoint myAddr, int reachableCount) => BootstrapSeedsReadyCore(new(myAddr), reachableCount);
+
+    [LoggerMessage(EventName = nameof(CreatedBootstrapProposal), Level = LogLevel.Debug, Message = "Created bootstrap proposal at {MyAddr}: {MemberCount} members, maxNodeId={MaxNodeId}")]
+    private partial void CreatedBootstrapProposalCore(LoggableEndpoint myAddr, int memberCount, long maxNodeId);
+    public void CreatedBootstrapProposal(Endpoint myAddr, int memberCount, long maxNodeId) => CreatedBootstrapProposalCore(new(myAddr), memberCount, maxNodeId);
+
+    [LoggerMessage(EventName = nameof(BootstrapConsensusDecided), Level = LogLevel.Information, Message = "Bootstrap consensus decided at {MyAddr}: {MemberCount} members, configId={ConfigId}")]
+    private partial void BootstrapConsensusDecidedCore(LoggableEndpoint myAddr, int memberCount, long configId);
+    public void BootstrapConsensusDecided(Endpoint myAddr, int memberCount, long configId) => BootstrapConsensusDecidedCore(new(myAddr), memberCount, configId);
+
+    [LoggerMessage(EventName = nameof(BootstrapComplete), Level = LogLevel.Information, Message = "Bootstrap complete at {MyAddr}: membership size={MembershipSize}, configId={ConfigId}")]
+    private partial void BootstrapCompleteCore(LoggableEndpoint myAddr, int membershipSize, LoggableConfigurationId configId);
+    public void BootstrapComplete(Endpoint myAddr, int membershipSize, ConfigurationId configId) => BootstrapCompleteCore(new(myAddr), membershipSize, new(configId));
 }

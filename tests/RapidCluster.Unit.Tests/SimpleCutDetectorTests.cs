@@ -19,7 +19,7 @@ public class SimpleCutDetectorTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = status,
-            ConfigurationId = configurationId
+            ConfigurationId = new ConfigurationId(configurationId).ToProtobuf()
         };
         msg.RingNumber.Add(ringNumber);
         return msg;
@@ -268,7 +268,7 @@ public class SimpleCutDetectorTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
         };
         // For K=1, only ring 0 is valid, but the message might contain it
         msg.RingNumber.Add(0);

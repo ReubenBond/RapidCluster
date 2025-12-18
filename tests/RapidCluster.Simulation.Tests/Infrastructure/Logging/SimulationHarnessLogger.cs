@@ -91,4 +91,10 @@ internal sealed partial class SimulationHarnessLogger(ILogger<RapidSimulationClu
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Advancing time by {Delta}")]
     public partial void TimeAdvancing(string delta);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Creating bootstrap cluster with {Size} nodes")]
+    public partial void BootstrapClusterCreating(int size);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Bootstrap cluster created with {Size} nodes")]
+    public partial void BootstrapClusterCreated(int size);
 }

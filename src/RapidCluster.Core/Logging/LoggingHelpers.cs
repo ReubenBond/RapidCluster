@@ -53,10 +53,35 @@ internal readonly struct LoggableMembershipProposal(MembershipProposal? proposal
 /// <summary>
 /// Wrapper for logging a MembershipView's configuration ID.
 /// </summary>
-internal readonly struct LoggableConfigurationId(MembershipView view)
+internal readonly struct LoggableConfigurationId
 {
-    private readonly MembershipView _view = view;
-    public override readonly string ToString() => _view.ConfigurationId.ToString();
+    private readonly ConfigurationId _configId;
+
+    public LoggableConfigurationId(MembershipView view)
+    {
+        _configId = view.ConfigurationId;
+    }
+
+    public LoggableConfigurationId(ConfigurationId configId)
+    {
+        _configId = configId;
+    }
+
+    public LoggableConfigurationId(Pb.ConfigurationId? pbConfigId)
+    {
+        _configId = ConfigurationId.FromProtobuf(pbConfigId);
+    }
+
+    /// <summary>
+    /// Creates a loggable configuration ID from just a version number.
+    /// Used when only the version is available (e.g., from failure detector callbacks).
+    /// </summary>
+    public LoggableConfigurationId(long version)
+    {
+        _configId = new ConfigurationId(version, 0);
+    }
+
+    public override readonly string ToString() => _configId.ToString();
 }
 
 /// <summary>

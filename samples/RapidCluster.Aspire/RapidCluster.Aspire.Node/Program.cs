@@ -21,16 +21,15 @@ builder.AddServiceDefaults();
 
 // Read cluster configuration from environment variables set by AppHost
 var clusterSize = builder.Configuration.GetValue<int>("CLUSTER_SIZE", 1);
-var nodeIndex = builder.Configuration.GetValue<int>("CLUSTER_NODE_INDEX", 0);
 var bootstrapFilePath = builder.Configuration["CLUSTER_BOOTSTRAP_FILE"]
     ?? Path.Combine(Path.GetTempPath(), "rapidcluster-aspire-bootstrap.json");
 
 // Register the file-based bootstrap provider for coordinated startup
-// Node 0 will start a new cluster, others will wait for node 0 and join it
+// All nodes register their addresses and wait for all expected nodes to appear,
+// then use consensus to agree on the initial cluster membership
 builder.Services.AddSingleton<FileBasedBootstrapProvider>(sp =>
     new FileBasedBootstrapProvider(
         bootstrapFilePath,
-        nodeIndex,
         clusterSize,
         sp.GetRequiredService<ILogger<FileBasedBootstrapProvider>>()));
 builder.Services.AddSingleton<ISeedProvider>(sp => sp.GetRequiredService<FileBasedBootstrapProvider>());
@@ -42,11 +41,9 @@ builder.Services.AddSingleton<IConfigureOptions<RapidClusterOptions>>(sp =>
 
 // Add RapidCluster services with manual lifecycle management
 // We use AddRapidClusterManual because the listen address is only known after the server starts
-builder.Services.AddRapidClusterManual(options =>
+builder.Services.AddRapidClusterServices(options =>
 {
-    // ListenAddress will be set by DeferredRapidClusterOptionsConfigurator after server starts
-    // Disable BootstrapExpect since we're using file-based coordination instead
-    options.BootstrapExpect = 0;
+    options.BootstrapExpect = clusterSize;
 });
 
 // Add gRPC transport with HTTPS enabled (required for Http1AndHttp2 with TLS)
@@ -229,7 +226,7 @@ internal sealed partial class ClusterStatusLogger : BackgroundService
             var cluster = _serviceProvider.GetRequiredService<IRapidCluster>();
             await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
             {
-                LogViewChange(_logger, view.ConfigurationId, view.Members.Length);
+                LogViewChange(_logger, view.ConfigurationId.Version, view.Members.Length);
             }
         }
         catch (OperationCanceledException)

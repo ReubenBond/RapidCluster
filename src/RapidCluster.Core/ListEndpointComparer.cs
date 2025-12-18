@@ -85,7 +85,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         if (x is null || y is null) return false;
 
         // Compare by configurationId and member endpoints
-        if (x.ConfigurationId != y.ConfigurationId) return false;
+        if (ConfigurationId.FromProtobuf(x.ConfigurationId) != ConfigurationId.FromProtobuf(y.ConfigurationId)) return false;
         if (x.Members.Count != y.Members.Count) return false;
 
         for (var i = 0; i < x.Members.Count; i++)
@@ -119,8 +119,8 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         if (x is null) return -1;
         if (y is null) return 1;
 
-        // First compare by configurationId
-        var configCompare = x.ConfigurationId.CompareTo(y.ConfigurationId);
+        // First compare by configurationId (version only - cluster ID should match for proposals being compared)
+        var configCompare = ConfigurationId.FromProtobuf(x.ConfigurationId).CompareTo(ConfigurationId.FromProtobuf(y.ConfigurationId));
         if (configCompare != 0) return configCompare;
 
         // Then by member count

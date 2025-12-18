@@ -178,7 +178,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         if (edgeFailureDetector is PingPongFailureDetectorFactory pingPongFactory)
         {
             pingPongFactory.OnStaleViewDetected = OnStaleViewDetected;
-            pingPongFactory.GetLocalConfigurationId = () => _membershipView.ConfigurationId;
+            pingPongFactory.GetLocalConfigurationId = () => _membershipView.ConfigurationId.Version;
         }
     }
 
@@ -201,13 +201,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // No valid seed addresses (empty list or all were self) - start a new cluster
             StartNewCluster();
         }
-        else if (ShouldBeBootstrapCoordinator())
+        else if (_bootstrapExpect > 0)
         {
-            // This node has the lowest address among all seeds (including self)
-            // and BootstrapExpect is set, so this node becomes the bootstrap coordinator.
-            // It starts as a single-node cluster and other nodes will join it.
-            _log.StartingAsBootstrapCoordinator(_myAddr, _bootstrapExpect);
-            StartNewCluster();
+            // Bootstrap mode: all nodes collaborate to form the initial cluster via consensus.
+            // This avoids the race condition where joiners contact the coordinator before it's ready.
+            await BootstrapClusterAsync(cancellationToken).ConfigureAwait(true);
         }
         else
         {
@@ -254,9 +252,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var isFirstSeed = true;
         Endpoint? firstSeed = null;
 
+        // Get the string representation of our address for comparison
+        // This ensures consistent comparison when the seed list is sorted by string
+        var myAddrString = $"{_myAddr.Hostname.ToStringUtf8()}:{_myAddr.Port}";
+
         foreach (var seed in seeds)
         {
             var pbSeed = seed.ToProtobuf();
+            var seedString = $"{pbSeed.Hostname.ToStringUtf8()}:{pbSeed.Port}";
 
             // Check if this is the first seed and if it matches self
             if (isFirstSeed)
@@ -264,14 +267,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 isFirstSeed = false;
                 firstSeed = pbSeed;
 
-                // Compare by port only when bootstrapExpect > 0 and ports match
-                // This handles dynamic environments (like Aspire) where the hostname
-                // might differ between discovery (container IP) and local address (hostname)
-                if (_bootstrapExpect > 0 && pbSeed.Port == _myAddr.Port)
-                {
-                    _wasFirstSeed = true;
-                }
-                else if (EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr))
+                // Compare addresses as strings (same format used by FileBasedBootstrapProvider)
+                // This ensures consistency when bootstrap coordinator is determined by sorted order
+                if (string.Equals(seedString, myAddrString, StringComparison.Ordinal))
                 {
                     _wasFirstSeed = true;
                 }
@@ -308,6 +306,181 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _metadataManager.Add(seedEndpoint, _nodeMetadata);
 
         FinalizeInitialization();
+    }
+
+    /// <summary>
+    /// Bootstraps a new cluster when BootstrapExpect is configured.
+    /// All nodes create the same deterministic initial membership from the seed list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The bootstrap process works as follows:
+    /// 1. Wait until BootstrapExpect seeds are reachable (including self)
+    /// 2. All nodes create the same deterministic MembershipView from the sorted seed list
+    /// 3. Each node applies this view directly - no consensus needed since the view is predetermined
+    /// 4. The cluster is now formed with ConfigurationId 1 containing all seeds
+    /// </para>
+    /// <para>
+    /// This approach ensures:
+    /// - No race condition: all nodes wait for the same condition before proceeding
+    /// - Simple: no consensus protocol for initial formation
+    /// - Deterministic: same seeds produce identical membership across all nodes
+    /// </para>
+    /// </remarks>
+    private async Task BootstrapClusterAsync(CancellationToken cancellationToken)
+    {
+        _log.StartingBootstrapConsensus(_myAddr, _bootstrapExpect, _seedAddresses.Count);
+
+        // Wait until enough seeds are reachable
+        await WaitForBootstrapSeedsAsync(cancellationToken).ConfigureAwait(true);
+
+        // Create deterministic membership view from sorted seed list
+        var bootstrapView = CreateBootstrapMembershipView();
+
+        // Apply the bootstrap membership directly
+        ApplyBootstrapView(bootstrapView);
+    }
+
+    /// <summary>
+    /// Waits until BootstrapExpect seeds are reachable.
+    /// Probes seeds periodically until enough respond.
+    /// </summary>
+    private async Task WaitForBootstrapSeedsAsync(CancellationToken cancellationToken)
+    {
+        var bootstrapTimeout = _options.BootstrapConsensusTimeout;
+        var probeInterval = TimeSpan.FromSeconds(1);
+        var stopwatch = Stopwatch.StartNew();
+
+        // Total expected count includes self
+        var expectedCount = _bootstrapExpect;
+        var allSeeds = new List<Endpoint>(_seedAddresses) { _myAddr };
+
+        while (stopwatch.Elapsed < bootstrapTimeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Count reachable seeds (self is always reachable)
+            var reachableCount = 1; // self
+
+            // Probe other seeds in parallel
+            var probeTasks = _seedAddresses.Select(seed => ProbeSeedAsync(seed, cancellationToken)).ToList();
+            var results = await Task.WhenAll(probeTasks).ConfigureAwait(true);
+            reachableCount += results.Count(r => r);
+
+            _log.BootstrapProbeResult(_myAddr, reachableCount, expectedCount);
+
+            if (reachableCount >= expectedCount)
+            {
+                _log.BootstrapSeedsReady(_myAddr, reachableCount);
+                return;
+            }
+
+            // Wait before next probe round
+            await Task.Delay(probeInterval, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
+        }
+
+        throw new TimeoutException($"Bootstrap timed out waiting for {expectedCount} seeds. Only {_seedAddresses.Count + 1} seeds configured (including self).");
+    }
+
+    /// <summary>
+    /// Probes a seed to check if it's reachable.
+    /// </summary>
+    private async Task<bool> ProbeSeedAsync(Endpoint seed, CancellationToken cancellationToken)
+    {
+#pragma warning disable CA1031 // Do not catch general exception types
+        try
+        {
+            // Use a simple probe request - we're just checking connectivity
+            var probeRequest = new RapidClusterRequest
+            {
+                ProbeMessage = new ProbeMessage { Sender = _myAddr }
+            };
+
+            var probeTimeout = TimeSpan.FromSeconds(2);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(probeTimeout);
+
+            await _messagingClient.SendMessageAsync(seed, probeRequest, cts.Token).ConfigureAwait(true);
+            return true;
+        }
+        catch
+        {
+            // Seed not reachable
+            return false;
+        }
+#pragma warning restore CA1031 // Do not catch general exception types
+    }
+
+    /// <summary>
+    /// Creates a deterministic membership view from the seed list.
+    /// All nodes will create the same view since the seed list is sorted identically.
+    /// </summary>
+    private (MembershipView View, long MaxNodeId) CreateBootstrapMembershipView()
+    {
+        // Build the member list: self + all seeds (seeds already excludes self)
+        var allMembers = new List<Endpoint>(_seedAddresses) { _myAddr };
+
+        // Sort deterministically by address string to ensure all nodes create identical views
+        allMembers.Sort((a, b) =>
+        {
+            var aStr = $"{a.Hostname.ToStringUtf8()}:{a.Port}";
+            var bStr = $"{b.Hostname.ToStringUtf8()}:{b.Port}";
+            return string.Compare(aStr, bStr, StringComparison.Ordinal);
+        });
+
+        // Assign NodeIds deterministically: 1, 2, 3, ... based on sorted order
+        long nodeId = 0;
+        var membersWithNodeIds = new List<Endpoint>();
+        foreach (var member in allMembers)
+        {
+            nodeId++;
+            var endpointWithNodeId = new Endpoint
+            {
+                Hostname = member.Hostname,
+                Port = member.Port,
+                NodeId = nodeId
+            };
+            membersWithNodeIds.Add(endpointWithNodeId);
+        }
+
+        var maxNodeId = nodeId;
+
+        _log.CreatedBootstrapProposal(_myAddr, membersWithNodeIds.Count, maxNodeId);
+
+        // Build the membership view with ConfigurationId 1
+        var view = new MembershipViewBuilder(
+            _options.ObserversPerSubject,
+            membersWithNodeIds,
+            maxNodeId).Build();
+
+        return (view, maxNodeId);
+    }
+
+    /// <summary>
+    /// Applies the bootstrap membership view to initialize the cluster.
+    /// </summary>
+    private void ApplyBootstrapView((MembershipView View, long MaxNodeId) bootstrap)
+    {
+        var (view, _) = bootstrap;
+
+        _membershipView = view;
+        _cutDetection = _cutDetectorFactory.Create(_membershipView);
+
+        // Add metadata for all members (empty for others, own metadata for self)
+        foreach (var member in view.Members)
+        {
+            if (EndpointAddressComparer.Instance.Equals(member, _myAddr))
+            {
+                _metadataManager.Add(member, _nodeMetadata);
+            }
+            else
+            {
+                _metadataManager.Add(member, new Metadata());
+            }
+        }
+
+        FinalizeInitialization();
+        _log.BootstrapComplete(_myAddr, _membershipView.Size, _membershipView.ConfigurationId);
     }
 
     /// <summary>
@@ -410,7 +583,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _membershipView = new MembershipViewBuilder(
             _options.ObserversPerSubject,
             [.. successfulResponse.Endpoints],
-            successfulResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(successfulResponse.ConfigurationId));
+            successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
         _metadataManager.AddMetadata(metadataMap);
 
@@ -588,7 +761,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _announcedProposal = false;
 
         // Replay any buffered consensus messages for this configuration
-        ReplayBufferedConsensusMessages(_membershipView.ConfigurationId, _stoppingCts.Token);
+        ReplayBufferedConsensusMessages(_membershipView.ConfigurationId.Version, _stoppingCts.Token);
 
         // Create new failure detectors
         CreateFailureDetectorsForCurrentConfiguration();
@@ -609,7 +782,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         // Clear pending joiner data that's no longer needed
         _pendingConsensusMessages.Keys
-            .Where(k => k < _membershipView.ConfigurationId)
+            .Where(k => k < _membershipView.ConfigurationId.Version)
             .ToList()
             .ForEach(k => _pendingConsensusMessages.Remove(k));
 
@@ -634,7 +807,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 {
                     Sender = _myAddr,
                     StatusCode = JoinStatusCode.SafeToJoin,
-                    ConfigurationId = _membershipView.ConfigurationId,
+                    ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
                     MaxNodeId = _membershipView.MaxNodeId
                 };
                 response.Endpoints.AddRange(config.Endpoints);
@@ -667,7 +840,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             Sender = _myAddr,
             StatusCode = JoinStatusCode.ConfigChanged,
-            ConfigurationId = _membershipView.ConfigurationId
+            ConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
         };
         var configChangedResponse = response.ToRapidClusterResponse();
 
@@ -751,10 +924,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             var joiningEndpoint = msg.Sender;
             var statusCode = _membershipView.IsSafeToJoin(joiningEndpoint);
-            var builder = new JoinResponse
+        var builder = new JoinResponse
             {
                 Sender = _myAddr,
-                ConfigurationId = _membershipView.ConfigurationId,
+                ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
                 StatusCode = statusCode
             };
 
@@ -789,7 +962,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         lock (_membershipUpdateLock)
         {
             var currentConfiguration = _membershipView.ConfigurationId;
-            if (currentConfiguration == joinMessage.ConfigurationId)
+            if (currentConfiguration == ConfigurationId.FromProtobuf(joinMessage.ConfigurationId))
             {
                 _log.EnqueueingSafeToJoin(joinMessage.Sender, _membershipView);
 
@@ -803,7 +976,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     EdgeSrc = _myAddr,
                     EdgeDst = joinMessage.Sender,
                     EdgeStatus = EdgeStatus.Up,
-                    ConfigurationId = currentConfiguration,
+                    ConfigurationId = currentConfiguration.ToProtobuf(),
                     Metadata = joinMessage.Metadata
                 };
                 alertMsg.RingNumber.AddRange(joinMessage.RingNumber);
@@ -814,7 +987,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
             else
             {
-                // This handles the corner case where the configuration changed between phase 1 and phase 2
+            // This handles the corner case where the configuration changed between phase 1 and phase 2
                 // of the joining node's bootstrap. It should attempt to rejoin the network.
                 var configuration = _membershipView.Configuration;
                 _log.WrongConfiguration(joinMessage.Sender, joinMessage.ConfigurationId, _membershipView);
@@ -822,7 +995,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 var responseBuilder = new JoinResponse
                 {
                     Sender = _myAddr,
-                    ConfigurationId = _membershipView.ConfigurationId,
+                    ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
                     MaxNodeId = _membershipView.MaxNodeId
                 };
 
@@ -861,7 +1034,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         var proposal = new MembershipProposal
         {
-            ConfigurationId = _membershipView.ConfigurationId + 1
+            ConfigurationId = _membershipView.ConfigurationId.Next().ToProtobuf()
         };
 
         // Track the next node ID to assign (starts from current max + 1)
@@ -939,7 +1112,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         lock (_membershipUpdateLock)
         {
-            if (!FilterAlertMessages(messageBatch, _membershipView.ConfigurationId))
+            if (!FilterAlertMessages(messageBatch, _membershipView.ConfigurationId.Version))
             {
                 _log.BatchedAlertFiltered(_membershipView);
                 return new ConsensusResponse().ToRapidClusterResponse();
@@ -1045,7 +1218,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             var currentConfigId = _membershipView.ConfigurationId;
 
-            if (messageConfigId > currentConfigId)
+            if (messageConfigId > currentConfigId.Version)
             {
                 // Message is for a future configuration - buffer it for later processing
                 _log.BufferingFutureConsensusMessage(request.ContentCase, messageConfigId, currentConfigId);
@@ -1075,11 +1248,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         return request.ContentCase switch
         {
-            RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage => request.FastRoundPhase2BMessage.ConfigurationId,
-            RapidClusterRequest.ContentOneofCase.Phase1AMessage => request.Phase1AMessage.ConfigurationId,
-            RapidClusterRequest.ContentOneofCase.Phase1BMessage => request.Phase1BMessage.ConfigurationId,
-            RapidClusterRequest.ContentOneofCase.Phase2AMessage => request.Phase2AMessage.ConfigurationId,
-            RapidClusterRequest.ContentOneofCase.Phase2BMessage => request.Phase2BMessage.ConfigurationId,
+            RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage => request.FastRoundPhase2BMessage.ConfigurationId.Version,
+            RapidClusterRequest.ContentOneofCase.Phase1AMessage => request.Phase1AMessage.ConfigurationId.Version,
+            RapidClusterRequest.ContentOneofCase.Phase1BMessage => request.Phase1BMessage.ConfigurationId.Version,
+            RapidClusterRequest.ContentOneofCase.Phase2AMessage => request.Phase2AMessage.ConfigurationId.Version,
+            RapidClusterRequest.ContentOneofCase.Phase2BMessage => request.Phase2BMessage.ConfigurationId.Version,
             _ => throw new ArgumentException($"Unexpected consensus message type: {request.ContentCase}")
         };
     }
@@ -1108,16 +1281,16 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Bidirectional stale view detection: if the prober has a higher config ID,
         // we need to catch up. This handles the case where we're being monitored by
         // nodes that have advanced past us (e.g., we missed a consensus round).
-        var senderConfigId = probeMessage.ConfigurationId;
+        var senderConfigId = ConfigurationId.FromProtobuf(probeMessage.ConfigurationId);
         var localConfigId = _membershipView.ConfigurationId;
         if (senderConfigId > localConfigId && probeMessage.Sender != null)
         {
-            OnStaleViewDetected(probeMessage.Sender, senderConfigId, localConfigId);
+            OnStaleViewDetected(probeMessage.Sender, senderConfigId.Version, localConfigId.Version);
         }
 
         return new ProbeResponse
         {
-            ConfigurationId = _membershipView.ConfigurationId,
+            ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
             SenderInMembership = senderInMembership
         }.ToRapidClusterResponse();
     }
@@ -1138,7 +1311,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var response = new MembershipViewResponse
         {
             Sender = _myAddr,
-            ConfigurationId = _membershipView.ConfigurationId,
+            ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
             MaxNodeId = _membershipView.MaxNodeId
         };
 
@@ -1360,7 +1533,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// configuration that the current node is not a part of, and messages that violate the semantics
     /// of a node being a part of a configuration.
     /// </summary>
-    private static bool FilterAlertMessages(BatchedAlertMessage batchedAlertMessage, long currentConfigurationId) => batchedAlertMessage.Messages.Any(m => m.ConfigurationId == currentConfigurationId);
+    private static bool FilterAlertMessages(BatchedAlertMessage batchedAlertMessage, long currentConfigurationId) => batchedAlertMessage.Messages.Any(m => m.ConfigurationId.Version == currentConfigurationId);
 
     private AlertMessage ExtractJoinerMetadata(AlertMessage alertMessage)
     {
@@ -1540,7 +1713,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var newView = new MembershipViewBuilder(
                 _options.ObserversPerSubject,
                 [.. successfulResponse.Endpoints],
-                successfulResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(successfulResponse.ConfigurationId));
+                successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
 
             // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
             oldConsensus = SetMembershipView(newView, metadataMap, nodeStatusChanges: null, addedNodes: null);
@@ -1637,15 +1810,15 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// This is the Paxos "learner" role - requesting missed consensus decisions.
     /// </summary>
     /// <param name="remoteEndpoint">The endpoint that reported the higher config ID.</param>
-    /// <param name="remoteConfigId">The configuration ID from the probe response.</param>
-    /// <param name="localConfigId">The local configuration ID when the stale view was detected.</param>
-    private void OnStaleViewDetected(Endpoint remoteEndpoint, long remoteConfigId, long localConfigId)
+    /// <param name="remoteConfigVersion">The configuration version from the probe response.</param>
+    /// <param name="localConfigVersion">The local configuration version when the stale view was detected.</param>
+    private void OnStaleViewDetected(Endpoint remoteEndpoint, long remoteConfigVersion, long localConfigVersion)
     {
-        _log.StaleViewDetected(remoteEndpoint, remoteConfigId, localConfigId);
+        _log.StaleViewDetected(remoteEndpoint, remoteConfigVersion, localConfigVersion);
 
         // Schedule refresh on the background task scheduler
         var refreshTask = Task.Factory.StartNew(
-            () => RefreshMembershipViewAsync(remoteEndpoint, remoteConfigId, _stoppingCts.Token),
+            () => RefreshMembershipViewAsync(remoteEndpoint, remoteConfigVersion, _stoppingCts.Token),
             _stoppingCts.Token,
             TaskCreationOptions.None,
             _sharedResources.TaskScheduler).Unwrap();
@@ -1656,12 +1829,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// Requests an updated membership view from a remote node.
     /// This implements the Paxos "learner" role - catching up on missed consensus decisions.
     /// </summary>
-    private async Task RefreshMembershipViewAsync(Endpoint remoteEndpoint, long expectedConfigId, CancellationToken cancellationToken)
+    private async Task RefreshMembershipViewAsync(Endpoint remoteEndpoint, long expectedConfigVersion, CancellationToken cancellationToken)
     {
         // Prevent concurrent refresh attempts
         if (_isRefreshingView || _disposed != 0)
         {
-            _log.SkippingStaleViewRefresh(expectedConfigId, _membershipView.ConfigurationId);
+            _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
             return;
         }
 
@@ -1671,14 +1844,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var elapsed = _sharedResources.TimeProvider.GetElapsedTime(lastRefresh, now);
         if (elapsed < _options.StaleViewRefreshInterval)
         {
-            _log.SkippingStaleViewRefresh(expectedConfigId, _membershipView.ConfigurationId);
+            _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
             return;
         }
 
         // Double-check we still need to refresh (config may have been updated by another mechanism)
-        if (expectedConfigId <= _membershipView.ConfigurationId)
+        if (expectedConfigVersion <= _membershipView.ConfigurationId.Version)
         {
-            _log.SkippingStaleViewRefresh(expectedConfigId, _membershipView.ConfigurationId);
+            _log.SkippingStaleViewRefresh(expectedConfigVersion, _membershipView.ConfigurationId.Version);
             return;
         }
 
@@ -1690,7 +1863,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var request = new MembershipViewRequest
             {
                 Sender = _myAddr,
-                CurrentConfigurationId = _membershipView.ConfigurationId
+                CurrentConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
             };
 
             var response = await _messagingClient.SendMessageAsync(
@@ -1706,9 +1879,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
 
             // Only apply if the response is newer than our current view
-            if (viewResponse.ConfigurationId <= _membershipView.ConfigurationId)
+            var responseConfigId = ConfigurationId.FromProtobuf(viewResponse.ConfigurationId);
+            if (responseConfigId <= _membershipView.ConfigurationId)
             {
-                _log.SkippingStaleViewRefresh(viewResponse.ConfigurationId, _membershipView.ConfigurationId);
+                _log.SkippingStaleViewRefresh(responseConfigId.Version, _membershipView.ConfigurationId.Version);
                 return;
             }
 
@@ -1745,7 +1919,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         lock (_membershipUpdateLock)
         {
             // Guard against config ID regression - never allow a stale view to replace a fresher one
-            if (viewResponse.ConfigurationId <= _membershipView.ConfigurationId)
+            var responseConfigId = ConfigurationId.FromProtobuf(viewResponse.ConfigurationId);
+            if (responseConfigId <= _membershipView.ConfigurationId)
             {
                 return;
             }
@@ -1761,7 +1936,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var newView = new MembershipViewBuilder(
                 _options.ObserversPerSubject,
                 [.. viewResponse.Endpoints],
-                viewResponse.MaxNodeId).BuildWithConfigurationId(new ConfigurationId(viewResponse.ConfigurationId));
+                viewResponse.MaxNodeId).BuildWithConfigurationId(responseConfigId);
 
             // Check if we were kicked (not in the new membership)
             // Use EndpointAddressComparer to ignore NodeId when checking membership
@@ -1789,7 +1964,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     // (we'll rejoin with a new identity)
                     _log.NodeKicked(
                         _myAddr,
-                        viewResponse.ConfigurationId,
+                        viewResponse.ConfigurationId.Version,
                         _membershipView.ConfigurationId.Version);
                 }
                 oldConsensus = null;
@@ -1880,7 +2055,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// </summary>
     /// <param name="subject">The subject that has failed.</param>
     /// <param name="configurationId">Configuration ID when the failure was detected</param>
-    private void EdgeFailureNotification(Endpoint subject, long configurationId)
+    private void EdgeFailureNotification(Endpoint subject, ConfigurationId configurationId)
     {
         _log.EdgeFailureNotificationScheduled(subject, configurationId);
 
@@ -1888,11 +2063,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             if (configurationId != _membershipView.ConfigurationId)
             {
-                _log.IgnoringOldConfigNotification(subject, _membershipView, configurationId);
+                _log.IgnoringOldConfigNotification(subject, _membershipView, configurationId.Version);
                 return;
             }
 
-            _log.AnnouncingEdgeFail(subject, _myAddr, configurationId, _membershipView);
+            _log.AnnouncingEdgeFail(subject, _myAddr, configurationId.Version, _membershipView);
 
             var ringNumbers = _membershipView.GetRingNumbers(_myAddr, subject);
             _log.EdgeFailureNotificationEnqueued(subject, ringNumbers);
@@ -1903,7 +2078,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 EdgeSrc = _myAddr,
                 EdgeDst = subject,
                 EdgeStatus = EdgeStatus.Down,
-                ConfigurationId = configurationId
+                ConfigurationId = configurationId.ToProtobuf()
             };
             msg.RingNumber.AddRange(ringNumbers);
 

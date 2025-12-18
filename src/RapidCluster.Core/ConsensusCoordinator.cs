@@ -27,7 +27,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private readonly RapidClusterMetrics _metrics;
     private readonly double _jitterRate;
     private readonly Endpoint _myAddr;
-    private readonly long _configurationId;
+    private readonly ConfigurationId _configurationId;
     private readonly int _membershipSize;
     private readonly IMessagingClient _client;
     private readonly IBroadcaster _broadcaster;
@@ -60,7 +60,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     public ConsensusCoordinator(
         Endpoint myAddr,
-        long configurationId,
+        ConfigurationId configurationId,
         int membershipSize,
         IMessagingClient client,
         IBroadcaster broadcaster,
@@ -108,7 +108,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             metrics,
             paxosLogger);
 
-        _log.Initialized(myAddr, configurationId, membershipSize);
+        _log.Initialized(myAddr, configurationId.Version, membershipSize);
     }
 
     /// <summary>
@@ -159,7 +159,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             switch (fastRoundResult)
             {
                 case ConsensusResult.Decided decided:
-                    _log.FastRoundDecided(_configurationId, decided.Value);
+                    _log.FastRoundDecided(_configurationId.Version, decided.Value);
                     _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success);
                     _metrics.RecordConsensusLatency(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success, consensusStopwatch);
                     _onDecidedTcs.TrySetResult(decided.Value);
@@ -181,13 +181,13 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                         return;
                     }
                     // Otherwise it was a timeout - fall through to classic rounds
-                    _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                    _log.FastRoundTimeout(_configurationId.Version, fastRoundTimeout);
                     _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
                     _metrics.RecordConsensusConflict();
                     break;
 
                 case ConsensusResult.Timeout:
-                    _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                    _log.FastRoundTimeout(_configurationId.Version, fastRoundTimeout);
                     _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
                     _metrics.RecordConsensusConflict();
                     break;
@@ -205,7 +205,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     var paxosResult = await _paxos.Decided.WaitAsync(cancellationToken).ConfigureAwait(true);
                     if (paxosResult is ConsensusResult.Decided decided)
                     {
-                        _log.ClassicRoundDecided(roundNumber - 1, _configurationId, decided.Value);
+                        _log.ClassicRoundDecided(roundNumber - 1, _configurationId.Version, decided.Value);
                         _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
                         _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
                         _onDecidedTcs.TrySetResult(decided.Value);
@@ -229,7 +229,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     var paxosResult = await _paxos.Decided.ConfigureAwait(true);
                     if (paxosResult is ConsensusResult.Decided decided)
                     {
-                        _log.ClassicRoundDecided(roundNumber, _configurationId, decided.Value);
+                        _log.ClassicRoundDecided(roundNumber, _configurationId.Version, decided.Value);
                         _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
                         _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
                         _onDecidedTcs.TrySetResult(decided.Value);

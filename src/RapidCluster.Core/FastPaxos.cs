@@ -24,7 +24,7 @@ internal sealed class FastPaxos
     private readonly FastPaxosLogger _log;
     private readonly RapidClusterMetrics _metrics;
     private readonly Endpoint _myAddr;
-    private readonly long _configurationId;
+    private readonly ConfigurationId _configurationId;
     private readonly long _membershipSize;
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
@@ -40,7 +40,7 @@ internal sealed class FastPaxos
 
     public FastPaxos(
             Endpoint myAddr,
-            long configurationId,
+            ConfigurationId configurationId,
             int membershipSize,
             IBroadcaster broadcaster,
             RapidClusterMetrics metrics,
@@ -53,7 +53,7 @@ internal sealed class FastPaxos
         _metrics = metrics;
         _log = new FastPaxosLogger(logger);
 
-        _log.FastPaxosInitialized(myAddr, configurationId, membershipSize);
+        _log.FastPaxosInitialized(myAddr, configurationId.Version, membershipSize);
     }
 
     /// <summary>
@@ -84,7 +84,7 @@ internal sealed class FastPaxos
 
         var consensusMessage = new FastRoundPhase2bMessage
         {
-            ConfigurationId = _configurationId,
+            ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
             Proposal = proposal
         };
@@ -122,11 +122,12 @@ internal sealed class FastPaxos
     /// <param name="proposalMessage">the membership change proposal towards a configuration change.</param>
     public void HandleFastRoundProposal(FastRoundPhase2bMessage proposalMessage)
     {
-        _log.HandleFastRoundProposalReceived(proposalMessage.Sender, proposalMessage.Proposal, proposalMessage.ConfigurationId);
+        var receivedConfigId = ConfigurationId.FromProtobuf(proposalMessage.ConfigurationId);
+        _log.HandleFastRoundProposalReceived(proposalMessage.Sender, proposalMessage.Proposal, receivedConfigId.Version);
 
-        if (proposalMessage.ConfigurationId != _configurationId)
+        if (receivedConfigId != _configurationId)
         {
-            _log.ConfigurationMismatch(_configurationId, proposalMessage.ConfigurationId);
+            _log.ConfigurationMismatch(_configurationId.Version, receivedConfigId.Version);
             return;
         }
 
@@ -138,7 +139,7 @@ internal sealed class FastPaxos
 
         if (_resultTcs.Task.IsCompleted)
         {
-            _log.FastRoundAlreadyDecided(_configurationId);
+            _log.FastRoundAlreadyDecided(_configurationId.Version);
             return;
         }
 
@@ -149,7 +150,7 @@ internal sealed class FastPaxos
         var proposal = proposalMessage.Proposal;
         if (proposal == null)
         {
-            _log.FastRoundAlreadyDecided(_configurationId); // Log as no-op
+            _log.FastRoundAlreadyDecided(_configurationId.Version); // Log as no-op
             return;
         }
 
@@ -174,7 +175,7 @@ internal sealed class FastPaxos
             // We have a successful proposal. Consume it.
             if (_resultTcs.TrySetResult(new ConsensusResult.Decided(proposal)))
             {
-                _log.FastRoundSucceeded(_configurationId);
+                _log.FastRoundSucceeded(_configurationId.Version);
             }
             return;
         }

@@ -55,7 +55,7 @@ public static class RapidClusterServiceCollectionExtensions
     /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterManual(
+    public static IServiceCollection AddRapidClusterServices(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
         Action<RapidClusterProtocolOptions>? configureProtocol = null,

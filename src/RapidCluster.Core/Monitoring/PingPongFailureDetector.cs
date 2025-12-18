@@ -167,7 +167,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         try
         {
             var localConfigId = _getLocalConfigurationId?.Invoke() ?? 0;
-            var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId }.ToRapidClusterRequest();
+            var request = new ProbeMessage { Sender = _observer, ConfigurationId = new ConfigurationId(localConfigId).ToProtobuf() }.ToRapidClusterRequest();
             var response = await _client.SendMessageAsync(_subject, request, _cts.Token).ConfigureAwait(true);
             stopwatch.Stop();
 
@@ -220,7 +220,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         if (_onStaleViewDetected != null && _getLocalConfigurationId != null)
         {
             var localConfigId = _getLocalConfigurationId();
-            var remoteConfigId = probeResponse.ConfigurationId;
+            var remoteConfigId = ConfigurationId.FromProtobuf(probeResponse.ConfigurationId).Version;
 
             if (remoteConfigId > localConfigId)
             {

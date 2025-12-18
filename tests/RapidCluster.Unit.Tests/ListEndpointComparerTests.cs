@@ -384,7 +384,7 @@ public class ListEndpointComparerTests
 
     private static MembershipProposal CreateProposal(Endpoint[] endpoints, long configId)
     {
-        var proposal = new MembershipProposal { ConfigurationId = configId };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(configId).ToProtobuf() };
         var counter = 0L;
         foreach (var endpoint in endpoints)
         {

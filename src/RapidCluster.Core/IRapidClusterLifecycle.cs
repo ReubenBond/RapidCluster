@@ -9,7 +9,7 @@ namespace RapidCluster;
 /// For typical scenarios, use <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/>
 /// which automatically registers a hosted service to manage the lifecycle.
 /// For scenarios requiring manual control (e.g., Aspire with dynamic ports), use
-/// <see cref="RapidClusterServiceCollectionExtensions.AddRapidClusterManual"/> and call
+/// <see cref="RapidClusterServiceCollectionExtensions.AddRapidClusterServices"/> and call
 /// <see cref="StartAsync"/> after the server is ready.
 /// </remarks>
 public interface IRapidClusterLifecycle

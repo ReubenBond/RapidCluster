@@ -257,6 +257,23 @@ public sealed class RapidClusterProtocolOptions
     public TimeSpan UnstableModeTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// Timeout for bootstrap consensus when using BootstrapExpect. Default: 30 seconds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When BootstrapExpect is set, all expected nodes participate in consensus to
+    /// establish the initial cluster membership. This timeout limits how long to wait
+    /// for that consensus to complete.
+    /// </para>
+    /// <para>
+    /// If the timeout expires before consensus is reached, the bootstrap fails and
+    /// the node will not join the cluster. This typically indicates network issues
+    /// preventing all bootstrap nodes from communicating.
+    /// </para>
+    /// </remarks>
+    public TimeSpan BootstrapConsensusTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Computes effective protocol parameters based on the actual cluster size.
     /// When the cluster is smaller than the configured ObserversPerSubject (K),
     /// the effective values are scaled down proportionally.

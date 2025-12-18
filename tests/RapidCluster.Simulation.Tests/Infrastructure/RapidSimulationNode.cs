@@ -110,6 +110,23 @@ internal sealed class RapidSimulationNode : SimulationNode
         Metadata? metadata,
         RapidClusterProtocolOptions? protocolOptions,
         ILoggerFactory? loggerFactory)
+        : this(harness, address, seedAddresses, bootstrapExpect: 0, metadata, protocolOptions, loggerFactory)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new simulation node with bootstrap support.
+    /// When bootstrapExpect > 0, the node will wait for that many seeds to be reachable
+    /// and create a deterministic initial membership.
+    /// </summary>
+    internal RapidSimulationNode(
+        RapidSimulationCluster harness,
+        Endpoint address,
+        IList<Endpoint>? seedAddresses,
+        int bootstrapExpect,
+        Metadata? metadata,
+        RapidClusterProtocolOptions? protocolOptions,
+        ILoggerFactory? loggerFactory)
     {
         Address = address;
 
@@ -185,7 +202,8 @@ internal sealed class RapidSimulationNode : SimulationNode
         {
             ListenAddress = address.ToEndPointPreferIP(),
             SeedAddresses = seedAddresses?.Select(s => s.ToEndPointPreferIP()).ToList(),
-            Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray()) ?? []
+            Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray()) ?? [],
+            BootstrapExpect = bootstrapExpect
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
         var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterOptions>(rapidClusterOptions));
@@ -214,7 +232,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         await _membershipService.InitializeAsync(cancellationToken).ConfigureAwait(true);
         _isInitialized = true;
 
-        _log.NodeInitialized(RapidClusterUtils.Loggable(Address), CurrentView.Size, CurrentView.ConfigurationId);
+        _log.NodeInitialized(RapidClusterUtils.Loggable(Address), CurrentView.Size, CurrentView.ConfigurationId.Version);
     }
 
     /// <summary>

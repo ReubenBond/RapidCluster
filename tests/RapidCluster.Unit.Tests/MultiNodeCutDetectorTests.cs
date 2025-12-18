@@ -22,7 +22,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = status,
-            ConfigurationId = configurationId
+            ConfigurationId = new ConfigurationId(configurationId).ToProtobuf()
         };
         msg.RingNumber.Add(ringNumber);
         return msg;
@@ -520,7 +520,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
         };
         for (var i = 0; i < K; i++)
         {
@@ -739,7 +739,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
         };
         for (var i = 0; i < K; i++)
         {
@@ -818,7 +818,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
         };
         for (var i = 0; i < H; i++)
         {
@@ -899,7 +899,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -953,10 +953,10 @@ public class MultiNodeCutDetectorTests
         {
             var msg = new AlertMessage
             {
-                EdgeSrc = observer,
+                EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -964,6 +964,7 @@ public class MultiNodeCutDetectorTests
             }
             return msg;
         }).ToList();
+
 
         var proposalEvents = 0;
         var nodesProposed = new HashSet<Endpoint>();
@@ -1095,7 +1096,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -1132,7 +1133,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = new RapidCluster.ConfigurationId(ConfigurationId).ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {

@@ -113,7 +113,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             FastRoundPhase2BMessage = new FastRoundPhase2bMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
             }
@@ -133,7 +133,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             Phase1AMessage = new Phase1aMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rank = new Rank { Round = 2, NodeIndex = 1 }
             }
@@ -153,7 +153,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             Phase1BMessage = new Phase1bMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 },
                 Vrnd = new Rank { Round = 1, NodeIndex = 0 }
@@ -174,7 +174,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             Phase2AMessage = new Phase2aMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 },
                 Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
@@ -195,7 +195,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             Phase2BMessage = new Phase2bMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 }
             }
@@ -237,7 +237,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 FastRoundPhase2BMessage = new FastRoundPhase2bMessage
                 {
-                    ConfigurationId = 1,
+                    ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
                     Proposal = proposal
                 }
@@ -265,7 +265,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 FastRoundPhase2BMessage = new FastRoundPhase2bMessage
                 {
-                    ConfigurationId = 999, // Wrong config ID
+                    ConfigurationId = new ConfigurationId(999).ToProtobuf(), // Wrong config ID
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
                     Proposal = proposal
                 }
@@ -344,7 +344,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 FastRoundPhase2BMessage = new FastRoundPhase2bMessage
                 {
-                    ConfigurationId = 1,
+                    ConfigurationId = new ConfigurationId(1).ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
                     Proposal = proposal
                 }
@@ -381,7 +381,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             NullLogger<FastPaxos>.Instance,
             NullLogger<Paxos>.Instance);
 
-        var coordinator = factory.Create(myAddr, configurationId: 42, membershipSize: 7, broadcaster);
+        var coordinator = factory.Create(myAddr, configurationId: new ConfigurationId(42), membershipSize: 7, broadcaster);
         _coordinators.Add(coordinator);
 
         Assert.NotNull(coordinator);
@@ -412,7 +412,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
         var coordinator = new ConsensusCoordinator(
             myAddr,
-            configurationId,
+            new ConfigurationId(configurationId),
             membershipSize,
             client,
             broadcaster,
@@ -434,7 +434,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
     private static MembershipProposal CreateProposal(params Endpoint[] endpoints)
     {
-        var proposal = new MembershipProposal { ConfigurationId = 100 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(100).ToProtobuf() };
         foreach (var endpoint in endpoints)
         {
             endpoint.NodeId = Utils.GetNextNodeId();

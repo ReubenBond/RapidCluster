@@ -6,9 +6,9 @@ namespace RapidCluster.Aspire.Node;
 
 /// <summary>
 /// A seed provider that uses a shared file for bootstrap coordination.
-/// Multiple nodes write their addresses to the file, and the node with index 0
-/// becomes the bootstrap coordinator (starts a new cluster).
-/// Other nodes wait until index 0's address appears, then use it as their seed.
+/// All nodes write their addresses to the file, and once the expected cluster size
+/// is reached, returns a deterministically ordered list of seeds where the first
+/// seed becomes the bootstrap coordinator.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,7 +17,21 @@ namespace RapidCluster.Aspire.Node;
 /// coordinator without prior knowledge of each other's addresses.
 /// </para>
 /// <para>
-/// The file format is a JSON object mapping node index to endpoint string.
+/// The bootstrap process works as follows:
+/// 1. Each node registers its address in the shared file
+/// 2. Each node waits until all expected nodes have registered
+/// 3. All nodes receive the same sorted list of seeds
+/// 4. The node whose address is first in the sorted list becomes the bootstrap coordinator
+///    (it will see itself as first and start a new cluster)
+/// 5. Other nodes will join through that coordinator
+/// </para>
+/// <para>
+/// This approach doesn't require a separate "bootstrap coordinator" designation - the
+/// ordering is determined automatically based on address sorting. The first node in
+/// the sorted list starts the cluster; others join it.
+/// </para>
+/// <para>
+/// The file format is a JSON object mapping unique node identifiers to endpoint strings.
 /// Each node writes its own entry atomically using file locking.
 /// </para>
 /// </remarks>
@@ -26,7 +40,6 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
 
     private readonly string _filePath;
-    private readonly int _nodeIndex;
     private readonly int _clusterSize;
     private readonly ILogger<FileBasedBootstrapProvider> _logger;
     private readonly TimeSpan _pollInterval;
@@ -38,14 +51,12 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     /// Initializes a new instance of the <see cref="FileBasedBootstrapProvider"/> class.
     /// </summary>
     /// <param name="filePath">Path to the shared bootstrap file.</param>
-    /// <param name="nodeIndex">This node's index (0-based). Node 0 becomes bootstrap coordinator.</param>
     /// <param name="clusterSize">Expected number of nodes in the cluster.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="pollInterval">How often to poll the file for updates. Default: 500ms.</param>
-    /// <param name="startupTimeout">How long to wait for bootstrap coordinator to appear. Default: 60s.</param>
+    /// <param name="startupTimeout">How long to wait for all nodes to register. Default: 60s.</param>
     public FileBasedBootstrapProvider(
         string filePath,
-        int nodeIndex,
         int clusterSize,
         ILogger<FileBasedBootstrapProvider> logger,
         TimeSpan? pollInterval = null,
@@ -53,11 +64,9 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     {
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(logger);
-        ArgumentOutOfRangeException.ThrowIfNegative(nodeIndex);
         ArgumentOutOfRangeException.ThrowIfLessThan(clusterSize, 1);
 
         _filePath = filePath;
-        _nodeIndex = nodeIndex;
         _clusterSize = clusterSize;
         _logger = logger;
         _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(500);
@@ -87,33 +96,26 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
             _registered = true;
         }
 
-        // If we're node 0, we're the bootstrap coordinator - return empty list to start new cluster
-        if (_nodeIndex == 0)
+        // Wait for all expected nodes to register
+        var allSeeds = await WaitForAllSeedsAsync(cancellationToken);
+        if (allSeeds == null || allSeeds.Count == 0)
         {
-            var myAddressStr = EndpointToString(_myAddress);
-            LogBootstrapCoordinator(_logger, _nodeIndex, myAddressStr);
+            LogSeedsTimeout(_logger, _clusterSize, _startupTimeout.TotalSeconds);
             return [];
         }
 
-        // Otherwise, wait for node 0 to register and use its address as seed
-        var node0Address = await WaitForBootstrapCoordinatorAsync(cancellationToken);
-        if (node0Address != null)
-        {
-            var node0AddressStr = EndpointToString(node0Address);
-            LogUsingBootstrapCoordinator(_logger, _nodeIndex, node0AddressStr);
-            return [node0Address];
-        }
-
-        // Timeout waiting for bootstrap coordinator - return empty list
-        // This will cause the node to fail to join, which is the correct behavior
-        LogBootstrapCoordinatorTimeout(_logger, _nodeIndex, _startupTimeout.TotalSeconds);
-        return [];
+        // Return all seeds in sorted order - MembershipService will use this to determine
+        // bootstrap coordinator (first in list) vs joiners (others in list)
+        // The sorting ensures all nodes see the same order, so they agree on who coordinates
+        var seedsList = string.Join(", ", allSeeds.Select(EndpointToString));
+        LogAllSeedsDiscovered(_logger, allSeeds.Count, seedsList);
+        return allSeeds;
     }
 
     private async Task RegisterNodeAsync(CancellationToken cancellationToken)
     {
         var endpointStr = EndpointToString(_myAddress!);
-        LogRegisteringNode(_logger, _nodeIndex, endpointStr, _filePath);
+        LogRegisteringNode(_logger, endpointStr, _filePath);
 
         var maxRetries = 10;
         for (var retry = 0; retry < maxRetries; retry++)
@@ -135,10 +137,12 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
                     FileShare.None);
 
                 var entries = await ReadEntriesAsync(stream, cancellationToken);
-                entries[_nodeIndex.ToString()] = endpointStr;
+
+                // Use the endpoint string as the key (each unique address is a unique node)
+                entries[endpointStr] = endpointStr;
                 await WriteEntriesAsync(stream, entries, cancellationToken);
 
-                LogNodeRegistered(_logger, _nodeIndex, entries.Count);
+                LogNodeRegistered(_logger, endpointStr, entries.Count);
                 return;
             }
             catch (IOException ex) when (retry < maxRetries - 1)
@@ -150,7 +154,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         }
     }
 
-    private async Task<EndPoint?> WaitForBootstrapCoordinatorAsync(CancellationToken cancellationToken)
+    private async Task<List<EndPoint>?> WaitForAllSeedsAsync(CancellationToken cancellationToken)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(_startupTimeout);
@@ -160,9 +164,23 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
             while (!timeoutCts.Token.IsCancellationRequested)
             {
                 var entries = await ReadEntriesFromFileAsync(timeoutCts.Token);
-                if (entries.TryGetValue("0", out var node0Str) && !string.IsNullOrEmpty(node0Str))
+                LogWaitingForSeeds(_logger, entries.Count, _clusterSize);
+
+                if (entries.Count >= _clusterSize)
                 {
-                    return ParseEndpoint(node0Str);
+                    // All nodes registered - return sorted list for deterministic ordering
+                    // Sorting ensures all nodes agree on who is first (the bootstrap coordinator)
+                    var seeds = entries.Values
+                        .Select(ParseEndpoint)
+                        .Where(e => e != null)
+                        .Cast<EndPoint>()
+                        .OrderBy(EndpointToString, StringComparer.Ordinal)
+                        .ToList();
+
+                    if (seeds.Count >= _clusterSize)
+                    {
+                        return seeds;
+                    }
                 }
 
                 await Task.Delay(_pollInterval, timeoutCts.Token);
@@ -258,21 +276,21 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         // No resources to dispose
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Node {NodeIndex} is the bootstrap coordinator at {Address}")]
-    private static partial void LogBootstrapCoordinator(ILogger logger, int nodeIndex, string address);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Registering node address {Address} to file {FilePath}")]
+    private static partial void LogRegisteringNode(ILogger logger, string address, string filePath);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Node {NodeIndex} will join using bootstrap coordinator at {Address}")]
-    private static partial void LogUsingBootstrapCoordinator(ILogger logger, int nodeIndex, string address);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Node {NodeIndex} timed out after {TimeoutSeconds}s waiting for bootstrap coordinator")]
-    private static partial void LogBootstrapCoordinatorTimeout(ILogger logger, int nodeIndex, double timeoutSeconds);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Node {NodeIndex} registering address {Address} to file {FilePath}")]
-    private static partial void LogRegisteringNode(ILogger logger, int nodeIndex, string address, string filePath);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Node {NodeIndex} registered, {TotalNodes} node(s) now in file")]
-    private static partial void LogNodeRegistered(ILogger logger, int nodeIndex, int totalNodes);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Node {Address} registered, {TotalNodes} node(s) now in file")]
+    private static partial void LogNodeRegistered(ILogger logger, string address, int totalNodes);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "File {FilePath} locked, retrying: {Message}")]
     private static partial void LogFileAccessRetry(ILogger logger, string filePath, string message);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Waiting for seeds: {CurrentCount}/{ExpectedCount} registered")]
+    private static partial void LogWaitingForSeeds(ILogger logger, int currentCount, int expectedCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "All {Count} seeds discovered: {Seeds}")]
+    private static partial void LogAllSeedsDiscovered(ILogger logger, int count, string seeds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Timed out waiting for {ExpectedCount} seeds after {TimeoutSeconds}s")]
+    private static partial void LogSeedsTimeout(ILogger logger, int expectedCount, double timeoutSeconds);
 }

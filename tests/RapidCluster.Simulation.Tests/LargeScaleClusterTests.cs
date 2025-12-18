@@ -595,14 +595,14 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     public void ConfigurationChangesTrackedThroughGrowthAndShrinkage()
     {
         var seedNode = _harness.CreateSeedNode();
-        var configIds = new HashSet<long> { seedNode.CurrentView.ConfigurationId };
+        var configIds = new HashSet<long> { seedNode.CurrentView.ConfigurationId.Version };
 
         // Grow the cluster
         for (var i = 1; i <= 5; i++)
         {
             _harness.CreateJoinerNode(seedNode, nodeId: i);
             _harness.WaitForConvergence();
-            configIds.Add(seedNode.CurrentView.ConfigurationId);
+            configIds.Add(seedNode.CurrentView.ConfigurationId.Version);
         }
 
         // Shrink the cluster
@@ -610,7 +610,7 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         foreach (var node in nodesToRemove)
         {
             _harness.RemoveNodeGracefully(node);
-            configIds.Add(seedNode.CurrentView.ConfigurationId);
+            configIds.Add(seedNode.CurrentView.ConfigurationId.Version);
         }
 
         // Each membership change should result in a different configuration ID

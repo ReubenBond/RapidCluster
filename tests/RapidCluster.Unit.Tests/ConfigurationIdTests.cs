@@ -95,21 +95,6 @@ public class ConfigurationIdTests
     }
 
     [Fact]
-    public void ImplicitConversion_ToLong()
-    {
-        var config = new ConfigurationId(123);
-        long value = config;
-        Assert.Equal(123, value);
-    }
-
-    [Fact]
-    public void ExplicitConversion_FromLong()
-    {
-        var config = (ConfigurationId)456L;
-        Assert.Equal(456, config.Version);
-    }
-
-    [Fact]
     public void ToString_Returns_Version_String()
     {
         var config = new ConfigurationId(789);

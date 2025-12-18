@@ -193,6 +193,73 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     }
 
     /// <summary>
+    /// Creates a cluster using BootstrapExpect mode where all nodes wait for each other
+    /// and create a deterministic initial membership simultaneously.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is different from <see cref="CreateCluster"/> and <see cref="CreateClusterParallel"/>:
+    /// - No single seed node that others join
+    /// - All nodes know the full seed list upfront
+    /// - All nodes create the same deterministic membership view
+    /// - Requires only probing (no consensus) for initial formation
+    /// </para>
+    /// <para>
+    /// Use this method when testing scenarios where all nodes start simultaneously
+    /// and need to form a cluster without a designated coordinator.
+    /// </para>
+    /// </remarks>
+    /// <param name="size">The number of nodes in the cluster.</param>
+    /// <param name="options">Optional protocol options.</param>
+    /// <returns>List of all nodes in the cluster.</returns>
+    public IReadOnlyList<RapidSimulationNode> CreateClusterWithBootstrap(
+        int size,
+        RapidClusterProtocolOptions? options = null)
+    {
+        if (size < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(size), "Cluster size must be at least 1");
+        }
+
+        var result = new List<RapidSimulationNode>(size);
+
+        // Create all node addresses first
+        var addresses = new List<Endpoint>(size);
+        for (var i = 0; i < size; i++)
+        {
+            addresses.Add(RapidClusterUtils.HostFromParts("node", i));
+        }
+
+        // All nodes get the full seed list (including themselves - they'll filter self out)
+        var allSeeds = addresses.ToList();
+
+        // Create all nodes with BootstrapExpect set
+        foreach (var address in addresses)
+        {
+            var node = new RapidSimulationNode(
+                this,
+                address,
+                allSeeds,
+                bootstrapExpect: size,
+                metadata: null,
+                protocolOptions: options,
+                loggerFactory: LoggerFactory);
+            RegisterNode(node);
+            result.Add(node);
+        }
+
+        _log.BootstrapClusterCreating(size);
+
+        // Initialize all nodes in parallel - they will probe each other and
+        // create the same deterministic membership view
+        Run(() => Task.WhenAll(result.Select(node => node.InitializeAsync())));
+
+        _log.BootstrapClusterCreated(size);
+
+        return result;
+    }
+
+    /// <summary>
     /// Creates a cluster of the specified size using parallel joins.
     /// Multiple nodes join concurrently, allowing the multi-node cut detection
     /// to batch them into fewer consensus rounds (O(log N) instead of O(N)).

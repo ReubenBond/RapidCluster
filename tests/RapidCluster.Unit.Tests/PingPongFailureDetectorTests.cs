@@ -159,7 +159,7 @@ public sealed class PingPongFailureDetectorTests
             if (idx == 1)
             {
                 // Second probe succeeds
-                return new ProbeResponse { ConfigurationId = 1 }.ToRapidClusterResponse();
+                return new ProbeResponse { ConfigurationId = new ConfigurationId(1).ToProtobuf() }.ToRapidClusterResponse();
             }
             throw new Exception("Probe failed");
         };
@@ -262,7 +262,7 @@ public sealed class PingPongFailureDetectorTests
         long detectedRemoteConfigId = 0;
         long detectedLocalConfigId = 0;
 
-        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = 10 }.ToRapidClusterResponse();
+        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(10).ToProtobuf() }.ToRapidClusterResponse();
 
         using var detector = new PingPongFailureDetector(
             subject,
@@ -300,7 +300,7 @@ public sealed class PingPongFailureDetectorTests
         using var client = new TestMessagingClient();
         var staleViewDetected = false;
 
-        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = 5 }.ToRapidClusterResponse();
+        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(5).ToProtobuf() }.ToRapidClusterResponse();
 
         using var detector = new PingPongFailureDetector(
             subject,
@@ -412,7 +412,7 @@ public sealed class PingPongFailureDetectorTests
                 return Task.FromResult(ResponseGenerator(request));
             }
 
-            return Task.FromResult(new ProbeResponse { ConfigurationId = 1 }.ToRapidClusterResponse());
+            return Task.FromResult(new ProbeResponse { ConfigurationId = new ConfigurationId(1).ToProtobuf() }.ToRapidClusterResponse());
         }
 
         public ValueTask DisposeAsync()

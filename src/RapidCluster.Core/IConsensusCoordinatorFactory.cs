@@ -22,7 +22,7 @@ internal interface IConsensusCoordinatorFactory
     /// <returns>A new ConsensusCoordinator instance.</returns>
     ConsensusCoordinator Create(
         Endpoint myAddr,
-        long configurationId,
+        ConfigurationId configurationId,
         int membershipSize,
         IBroadcaster broadcaster);
 }
@@ -42,7 +42,7 @@ internal sealed class ConsensusCoordinatorFactory(
 {
     public ConsensusCoordinator Create(
         Endpoint myAddr,
-        long configurationId,
+        ConfigurationId configurationId,
         int membershipSize,
         IBroadcaster broadcaster)
     {

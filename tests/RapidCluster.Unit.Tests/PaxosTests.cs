@@ -60,39 +60,15 @@ public class PaxosTests
         var msg = new Phase1bMessage
         {
             Sender = sender,
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = rnd,
             Vrnd = vrnd
         };
 
         Assert.Equal(sender, msg.Sender);
-        Assert.Equal(100, msg.ConfigurationId);
+        Assert.Equal(100, msg.ConfigurationId.Version);
         Assert.Equal(5, msg.Rnd.Round);
-        Assert.Equal(3, msg.Vrnd.Round);
-    }
-
-    /// <summary>
-    /// Test that Phase2aMessage can be created correctly
-    /// </summary>
-    [Fact]
-    public void Phase2aMessageCreation()
-    {
-        var sender = Utils.HostFromParts("127.0.0.1", 1234);
-        var value = Utils.HostFromParts("127.0.0.1", 5678);
-        var rnd = new Rank { Round = 5, NodeIndex = 1 };
-
-        var msg = new Phase2aMessage
-        {
-            Sender = sender,
-            ConfigurationId = 100,
-            Rnd = rnd,
-            Proposal = CreateProposal(value)
-        };
-
-        Assert.Equal(sender, msg.Sender);
-        Assert.Equal(100, msg.ConfigurationId);
-        Assert.Equal(5, msg.Rnd.Round);
-        Assert.Single(msg.Proposal.Members);
+        Assert.Null(msg.Proposal);
     }
 
     private static int CompareRanks(Rank r1, Rank r2)
@@ -111,12 +87,12 @@ public class PaxosTests
         var msg = new Phase1aMessage
         {
             Sender = sender,
-            ConfigurationId = 1000,
+            ConfigurationId = new ConfigurationId(1000).ToProtobuf(),
             Rank = rank
         };
 
         Assert.Equal(sender, msg.Sender);
-        Assert.Equal(1000, msg.ConfigurationId);
+        Assert.Equal(1000, msg.ConfigurationId.Version);
         Assert.Equal(5, msg.Rank.Round);
         Assert.Equal(10, msg.Rank.NodeIndex);
     }
@@ -127,7 +103,7 @@ public class PaxosTests
         var msg = new Phase1aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100
+            ConfigurationId = new ConfigurationId(100).ToProtobuf()
         };
 
         Assert.Null(msg.Rank);
@@ -139,7 +115,7 @@ public class PaxosTests
         var original = new Phase1aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rank = new Rank { Round = 5, NodeIndex = 10 }
         };
 
@@ -148,8 +124,8 @@ public class PaxosTests
         Assert.Equal(original.ConfigurationId, clone.ConfigurationId);
         Assert.Equal(original.Rank.Round, clone.Rank.Round);
 
-        clone.ConfigurationId = 200;
-        Assert.Equal(100, original.ConfigurationId);
+        clone.ConfigurationId = new ConfigurationId(200).ToProtobuf();
+        Assert.Equal(100, original.ConfigurationId.Version);
     }
 
     [Fact]
@@ -163,14 +139,14 @@ public class PaxosTests
         var msg = new Phase1bMessage
         {
             Sender = sender,
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = rnd,
             Vrnd = vrnd,
             Proposal = CreateProposal(vval)
         };
 
         Assert.Equal(sender, msg.Sender);
-        Assert.Equal(100, msg.ConfigurationId);
+        Assert.Equal(100, msg.ConfigurationId.Version);
         Assert.Equal(5, msg.Rnd.Round);
         Assert.Equal(3, msg.Vrnd.Round);
         Assert.Single(msg.Proposal.Members);
@@ -184,7 +160,7 @@ public class PaxosTests
         var msg = new Phase1bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 1 },
             Vrnd = new Rank { Round = 0, NodeIndex = 0 }
         };
@@ -195,7 +171,7 @@ public class PaxosTests
     [Fact]
     public void Phase1bMessageMultipleMembersAllStored()
     {
-        var proposal = new MembershipProposal { ConfigurationId = 101 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(101).ToProtobuf() };
         proposal.Members.Add(Utils.HostFromParts("127.0.0.1", 1001, Utils.GetNextNodeId()));
         proposal.Members.Add(Utils.HostFromParts("127.0.0.1", 1002, Utils.GetNextNodeId()));
         proposal.Members.Add(Utils.HostFromParts("127.0.0.1", 1003, Utils.GetNextNodeId()));
@@ -203,7 +179,7 @@ public class PaxosTests
         var msg = new Phase1bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 1 },
             Vrnd = new Rank { Round = 1, NodeIndex = 0 },
             Proposal = proposal
@@ -221,13 +197,13 @@ public class PaxosTests
         var msg = new Phase2aMessage
         {
             Sender = sender,
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = rnd,
             Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
         };
 
         Assert.Equal(sender, msg.Sender);
-        Assert.Equal(100, msg.ConfigurationId);
+        Assert.Equal(100, msg.ConfigurationId.Version);
         Assert.Equal(5, msg.Rnd.Round);
         Assert.Single(msg.Proposal.Members);
     }
@@ -238,7 +214,7 @@ public class PaxosTests
         var msg = new Phase2aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
             Proposal = CreateProposal(
                 Utils.HostFromParts("10.0.0.1", 5001),
@@ -258,13 +234,13 @@ public class PaxosTests
         var msg = new Phase2bMessage
         {
             Sender = sender,
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = rnd,
             Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
         };
 
         Assert.Equal(sender, msg.Sender);
-        Assert.Equal(100, msg.ConfigurationId);
+        Assert.Equal(100, msg.ConfigurationId.Version);
         Assert.Equal(5, msg.Rnd.Round);
         Assert.Single(msg.Proposal.Members);
     }
@@ -272,7 +248,7 @@ public class PaxosTests
     [Fact]
     public void Phase2bMessageMultipleMembersAllStored()
     {
-        var proposal = new MembershipProposal { ConfigurationId = 101 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(101).ToProtobuf() };
         for (var i = 0; i < 10; i++)
         {
             proposal.Members.Add(Utils.HostFromParts("192.168.1." + i, 5000 + i, Utils.GetNextNodeId()));
@@ -281,7 +257,7 @@ public class PaxosTests
         var msg = new Phase2bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
             Proposal = proposal
         };
@@ -297,12 +273,12 @@ public class PaxosTests
         var msg = new FastRoundPhase2bMessage
         {
             Sender = sender,
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
         };
 
         Assert.Equal(sender, msg.Sender);
-        Assert.Equal(100, msg.ConfigurationId);
+        Assert.Equal(100, msg.ConfigurationId.Version);
         Assert.Single(msg.Proposal.Members);
     }
 
@@ -312,7 +288,7 @@ public class PaxosTests
         var msg = new FastRoundPhase2bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100
+            ConfigurationId = new ConfigurationId(100).ToProtobuf()
         };
 
         Assert.Null(msg.Proposal);
@@ -321,7 +297,7 @@ public class PaxosTests
     [Fact]
     public void FastRoundPhase2bMessageLargeProposalHandledCorrectly()
     {
-        var proposal = new MembershipProposal { ConfigurationId = 101 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(101).ToProtobuf() };
         for (var i = 0; i < 100; i++)
         {
             proposal.Members.Add(Utils.HostFromParts("10.0.0." + i, 5000, Utils.GetNextNodeId()));
@@ -330,7 +306,7 @@ public class PaxosTests
         var msg = new FastRoundPhase2bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Proposal = proposal
         };
 
@@ -404,7 +380,7 @@ public class PaxosTests
         var original = new Phase1aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 999,
+            ConfigurationId = new ConfigurationId(999).ToProtobuf(),
             Rank = new Rank { Round = 10, NodeIndex = 20 }
         };
 
@@ -422,7 +398,7 @@ public class PaxosTests
         var original = new Phase2aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 10 },
             Proposal = CreateProposal(
                 Utils.HostFromParts("10.0.0.1", 5001),
@@ -452,7 +428,7 @@ public class PaxosTests
         var msg = new Phase1bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 10 },
             Vrnd = new Rank { Round = 5, NodeIndex = 10 }
         };
@@ -466,11 +442,11 @@ public class PaxosTests
         var msg = new Phase1aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = -1,
+            ConfigurationId = new ConfigurationId(-1).ToProtobuf(),
             Rank = new Rank { Round = 1, NodeIndex = 1 }
         };
 
-        Assert.Equal(-1, msg.ConfigurationId);
+        Assert.Equal(-1, msg.ConfigurationId.Version);
     }
 
     [Fact]
@@ -479,11 +455,11 @@ public class PaxosTests
         var msg = new Phase1aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = long.MaxValue,
+            ConfigurationId = new ConfigurationId(long.MaxValue).ToProtobuf(),
             Rank = new Rank { Round = 1, NodeIndex = 1 }
         };
 
-        Assert.Equal(long.MaxValue, msg.ConfigurationId);
+        Assert.Equal(long.MaxValue, msg.ConfigurationId.Version);
     }
 
     /// <summary>
@@ -491,7 +467,7 @@ public class PaxosTests
     /// </summary>
     private static MembershipProposal CreateProposal(params Endpoint[] endpoints)
     {
-        var proposal = new MembershipProposal { ConfigurationId = 100 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(100).ToProtobuf() };
         foreach (var endpoint in endpoints)
         {
             // If the endpoint doesn't have a node_id set, assign one
@@ -512,7 +488,7 @@ public class PaxosTests
         var msg = new Phase1bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(100).ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
             Vrnd = new Rank { Round = vrndRound, NodeIndex = vrndNodeIndex }
         };

@@ -42,7 +42,7 @@ builder.Services.AddSingleton<IConfigureOptions<RapidClusterOptions>>(sp =>
 
 // Add RapidCluster services with manual lifecycle management
 // We use AddRapidClusterManual because the listen address is only known after the server starts
-builder.Services.AddRapidClusterManual(options =>
+builder.Services.AddRapidClusterServices(options =>
 {
     // ListenAddress will be set by DeferredRapidClusterOptionsConfigurator after server starts
     // Disable BootstrapExpect since we're using file-based coordination instead
@@ -229,7 +229,7 @@ internal sealed partial class ClusterStatusLogger : BackgroundService
             var cluster = _serviceProvider.GetRequiredService<IRapidCluster>();
             await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
             {
-                LogViewChange(_logger, view.ConfigurationId, view.Members.Length);
+                LogViewChange(_logger, view.ConfigurationId.Version, view.Members.Length);
             }
         }
         catch (OperationCanceledException)

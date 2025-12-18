@@ -315,7 +315,19 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Information, Message = "Cluster already formed (configId={ConfigId}), falling back to join protocol")]
     public partial void ClusterAlreadyFormedFallingBackToJoin(long configId);
 
-    [LoggerMessage(EventName = nameof(GossipSenderAlreadyInMembership), Level = LogLevel.Debug, Message = "Gossip sender {Sender} is already in our membership - responding with AGREED status")]
-    private partial void GossipSenderAlreadyInMembershipCore(LoggableEndpoint sender);
-    public void GossipSenderAlreadyInMembership(Endpoint sender) => GossipSenderAlreadyInMembershipCore(new(sender));
+    [LoggerMessage(EventName = nameof(BootstrapInProgressReceived), Level = LogLevel.Information, Message = "{MyAddr} received BOOTSTRAP_IN_PROGRESS from {ContactedSeed}: seed knows {SeedKnownCount} nodes, we now know {TotalKnownCount} nodes")]
+    private partial void BootstrapInProgressReceivedCore(LoggableEndpoint myAddr, LoggableEndpoint contactedSeed, int seedKnownCount, int totalKnownCount);
+    public void BootstrapInProgressReceived(Endpoint myAddr, Endpoint contactedSeed, int seedKnownCount, int totalKnownCount) => BootstrapInProgressReceivedCore(new(myAddr), new(contactedSeed), seedKnownCount, totalKnownCount);
+
+    [LoggerMessage(EventName = nameof(BootstrapCoordinatorTriggered), Level = LogLevel.Information, Message = "Bootstrap coordinator triggered at {MyAddr}: {KnownCount} nodes known, forming cluster")]
+    private partial void BootstrapCoordinatorTriggeredCore(LoggableEndpoint myAddr, int knownCount);
+    public void BootstrapCoordinatorTriggered(Endpoint myAddr, int knownCount) => BootstrapCoordinatorTriggeredCore(new(myAddr), knownCount);
+
+    [LoggerMessage(EventName = nameof(BootstrapRespondingInProgress), Level = LogLevel.Debug, Message = "Responding BOOTSTRAP_IN_PROGRESS to {Joiner}: we know {KnownCount} nodes")]
+    private partial void BootstrapRespondingInProgressCore(LoggableEndpoint joiner, int knownCount);
+    public void BootstrapRespondingInProgress(Endpoint joiner, int knownCount) => BootstrapRespondingInProgressCore(new(joiner), knownCount);
+
+    [LoggerMessage(EventName = nameof(BootstrapModeExited), Level = LogLevel.Information, Message = "Node {MyAddr} exiting bootstrap mode - cluster was formed by another node")]
+    private partial void BootstrapModeExitedCore(LoggableEndpoint myAddr);
+    public void BootstrapModeExited(Endpoint myAddr) => BootstrapModeExitedCore(new(myAddr));
 }

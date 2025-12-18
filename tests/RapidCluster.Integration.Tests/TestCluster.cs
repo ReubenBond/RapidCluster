@@ -50,11 +50,9 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddSingleton(_loggerFactory);
         builder.ConfigureRapidClusterKestrel(port);
 
-        builder.Services.AddRapidCluster(options =>
-        {
-            options.ListenAddress = address;
-            options.SeedAddresses = [address]; // Same as listen = seed node
-        });
+        builder.Services.AddRapidCluster(
+            options => options.ListenAddress = address,
+            seeds => seeds.SeedAddresses = [address]); // Same as listen = seed node
         builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
@@ -85,12 +83,13 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddSingleton(_loggerFactory);
         builder.ConfigureRapidClusterKestrel(port);
 
-        builder.Services.AddRapidCluster(options =>
-        {
-            options.ListenAddress = address;
-            options.SeedAddresses = [address];
-            configureOptions(options);
-        });
+        builder.Services.AddRapidCluster(
+            options =>
+            {
+                options.ListenAddress = address;
+                configureOptions(options);
+            },
+            seeds => seeds.SeedAddresses = [address]);
         builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
@@ -121,11 +120,9 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddSingleton(_loggerFactory);
         builder.ConfigureRapidClusterKestrel(port);
 
-        builder.Services.AddRapidCluster(options =>
-        {
-            options.ListenAddress = address;
-            options.SeedAddresses = [seedAddress];
-        });
+        builder.Services.AddRapidCluster(
+            options => options.ListenAddress = address,
+            seeds => seeds.SeedAddresses = [seedAddress]);
         builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();
@@ -157,12 +154,13 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddSingleton(_loggerFactory);
         builder.ConfigureRapidClusterKestrel(port);
 
-        builder.Services.AddRapidCluster(options =>
-        {
-            options.ListenAddress = address;
-            options.SeedAddresses = [seedAddress];
-            configureOptions(options);
-        });
+        builder.Services.AddRapidCluster(
+            options =>
+            {
+                options.ListenAddress = address;
+                configureOptions(options);
+            },
+            seeds => seeds.SeedAddresses = [seedAddress]);
         builder.Services.AddRapidClusterGrpc();
 
         var app = builder.Build();

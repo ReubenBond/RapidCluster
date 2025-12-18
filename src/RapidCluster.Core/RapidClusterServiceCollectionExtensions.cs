@@ -21,17 +21,19 @@ public static class RapidClusterServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
+    /// <param name="configureSeeds">Configuration action for seed discovery options.</param>
     /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddRapidCluster(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
+        Action<RapidClusterSeedOptions>? configureSeeds = null,
         Action<RapidClusterProtocolOptions>? configureProtocol = null,
         TimeProvider? timeProvider = null)
     {
         // Add core services
-        AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
+        AddRapidClusterCore(services, configure, configureSeeds, configureProtocol, timeProvider);
 
         // Register the cluster service as a hosted service for automatic lifecycle management
         services.AddHostedService(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
@@ -52,17 +54,19 @@ public static class RapidClusterServiceCollectionExtensions
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
+    /// <param name="configureSeeds">Configuration action for seed discovery options.</param>
     /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddRapidClusterServices(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
+        Action<RapidClusterSeedOptions>? configureSeeds = null,
         Action<RapidClusterProtocolOptions>? configureProtocol = null,
         TimeProvider? timeProvider = null)
     {
         // Add core services without the hosted service registration
-        AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
+        AddRapidClusterCore(services, configure, configureSeeds, configureProtocol, timeProvider);
 
         // No hosted service registration - caller must manage lifecycle manually via IRapidClusterLifecycle
 
@@ -75,6 +79,7 @@ public static class RapidClusterServiceCollectionExtensions
     private static void AddRapidClusterCore(
         IServiceCollection services,
         Action<RapidClusterOptions> configure,
+        Action<RapidClusterSeedOptions>? configureSeeds,
         Action<RapidClusterProtocolOptions>? configureProtocol,
         TimeProvider? timeProvider)
     {
@@ -84,14 +89,11 @@ public static class RapidClusterServiceCollectionExtensions
         // Configure options
         services.Configure(configure);
 
-        // Configure seed options from cluster options (for backward compatibility)
-        // This copies SeedAddresses from RapidClusterOptions to RapidClusterSeedOptions
-        services.AddOptions<Discovery.RapidClusterSeedOptions>()
-            .Configure<Microsoft.Extensions.Options.IOptions<RapidClusterOptions>>((seedOptions, clusterOptions) =>
-            {
-                // Only copy if seed options doesn't already have seeds configured
-                seedOptions.SeedAddresses ??= clusterOptions.Value.SeedAddresses;
-            });
+        // Configure seed options
+        if (configureSeeds != null)
+        {
+            services.Configure(configureSeeds);
+        }
 
         // Configure protocol options
         if (configureProtocol != null)

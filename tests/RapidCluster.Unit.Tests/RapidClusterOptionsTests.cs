@@ -31,41 +31,6 @@ public class RapidClusterOptionsTests
     }
 
     [Fact]
-    public void SeedAddressesDefaultIsNull()
-    {
-        var options = new RapidClusterOptions();
-        Assert.Null(options.SeedAddresses);
-    }
-
-    [Fact]
-    public void SeedAddressesCanBeSet()
-    {
-        var options = new RapidClusterOptions
-        {
-            SeedAddresses = [new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9000)]
-        };
-
-        Assert.NotNull(options.SeedAddresses);
-        Assert.Single(options.SeedAddresses);
-        var ipEndPoint = Assert.IsType<IPEndPoint>(options.SeedAddresses[0]);
-        Assert.Equal("192.168.1.1", ipEndPoint.Address.ToString());
-        Assert.Equal(9000, ipEndPoint.Port);
-    }
-
-    [Fact]
-    public void SeedAddressesCanContainListenAddressForSeedNode()
-    {
-        var address = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 1234);
-        var options = new RapidClusterOptions
-        {
-            ListenAddress = address,
-            SeedAddresses = [address]
-        };
-
-        Assert.Equal(options.ListenAddress, options.SeedAddresses![0]);
-    }
-
-    [Fact]
     public void MetadataDefaultIsEmptyMetadata()
     {
         var options = new RapidClusterOptions();
@@ -191,12 +156,10 @@ public class RapidClusterOptionsTests
     public void FullConfigurationAllPropertiesSet()
     {
         var listenAddr = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 5000);
-        var seedAddr = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 5000);
 
         var options = new RapidClusterOptions
         {
             ListenAddress = listenAddr,
-            SeedAddresses = [seedAddr],
             Metadata = new Dictionary<string, byte[]>
             {
                 ["role"] = Encoding.UTF8.GetBytes("worker"),
@@ -205,7 +168,6 @@ public class RapidClusterOptionsTests
         };
 
         Assert.Equal(listenAddr, options.ListenAddress);
-        Assert.Equal(seedAddr, options.SeedAddresses![0]);
         Assert.Equal(2, options.Metadata.Count);
     }
 

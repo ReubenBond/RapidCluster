@@ -4,7 +4,6 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 
 using Microsoft.Extensions.Options;
-using RapidCluster.Bootstrap;
 using RapidCluster.Discovery;
 using RapidCluster.Exceptions;
 using RapidCluster.Logging;
@@ -61,10 +60,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Seed addresses (excluding self) - populated during InitializeAsync from seed provider
     private List<Endpoint> _seedAddresses = [];
 
-    // Bootstrap coordinator for seed gossip protocol during bootstrap.
-    // Only non-null during the bootstrap negotiation phase.
-    private BootstrapCoordinator? _bootstrapCoordinator;
-
     // Buffer for consensus messages from future configurations
     // Key: configurationId, Value: list of messages waiting for that config
     private readonly Dictionary<long, List<RapidClusterRequest>> _pendingConsensusMessages = [];
@@ -92,8 +87,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Cancelled by StopAsync or when SharedResources signals shutdown
     private readonly CancellationTokenSource _stoppingCts;
 
-    // Logger factory for creating loggers for FastPaxos instances during bootstrap
-    private readonly ILoggerFactory _loggerFactory;
+    // Bootstrap state tracking (for new join-first bootstrap protocol)
+    // Nodes attempting to join this node during bootstrap
+    private readonly HashSet<Endpoint> _bootstrapKnownNodes = new(EndpointAddressComparer.Instance);
+    // Whether this node is still in the bootstrap phase (before cluster is formed)
+    private bool _isBootstrapping;
+    // Task completion source for signaling when bootstrap should complete
+    private TaskCompletionSource<bool>? _bootstrapCompletionSource;
 
     /// <summary>
     /// Result of a single join attempt. Used to avoid exception-based control flow for retryable conditions.
@@ -139,8 +139,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         RapidClusterMetrics metrics,
         ISeedProvider seedProvider,
         MetadataManager metadataManager,
-        ILogger<MembershipService> logger,
-        ILoggerFactory loggerFactory)
+        ILogger<MembershipService> logger)
     {
         var opts = RapidClusterOptions.Value;
         _clusterOptions = opts;
@@ -160,7 +159,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _viewAccessor = viewAccessor;
         _metrics = metrics;
         _log = new MembershipServiceLogger(logger);
-        _loggerFactory = loggerFactory;
         _sendQueue = Channel.CreateUnbounded<AlertMessage>();
 
         // Create linked CTS so background tasks stop on either StopAsync or SharedResources shutdown
@@ -178,6 +176,17 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// Initializes the membership service by either starting a new cluster or joining an existing one.
     /// This must be called after construction before the service can handle messages.
     /// </summary>
+    /// <remarks>
+    /// The initialization flow is:
+    /// 1. Fetch seeds from the provider
+    /// 2. If no seeds (or only self), start a new single-node cluster
+    /// 3. If BootstrapExpect > 0, enter bootstrap mode and try to join seeds
+    ///    - If seed responds with BOOTSTRAP_IN_PROGRESS, participate in bootstrap
+    ///    - A node becomes the bootstrap coordinator when:
+    ///      a) It hasn't learned of any node that precedes it (lexicographically)
+    ///      b) It has (BootstrapExpect - 1) other nodes trying to join it
+    /// 4. If BootstrapExpect == 0, join the cluster normally
+    /// </remarks>
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         if (_initialized)
@@ -185,33 +194,28 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             throw new InvalidOperationException("MembershipService is already initialized");
         }
 
-        // Try bootstrap if BootstrapExpect is configured
-        if (_clusterOptions.BootstrapExpect > 0)
-        {
-            var bootstrapResult = await TryBootstrapClusterAsync(cancellationToken).ConfigureAwait(true);
-            if (bootstrapResult != null)
-            {
-                // Bootstrap succeeded - we're done
-                StartBackgroundTasks();
-                _initialized = true;
-                return;
-            }
-            // Bootstrap returned null (no seeds) - fall through to start new cluster
-        }
-
-        // Fetch seeds from the provider for join/start decision
+        // Fetch seeds from the provider
         await RefreshSeedsAsync(cancellationToken).ConfigureAwait(true);
 
         if (_seedAddresses.Count == 0)
         {
             // No valid seed addresses (empty list or all were self) - start a new cluster
             StartNewCluster();
+            StartBackgroundTasks();
+            _initialized = true;
+            return;
         }
-        else
+
+        // Enter bootstrap mode if BootstrapExpect is configured
+        if (_clusterOptions.BootstrapExpect > 0)
         {
-            // Join an existing cluster
-            await JoinClusterAsync(cancellationToken).ConfigureAwait(true);
+            _isBootstrapping = true;
+            _bootstrapKnownNodes.Add(_myAddr); // Always include self
+            _bootstrapCompletionSource = new TaskCompletionSource<bool>();
         }
+
+        // Try to join through seeds - this handles both established clusters and bootstrap scenarios
+        await JoinClusterAsync(cancellationToken).ConfigureAwait(true);
 
         StartBackgroundTasks();
         _initialized = true;
@@ -224,64 +228,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         var alertBatcherTask = Task.Factory.StartNew(AlertBatcherAsync, _stoppingCts.Token, TaskCreationOptions.None, _sharedResources.TaskScheduler).Unwrap();
         TrackBackgroundTask(alertBatcherTask);
-    }
-
-    /// <summary>
-    /// Attempts to bootstrap the cluster using the BootstrapCoordinator.
-    /// </summary>
-    /// <returns>
-    /// A completed bootstrap result, or <c>null</c> if bootstrap doesn't apply (no seeds available).
-    /// </returns>
-    /// <exception cref="TimeoutException">Thrown if seeds are not reachable within timeout.</exception>
-    private async Task<BootstrapResult?> TryBootstrapClusterAsync(CancellationToken cancellationToken)
-    {
-        _log.StartingBootstrapConsensus(_myAddr, _clusterOptions.BootstrapExpect, 0);
-
-        // Create the bootstrap coordinator
-        _bootstrapCoordinator = new BootstrapCoordinator(
-            _myAddr,
-            _clusterOptions.BootstrapExpect,
-            _options.ObserversPerSubject,
-            _messagingClient,
-            _sharedResources,
-            _loggerFactory.CreateLogger<BootstrapCoordinator>(),
-            _options.BootstrapConsensusTimeout);
-
-        try
-        {
-            var result = await _bootstrapCoordinator.TryBootstrapAsync(_seedProvider, cancellationToken).ConfigureAwait(true);
-
-            if (result == null)
-            {
-                // No seeds available - caller should start new cluster
-                return null;
-            }
-
-            // Apply the view directly (no consensus needed)
-            _log.BootstrapConsensusDecided(_myAddr, result.View.Size, result.View.ConfigurationId.Version);
-            ApplyBootstrapView(result);
-            return result;
-        }
-        catch (BootstrapAlreadyCompleteException ex)
-        {
-            // A cluster already exists - fall back to normal join
-            _log.ClusterAlreadyFormedFallingBackToJoin(ex.ClusterConfigurationId?.Version ?? 0);
-
-            // Clear the bootstrap coordinator and join the existing cluster
-            _bootstrapCoordinator = null;
-
-            // Refresh seeds for join (they may have been updated during gossip)
-            await RefreshSeedsAsync(cancellationToken).ConfigureAwait(true);
-            await JoinClusterAsync(cancellationToken).ConfigureAwait(true);
-
-            // Return a dummy result to indicate we successfully initialized (via join)
-            return new BootstrapResult { View = _membershipView };
-        }
-        finally
-        {
-            // Clear the coordinator when done (no longer in bootstrap phase)
-            _bootstrapCoordinator = null;
-        }
     }
 
     /// <summary>
@@ -332,35 +278,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
-    /// Applies the bootstrap membership view to initialize the cluster.
-    /// </summary>
-    private void ApplyBootstrapView(BootstrapResult bootstrap)
-    {
-        var view = bootstrap.View;
-
-        _membershipView = view;
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
-
-        // Add metadata for all members (empty for others, own metadata for self)
-        foreach (var member in view.Members)
-        {
-            if (EndpointAddressComparer.Instance.Equals(member, _myAddr))
-            {
-                _metadataManager.Add(member, _nodeMetadata);
-            }
-            else
-            {
-                _metadataManager.Add(member, new Metadata());
-            }
-        }
-
-        FinalizeInitialization();
-        _log.BootstrapComplete(_myAddr, _membershipView.Size, _membershipView.ConfigurationId);
-    }
-
-    /// <summary>
     /// Joins an existing cluster through the configured seed nodes.
     /// Cycles through seeds in round-robin fashion until join succeeds or max retries exhausted.
+    /// 
+    /// During bootstrap (BootstrapExpect > 0), this method:
+    /// - Handles BOOTSTRAP_IN_PROGRESS responses by learning about other nodes
+    /// - If this node becomes the smallest known node, waits for others to contact it
+    /// - Bootstrap is completed via TriggerBootstrap when enough nodes are known
     /// </summary>
     private async Task JoinClusterAsync(CancellationToken cancellationToken)
     {
@@ -382,6 +306,15 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             if (_membershipView.IsHostPresent(_myAddr))
             {
                 _log.JoinCompletedViaLearnerProtocol(_myAddr, _membershipView);
+                _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
+                return;
+            }
+
+            // During bootstrap, check if we should be the coordinator (smallest node)
+            // If so, wait for others to contact us instead of continuing to join
+            if (_isBootstrapping && ShouldWaitAsBootstrapCoordinator())
+            {
+                await WaitForBootstrapCompletionAsync(cancellationToken).ConfigureAwait(true);
                 _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
                 return;
             }
@@ -467,6 +400,55 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
+    /// Checks if this node should wait as the bootstrap coordinator rather than continue trying to join.
+    /// This happens when:
+    /// 1. We're in bootstrap mode
+    /// 2. We're the smallest known node (no node precedes us lexicographically)
+    /// 3. We've contacted at least one other seed (so we know about others)
+    /// </summary>
+    private bool ShouldWaitAsBootstrapCoordinator()
+    {
+        lock (_membershipUpdateLock)
+        {
+            // Only relevant during bootstrap
+            if (!_isBootstrapping || _clusterOptions.BootstrapExpect <= 0)
+            {
+                return false;
+            }
+
+            // We need to know about at least one other node (contacted at least one seed)
+            // Otherwise we don't know if we're the smallest yet
+            if (_bootstrapKnownNodes.Count <= 1)
+            {
+                return false;
+            }
+
+            // Check if we're the smallest known node
+            var smallestNode = GetSmallestKnownNode();
+            return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
+        }
+    }
+
+    /// <summary>
+    /// Waits for bootstrap to complete when this node is the bootstrap coordinator.
+    /// Other nodes will contact us via PreJoinMessage, and when we have enough,
+    /// TriggerBootstrap will be called which sets _bootstrapCompletionSource.
+    /// </summary>
+    private async Task WaitForBootstrapCompletionAsync(CancellationToken cancellationToken)
+    {
+        _log.BootstrapCoordinatorTriggered(_myAddr, _bootstrapKnownNodes.Count);
+
+        // Wait for the bootstrap completion source to be signaled
+        // This happens when TriggerBootstrap is called from HandlePreJoinDuringBootstrap
+        if (_bootstrapCompletionSource != null)
+        {
+            using var registration = cancellationToken.Register(
+                () => _bootstrapCompletionSource.TrySetCanceled(cancellationToken));
+            await _bootstrapCompletionSource.Task.ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
     /// Attempts a single join operation through the specified seed. Generates a new NodeId and handles UUID collisions internally.
     /// Returns a result indicating success, retry needed, or permanent failure.
     /// </summary>
@@ -500,11 +482,25 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         var joinResponse = preJoinResponse.JoinResponse;
 
+        // Handle BOOTSTRAP_IN_PROGRESS: the seed is still bootstrapping
+        // We should redirect to the first (smallest) node in the returned endpoints
+        if (joinResponse.StatusCode == JoinStatusCode.BootstrapInProgress)
+        {
+            return HandleBootstrapInProgressResponse(joinResponse, seedAddress);
+        }
+
         if (joinResponse.StatusCode != JoinStatusCode.SafeToJoin &&
             joinResponse.StatusCode != JoinStatusCode.HostnameAlreadyInRing)
         {
             // Most status codes indicate permanent failure for this seed
             return JoinAttemptResult.Failed($"Join failed with status: {joinResponse.StatusCode}");
+        }
+
+        // If we were in bootstrap mode and received SafeToJoin/HostnameAlreadyInRing,
+        // the cluster has been formed by another node. Exit bootstrap mode.
+        if (_isBootstrapping)
+        {
+            ExitBootstrapMode();
         }
 
         var observers = joinResponse.Endpoints.ToList();
@@ -557,6 +553,89 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         return JoinAttemptResult.Success(successfulResponse);
+    }
+
+    /// <summary>
+    /// Handles a BOOTSTRAP_IN_PROGRESS response from a seed node.
+    /// Updates our known nodes and determines if we should redirect to a smaller node.
+    /// </summary>
+    /// <param name="response">The join response with BOOTSTRAP_IN_PROGRESS status.</param>
+    /// <param name="contactedSeed">The seed we contacted.</param>
+    /// <returns>A join attempt result indicating retry (with potential redirect) or success if bootstrap completes.</returns>
+    private JoinAttemptResult HandleBootstrapInProgressResponse(JoinResponse response, Endpoint contactedSeed)
+    {
+        // The response contains known nodes from the contacted seed
+        var knownNodes = response.Endpoints.ToList();
+
+        // Learn about nodes from the response
+        lock (_membershipUpdateLock)
+        {
+            foreach (var node in knownNodes)
+            {
+                _bootstrapKnownNodes.Add(node);
+            }
+            // Also add the contacted seed itself
+            _bootstrapKnownNodes.Add(contactedSeed);
+        }
+
+        _log.BootstrapInProgressReceived(_myAddr, contactedSeed, knownNodes.Count, _bootstrapKnownNodes.Count);
+
+        // Check if there's a smaller node we should redirect to
+        var smallestNode = GetSmallestKnownNode();
+        if (!EndpointAddressComparer.Instance.Equals(smallestNode, contactedSeed))
+        {
+            // Redirect to the smallest known node
+            // Update seed addresses to try the smallest node first
+            lock (_membershipUpdateLock)
+            {
+                // Remove the smallest node from current position and insert at front
+                _seedAddresses.Remove(smallestNode);
+                _seedAddresses.Insert(0, smallestNode);
+            }
+        }
+
+        // Return retry to try again (potentially with a different/smaller node)
+        return JoinAttemptResult.RetryNeeded($"Bootstrap in progress, {_bootstrapKnownNodes.Count} nodes known");
+    }
+
+    /// <summary>
+    /// Gets the lexicographically smallest known node (used for bootstrap coordinator selection).
+    /// </summary>
+    private Endpoint GetSmallestKnownNode()
+    {
+        lock (_membershipUpdateLock)
+        {
+            return _bootstrapKnownNodes
+                .OrderBy(e => $"{e.Hostname.ToStringUtf8()}:{e.Port}", StringComparer.Ordinal)
+                .First();
+        }
+    }
+
+    /// <summary>
+    /// Checks if this node should be the bootstrap coordinator.
+    /// A node becomes the coordinator when:
+    /// 1. It hasn't learned of any node that precedes it (lexicographically)
+    /// 2. It has (BootstrapExpect - 1) other nodes trying to join it
+    /// </summary>
+    private bool ShouldBeBootstrapCoordinator()
+    {
+        if (_clusterOptions.BootstrapExpect <= 0)
+        {
+            return false;
+        }
+
+        lock (_membershipUpdateLock)
+        {
+            // Check if we have enough nodes
+            if (_bootstrapKnownNodes.Count < _clusterOptions.BootstrapExpect)
+            {
+                return false;
+            }
+
+            // Check if this node is the smallest (no node precedes it)
+            var smallestNode = GetSmallestKnownNode();
+            return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
+        }
     }
 
     /// <summary>
@@ -765,7 +844,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RapidClusterRequest.ContentOneofCase.Phase2BMessage => HandleConsensusMessages(msg, cancellationToken),
             RapidClusterRequest.ContentOneofCase.LeaveMessage => HandleLeaveMessage(msg, cancellationToken),
             RapidClusterRequest.ContentOneofCase.MembershipViewRequest => HandleMembershipViewRequest(msg.MembershipViewRequest, cancellationToken),
-            RapidClusterRequest.ContentOneofCase.BootstrapSeedGossip => HandleBootstrapSeedGossip(msg.BootstrapSeedGossip, cancellationToken),
             _ => throw new ArgumentException($"Unidentified RapidClusterRequest type {msg.ContentCase}")
         };
 
@@ -785,7 +863,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RapidClusterRequest.ContentOneofCase.Phase2BMessage => MetricNames.MessageTypes.Phase2b,
             RapidClusterRequest.ContentOneofCase.LeaveMessage => MetricNames.MessageTypes.LeaveMessage,
             RapidClusterRequest.ContentOneofCase.MembershipViewRequest => MetricNames.MessageTypes.MembershipViewRequest,
-            RapidClusterRequest.ContentOneofCase.BootstrapSeedGossip => MetricNames.MessageTypes.BootstrapSeedGossip,
             _ => "unknown"
         };
     }
@@ -794,12 +871,25 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// This is invoked by a new node joining the network at a seed node.
     /// The seed responds with the current configuration ID and a list of observers
     /// for the joiner, who then moves on to phase 2 of the protocol with its observers.
+    /// 
+    /// During bootstrap (when _isBootstrapping is true), this method:
+    /// 1. Adds the sender to _bootstrapKnownNodes
+    /// 2. Checks if we should trigger bootstrap (we're the smallest node + have enough joiners)
+    /// 3. Returns BOOTSTRAP_IN_PROGRESS with known nodes, or triggers cluster formation
     /// </summary>
     private RapidClusterResponse HandlePreJoinMessage(PreJoinMessage msg, CancellationToken cancellationToken)
     {
         lock (_membershipUpdateLock)
         {
             var joiningEndpoint = msg.Sender;
+
+            // If we're in bootstrap mode, handle bootstrap protocol
+            if (_isBootstrapping)
+            {
+                return HandlePreJoinDuringBootstrap(joiningEndpoint);
+            }
+
+            // Normal join handling for established cluster
             var statusCode = _membershipView.IsSafeToJoin(joiningEndpoint);
             var builder = new JoinResponse
             {
@@ -811,8 +901,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             _log.JoinAtSeed(_myAddr, msg.Sender, _membershipView);
 
             var observersCount = 0;
-            if (statusCode == JoinStatusCode.SafeToJoin || statusCode == JoinStatusCode.HostnameAlreadyInRing)
+            if (statusCode == JoinStatusCode.SafeToJoin)
             {
+                // Only return observers for SafeToJoin - node proceeds to phase 2
+                // For HostnameAlreadyInRing, don't return observers - node should use learner protocol
+                // to get current membership view instead of triggering a view change
                 var observers = _membershipView.GetExpectedObserversOf(joiningEndpoint);
                 builder.Endpoints.AddRange(observers);
                 observersCount = observers.Length;
@@ -821,6 +914,145 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             _log.HandlePreJoinResult(joiningEndpoint, statusCode, observersCount);
 
             return builder.ToRapidClusterResponse();
+        }
+    }
+
+    /// <summary>
+    /// Handles a PreJoinMessage while this node is in bootstrap mode.
+    /// Tracks the joining node and either triggers bootstrap or returns BOOTSTRAP_IN_PROGRESS.
+    /// Must be called under _membershipUpdateLock.
+    /// </summary>
+    private RapidClusterResponse HandlePreJoinDuringBootstrap(Endpoint joiningEndpoint)
+    {
+        // Add the joiner to our known nodes
+        _bootstrapKnownNodes.Add(joiningEndpoint);
+
+        _log.JoinAtSeed(_myAddr, joiningEndpoint, _membershipView);
+
+        // Check if we should trigger bootstrap
+        if (ShouldBeBootstrapCoordinator())
+        {
+            // We have enough nodes and we're the smallest - trigger bootstrap!
+            _log.BootstrapCoordinatorTriggered(_myAddr, _bootstrapKnownNodes.Count);
+            TriggerBootstrap();
+
+            // After bootstrap, the joiner is already in the ring (was included in bootstrap).
+            // Respond with HOSTNAME_ALREADY_IN_RING with NO observers - this ensures the joiner
+            // does NOT proceed to phase 2 of the join protocol (which would trigger consensus
+            // to re-add a node that's already in the ring). Instead, the joiner will fail this
+            // join attempt and eventually learn the membership via the learner protocol.
+            var response = new JoinResponse
+            {
+                Sender = _myAddr,
+                ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
+                StatusCode = JoinStatusCode.HostnameAlreadyInRing
+            };
+            // Intentionally NOT adding observers - joiner should use learner protocol
+
+            _log.HandlePreJoinResult(joiningEndpoint, JoinStatusCode.HostnameAlreadyInRing, 0);
+            return response.ToRapidClusterResponse();
+        }
+
+        // Not ready to trigger bootstrap yet - respond with BOOTSTRAP_IN_PROGRESS
+        // Include all known nodes so the joiner can learn about them and potentially redirect
+        _log.BootstrapRespondingInProgress(joiningEndpoint, _bootstrapKnownNodes.Count);
+
+        var bootstrapResponse = new JoinResponse
+        {
+            Sender = _myAddr,
+            ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
+            StatusCode = JoinStatusCode.BootstrapInProgress
+        };
+        bootstrapResponse.Endpoints.AddRange(_bootstrapKnownNodes);
+
+        _log.HandlePreJoinResult(joiningEndpoint, JoinStatusCode.BootstrapInProgress, _bootstrapKnownNodes.Count);
+        return bootstrapResponse.ToRapidClusterResponse();
+    }
+
+    /// <summary>
+    /// Triggers cluster formation when bootstrap conditions are met.
+    /// Called when this node is the smallest known node and has enough joiners.
+    /// Must be called under _membershipUpdateLock.
+    /// </summary>
+    private void TriggerBootstrap()
+    {
+        // Sort nodes deterministically by address (hostname:port)
+        var sortedNodes = _bootstrapKnownNodes
+            .OrderBy(e => $"{e.Hostname.ToStringUtf8()}:{e.Port}", StringComparer.Ordinal)
+            .ToList();
+
+        // Assign monotonically increasing node IDs starting from 1
+        var membersWithIds = new List<Endpoint>();
+        for (var i = 0; i < sortedNodes.Count; i++)
+        {
+            var node = sortedNodes[i];
+            var endpointWithId = new Endpoint
+            {
+                Hostname = node.Hostname,
+                Port = node.Port,
+                NodeId = i + 1  // Node IDs start at 1
+            };
+            membersWithIds.Add(endpointWithId);
+        }
+
+        // Create the initial configuration ID with cluster ID computed from the seed set
+        var initialConfigId = ConfigurationId.CreateInitial(membersWithIds);
+
+        // Create the initial membership view
+        _membershipView = new MembershipViewBuilder(
+            _options.ObserversPerSubject,
+            membersWithIds,
+            maxNodeId: membersWithIds.Count)
+            .BuildWithConfigurationId(initialConfigId);
+
+        _cutDetection = _cutDetectorFactory.Create(_membershipView);
+
+        // Add metadata for all members (empty metadata for now, own metadata for self)
+        foreach (var member in _membershipView.Members)
+        {
+            if (EndpointAddressComparer.Instance.Equals(member, _myAddr))
+            {
+                _metadataManager.Add(member, _nodeMetadata);
+            }
+            else
+            {
+                _metadataManager.Add(member, new Metadata());
+            }
+        }
+
+        // Exit bootstrap mode
+        _isBootstrapping = false;
+
+        // Signal any waiting bootstrap completion source
+        _bootstrapCompletionSource?.TrySetResult(true);
+
+        FinalizeInitialization();
+        _log.BootstrapComplete(_myAddr, _membershipView.Size, _membershipView.ConfigurationId);
+    }
+
+    /// <summary>
+    /// Exits bootstrap mode without triggering cluster formation.
+    /// Called when this node discovers that bootstrap has been completed by another node.
+    /// This can happen when:
+    /// 1. A PreJoin response returns SafeToJoin (cluster already formed)
+    /// 2. A PreJoin response returns HostnameAlreadyInRing (we're already in the cluster)
+    /// </summary>
+    private void ExitBootstrapMode()
+    {
+        lock (_membershipUpdateLock)
+        {
+            if (!_isBootstrapping)
+            {
+                return; // Already exited
+            }
+
+            _isBootstrapping = false;
+
+            // Signal any waiting bootstrap completion source
+            // (This should not happen normally since coordinator waits, but be safe)
+            _bootstrapCompletionSource?.TrySetResult(true);
+
+            _log.BootstrapModeExited(_myAddr);
         }
     }
 
@@ -1220,71 +1452,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         return response.ToRapidClusterResponse();
-    }
-
-    /// <summary>
-    /// Handles incoming seed gossip messages during bootstrap negotiation.
-    /// If this node is currently bootstrapping with dynamic seeds, forwards to the coordinator.
-    /// If the cluster is already formed, responds appropriately based on whether the sender
-    /// is already in our membership.
-    /// </summary>
-    private RapidClusterResponse HandleBootstrapSeedGossip(BootstrapSeedGossip gossip, CancellationToken cancellationToken)
-    {
-        // If we have a bootstrap coordinator, we're in the negotiation phase
-        if (_bootstrapCoordinator != null)
-        {
-            var response = _bootstrapCoordinator.HandleGossip(gossip);
-            return new RapidClusterResponse { BootstrapSeedGossipResponse = response };
-        }
-
-        // If the cluster is already initialized (we have a valid membership view)
-        if (_initialized && _membershipView.ConfigurationId.Version > 0)
-        {
-            // Check if the sender is already in our membership view.
-            // This handles a race condition: when the first node completes bootstrap and forms
-            // the cluster, other nodes may still be in their gossip rounds. If they're already
-            // in our membership (because they were part of the bootstrap), we should tell them
-            // they're part of the cluster (AGREED status) rather than tell them to join.
-            // This prevents a scenario where nodes that are already members try to join again,
-            // which can cause consensus to remove them incorrectly.
-            var senderIsInMembership = _membershipView.Members.Any(m =>
-                EndpointAddressComparer.Instance.Equals(m, gossip.Sender));
-
-            if (senderIsInMembership)
-            {
-                // The sender is already in our membership - they should complete bootstrap,
-                // not fall back to join. Respond with AGREED status and include the full
-                // membership so they can finalize their view.
-                _log.GossipSenderAlreadyInMembership(gossip.Sender);
-                var agreedResponse = new BootstrapSeedGossipResponse
-                {
-                    Sender = _myAddr,
-                    Status = BootstrapStatus.Agreed,
-                    ConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
-                };
-                // Include our membership as the agreed seed set
-                agreedResponse.KnownSeeds.AddRange(_membershipView.Members);
-                return new RapidClusterResponse { BootstrapSeedGossipResponse = agreedResponse };
-            }
-
-            // Sender is not in our membership - they need to join normally
-            var response = new BootstrapSeedGossipResponse
-            {
-                Sender = _myAddr,
-                Status = BootstrapStatus.AlreadyFormed,
-                ConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
-            };
-            return new RapidClusterResponse { BootstrapSeedGossipResponse = response };
-        }
-
-        // Not initialized and no coordinator - we're probably in static bootstrap mode
-        // or haven't started bootstrap yet. Just respond with NEGOTIATING status.
-        var defaultResponse = new BootstrapSeedGossipResponse
-        {
-            Sender = _myAddr,
-            Status = BootstrapStatus.Negotiating
-        };
-        return new RapidClusterResponse { BootstrapSeedGossipResponse = defaultResponse };
     }
 
     /// <summary>
@@ -1841,8 +2008,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
 
             // Only apply if the response is newer than our current view
+            // Use IsOlderThanOrDifferentCluster to handle the bootstrap case where local ClusterId is 0
             var responseConfigId = ConfigurationId.FromProtobuf(viewResponse.ConfigurationId);
-            if (responseConfigId <= _membershipView.ConfigurationId)
+            if (!_membershipView.ConfigurationId.IsOlderThanOrDifferentCluster(responseConfigId))
             {
                 _log.SkippingStaleViewRefresh(responseConfigId.Version, _membershipView.ConfigurationId.Version);
                 return;
@@ -1881,8 +2049,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         lock (_membershipUpdateLock)
         {
             // Guard against config ID regression - never allow a stale view to replace a fresher one
+            // Use IsOlderThanOrDifferentCluster to handle the bootstrap case where local ClusterId is 0
             var responseConfigId = ConfigurationId.FromProtobuf(viewResponse.ConfigurationId);
-            if (responseConfigId <= _membershipView.ConfigurationId)
+            if (!_membershipView.ConfigurationId.IsOlderThanOrDifferentCluster(responseConfigId))
             {
                 return;
             }

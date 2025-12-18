@@ -202,14 +202,13 @@ internal sealed class RapidSimulationNode : SimulationNode
         var rapidClusterOptions = new RapidClusterOptions
         {
             ListenAddress = address.ToEndPointPreferIP(),
-            SeedAddresses = seedAddresses?.Select(s => s.ToEndPointPreferIP()).ToList(),
             Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray()) ?? [],
             BootstrapExpect = bootstrapExpect
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
         var seedOptions = new RapidClusterSeedOptions
         {
-            SeedAddresses = rapidClusterOptions.SeedAddresses,
+            SeedAddresses = seedAddresses?.Select(s => s.ToEndPointPreferIP()).ToList(),
             IsStatic = seedsAreStatic
         };
         var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterSeedOptions>(seedOptions));

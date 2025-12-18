@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
 namespace RapidCluster;
@@ -15,19 +14,9 @@ public sealed class RapidClusterOptions
     public EndPoint ListenAddress { get; set; } = null!;
 
     /// <summary>
-    /// The seed node endpoints to join. If null/empty or all entries equal ListenAddress, starts a new cluster.
-    /// Nodes are tried in round-robin order until join succeeds.
-    /// </summary>
-    /// <remarks>
-    /// This property provides backward compatibility. For more advanced seed discovery,
-    /// register an <see cref="Discovery.ISeedProvider"/> implementation in the DI container.
-    /// </remarks>
-    public IReadOnlyList<EndPoint>? SeedAddresses { get; set; }
-
-    /// <summary>
     /// Metadata for this node.
     /// </summary>
-    [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Options class needs settable properties for configuration binding")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Options class needs settable properties for configuration binding")]
     public Dictionary<string, byte[]> Metadata { get; set; } = [];
 
     /// <summary>

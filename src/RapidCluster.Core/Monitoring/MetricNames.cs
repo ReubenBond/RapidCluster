@@ -230,7 +230,6 @@ public static class MetricNames
         public const string LeaveMessage = "leave";
         public const string MembershipViewRequest = "membership_view_request";
         public const string MembershipViewResponse = "membership_view_response";
-        public const string BootstrapSeedGossip = "bootstrap_seed_gossip";
     }
 
     internal static class Protocols

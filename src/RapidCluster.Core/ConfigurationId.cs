@@ -60,6 +60,46 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     public ConfigurationId Next() => new(Version + 1, ClusterId);
 
     /// <summary>
+    /// Determines if the other configuration is newer than or equal to this one,
+    /// handling the special case where this configuration has no cluster ID (ClusterId == 0).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is useful during bootstrap when a node has not yet joined any cluster and has
+    /// ClusterId == 0. In this case, any configuration with a non-zero ClusterId is considered
+    /// "newer" because it represents an actual cluster the node should join.
+    /// </para>
+    /// <para>
+    /// Unlike the comparison operators which throw when cluster IDs differ, this method
+    /// returns a boolean and handles cross-cluster comparisons gracefully.
+    /// </para>
+    /// </remarks>
+    /// <param name="other">The other configuration to compare against.</param>
+    /// <returns>
+    /// <c>true</c> if the other configuration is newer than or equal to this one, or if
+    /// the cluster IDs differ (meaning the other is from a different/new cluster);
+    /// <c>false</c> otherwise.
+    /// </returns>
+    public bool IsOlderThanOrDifferentCluster(ConfigurationId other)
+    {
+        // If this node has no cluster ID, any cluster is "newer" - we should join it
+        if (ClusterId == 0 && other.ClusterId != 0)
+        {
+            return true;
+        }
+
+        // If cluster IDs differ (and both are non-zero), treat as different clusters
+        // In this case, we can't compare versions meaningfully
+        if (ClusterId != other.ClusterId)
+        {
+            return false;
+        }
+
+        // Same cluster - compare versions normally
+        return Version < other.Version;
+    }
+
+    /// <summary>
     /// Creates the initial configuration ID (version 1) with a cluster ID computed
     /// from the sorted seed endpoints.
     /// </summary>

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging;
 
 using Microsoft.Extensions.Options;
@@ -205,36 +206,40 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         if (_seedAddresses.Count == 0)
         {
             // No valid seed addresses (empty list or all were self) - start a new cluster
-            StartNewCluster();
-            StartBackgroundTasks();
-            _initialized = true;
-            return;
-        }
+            _log.StartingNewCluster(_myAddr);
 
-        // Enter bootstrap mode if BootstrapExpect is configured
-        if (_clusterOptions.BootstrapExpect > 0)
+            // Create endpoint with node ID = 1 for the seed node
+            var seedEndpoint = new Endpoint
+            {
+                Hostname = _myAddr.Hostname,
+                Port = _myAddr.Port,
+                NodeId = 1
+            };
+
+            // Create MemberInfo with endpoint and metadata - stores metadata directly in the view
+            var seedMember = new MemberInfo(seedEndpoint, _nodeMetadata);
+            _membershipView = BuildMembershipView([seedMember], maxNodeId: 1, configurationId: null);
+            _cutDetection = _cutDetectorFactory.Create(_membershipView);
+
+            FinalizeInitialization();
+        }
+        else
         {
-            _isBootstrapping = true;
-            _bootstrapKnownNodes.Add(_myAddr); // Always include self
-            _bootstrapCompletionSource = new TaskCompletionSource<bool>();
+            // Enter bootstrap mode if BootstrapExpect is configured
+            if (_clusterOptions.BootstrapExpect > 0)
+            {
+                _isBootstrapping = true;
+                _bootstrapKnownNodes.Add(_myAddr); // Always include self
+                _bootstrapCompletionSource = new TaskCompletionSource<bool>();
+            }
+
+            // Try to join through seeds - this handles both established clusters and bootstrap scenarios
+            await JoinClusterAsync(cancellationToken).ConfigureAwait(true);
         }
 
-        // Try to join through seeds - this handles both established clusters and bootstrap scenarios
-        await JoinClusterAsync(cancellationToken).ConfigureAwait(true);
-
-        StartBackgroundTasks();
-        _initialized = true;
-    }
-
-    /// <summary>
-    /// Starts background tasks after initialization is complete.
-    /// </summary>
-    private void StartBackgroundTasks()
-    {
         _alertBatcherTask = Task.Factory.StartNew(AlertBatcherAsync, _stoppingCts.Token, TaskCreationOptions.None, _sharedResources.TaskScheduler).Unwrap();
-
-        // Start the refresh coordinator for handling stale view detection
         _refreshCoordinator.Start();
+        _initialized = true;
     }
 
     /// <summary>
@@ -247,41 +252,67 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
         // Convert to protobuf and sort deterministically by address string
         // This ensures all nodes will have the same ordering regardless of input order
-        var allSeeds = seedResult.Seeds
-            .Select(s => s.ToProtobuf())
-            .DistinctBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}")
-            .OrderBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}", StringComparer.Ordinal)
-            .ToList();
-
         // Build seed list excluding self (but preserving sorted order)
-        _seedAddresses = allSeeds
+        _seedAddresses = [.. seedResult.Seeds
+            .Select(s => s.ToProtobuf())
             .Where(s => !EndpointAddressComparer.Instance.Equals(s, _myAddr))
-            .ToList();
+            .DistinctBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}")
+            .OrderBy(s => $"{s.Hostname.ToStringUtf8()}:{s.Port}", StringComparer.Ordinal)];
 
         _log.SeedsRefreshed(_seedAddresses.Count);
     }
 
     /// <summary>
-    /// Starts a new cluster with this node as the only member.
+    /// Builds a MembershipView from a list of MemberInfo.
+    /// This is the single path for creating membership views throughout the service.
     /// </summary>
-    private void StartNewCluster()
+    /// <param name="members">The members to include in the view.</param>
+    /// <param name="maxNodeId">The maximum node ID ever assigned.</param>
+    /// <param name="configurationId">The configuration ID, or null to generate an initial one from the members.</param>
+    /// <returns>The built membership view.</returns>
+    private MembershipView BuildMembershipView(
+        List<MemberInfo> members,
+        long maxNodeId,
+        ConfigurationId? configurationId)
     {
-        _log.StartingNewCluster(_myAddr);
+        var builder = new MembershipViewBuilder(_options.ObserversPerSubject, members, maxNodeId);
 
-        // Create endpoint with node ID = 1 for the seed node
-        var seedEndpoint = new Endpoint
+        if (configurationId.HasValue)
         {
-            Hostname = _myAddr.Hostname,
-            Port = _myAddr.Port,
-            NodeId = 1
-        };
+            return builder.BuildWithConfigurationId(configurationId.Value);
+        }
 
-        // Create MemberInfo with endpoint and metadata - stores metadata directly in the view
-        var seedMember = new MemberInfo(seedEndpoint, _nodeMetadata);
-        _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [seedMember], maxNodeId: 1).Build();
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
+        // Generate initial configuration ID from member endpoints
+        var endpoints = members.Select(m => m.Endpoint).ToArray();
+        var initialConfigId = ConfigurationId.CreateInitial(endpoints);
+        return builder.BuildWithConfigurationId(initialConfigId);
+    }
 
-        FinalizeInitialization();
+    /// <summary>
+    /// Builds a list of MemberInfo from a protobuf response containing endpoints and metadata.
+    /// Used to parse JoinResponse and MembershipViewResponse messages.
+    /// </summary>
+    /// <param name="endpoints">The endpoint list from the response.</param>
+    /// <param name="metadataKeys">The metadata keys (endpoints) from the response.</param>
+    /// <param name="metadataValues">The metadata values from the response.</param>
+    /// <returns>A list of MemberInfo combining endpoints with their metadata.</returns>
+    private static List<MemberInfo> BuildMemberInfosFromResponse(
+        RepeatedField<Endpoint> endpoints,
+        RepeatedField<Endpoint> metadataKeys,
+        RepeatedField<Metadata> metadataValues)
+    {
+        // Build metadata lookup from parallel key/value lists
+        var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
+        var count = Math.Min(metadataKeys.Count, metadataValues.Count);
+        for (var i = 0; i < count; i++)
+        {
+            metadataMap[metadataKeys[i]] = metadataValues[i];
+        }
+
+        // Create MemberInfo for each endpoint, using empty metadata if not found
+        return endpoints
+            .Select(e => new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata())))
+            .ToList();
     }
 
     /// <summary>
@@ -385,57 +416,47 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             throw new JoinException(lastFailureReason ?? $"Failed to join cluster after {maxRetries + 1} attempts");
         }
 
-        // Initialize membership from response - build MemberInfo with endpoints and metadata
-        var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
-        for (var i = 0; i < successfulResponse.MetadataKeys.Count && i < successfulResponse.MetadataValues.Count; i++)
-        {
-            var endpoint = successfulResponse.MetadataKeys[i];
-            var metadata = successfulResponse.MetadataValues[i];
-            metadataMap[endpoint] = metadata;
-        }
+        // Initialize membership from response
+        var memberInfos = BuildMemberInfosFromResponse(
+            successfulResponse.Endpoints,
+            successfulResponse.MetadataKeys,
+            successfulResponse.MetadataValues);
 
-        // Create MemberInfo for each endpoint with its metadata
-        var memberInfos = successfulResponse.Endpoints.Select(e =>
-            new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata()))).ToList();
-
-        // Pass maxNodeId to ensure it's preserved even if the node with that ID was removed
-        _membershipView = new MembershipViewBuilder(
-            _options.ObserversPerSubject,
+        _membershipView = BuildMembershipView(
             memberInfos,
-            successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
+            successfulResponse.MaxNodeId,
+            ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
 
         FinalizeInitialization();
         _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
-    }
 
-    /// <summary>
-    /// Checks if this node should wait as the bootstrap coordinator rather than continue trying to join.
-    /// This happens when:
-    /// 1. We're in bootstrap mode
-    /// 2. We're the smallest known node (no node precedes us lexicographically)
-    /// 3. We've contacted at least one other seed (so we know about others)
-    /// </summary>
-    private bool ShouldWaitAsBootstrapCoordinator()
-    {
-        lock (_membershipUpdateLock)
+        // Checks if this node should wait as the bootstrap coordinator rather than continue trying to join.
+        // This happens when:
+        // 1. We're in bootstrap mode
+        // 2. We're the smallest known node (no node precedes us lexicographically)
+        // 3. We've contacted at least one other seed (so we know about others)
+        bool ShouldWaitAsBootstrapCoordinator()
         {
-            // Only relevant during bootstrap
-            if (!_isBootstrapping || _clusterOptions.BootstrapExpect <= 0)
+            lock (_membershipUpdateLock)
             {
-                return false;
-            }
+                // Only relevant during bootstrap
+                if (!_isBootstrapping || _clusterOptions.BootstrapExpect <= 0)
+                {
+                    return false;
+                }
 
-            // We need to know about at least one other node (contacted at least one seed)
-            // Otherwise we don't know if we're the smallest yet
-            if (_bootstrapKnownNodes.Count <= 1)
-            {
-                return false;
-            }
+                // We need to know about at least one other node (contacted at least one seed)
+                // Otherwise we don't know if we're the smallest yet
+                if (_bootstrapKnownNodes.Count <= 1)
+                {
+                    return false;
+                }
 
-            // Check if we're the smallest known node
-            var smallestNode = GetSmallestKnownNode();
-            return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
+                // Check if we're the smallest known node
+                var smallestNode = GetSmallestKnownNode();
+                return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
+            }
         }
     }
 
@@ -1182,16 +1203,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             memberInfos.Add(new MemberInfo(endpointWithId, metadata));
         }
 
-        // Create the initial configuration ID with cluster ID computed from the seed set
-        var initialConfigId = ConfigurationId.CreateInitial([.. memberInfos.Select(m => m.Endpoint)]);
-
-        // Create the initial membership view with MemberInfo (includes metadata)
-        _membershipView = new MembershipViewBuilder(
-            _options.ObserversPerSubject,
-            memberInfos,
-            maxNodeId: memberInfos.Count)
-            .BuildWithConfigurationId(initialConfigId);
-
+        // Build the initial membership view (null configId causes initial ConfigId to be generated)
+        _membershipView = BuildMembershipView(memberInfos, maxNodeId: memberInfos.Count, configurationId: null);
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
 
         // Exit bootstrap mode
@@ -1954,21 +1967,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             _pendingConsensusMessages.Clear();
 
             // Build new membership view from response
-            var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
-            for (var i = 0; i < successfulResponse.MetadataKeys.Count && i < successfulResponse.MetadataValues.Count; i++)
-            {
-                metadataMap[successfulResponse.MetadataKeys[i]] = successfulResponse.MetadataValues[i];
-            }
-
-            // Create MemberInfo for each endpoint with its metadata
-            var memberInfos = successfulResponse.Endpoints.Select(e =>
-                new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata()))).ToList();
-
-            // Build the new view - endpoints in the response already contain node_id
-            var newView = new MembershipViewBuilder(
-                _options.ObserversPerSubject,
+            var memberInfos = BuildMemberInfosFromResponse(
+                successfulResponse.Endpoints,
+                successfulResponse.MetadataKeys,
+                successfulResponse.MetadataValues);
+            var newView = BuildMembershipView(
                 memberInfos,
-                successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
+                successfulResponse.MaxNodeId,
+                ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
 
             // SetMembershipView handles computing membership changes, metrics, and joiner notifications
             oldConsensus = SetMembershipView(newView);
@@ -2078,22 +2084,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 return;
             }
 
-            // Build metadata map from response
-            var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
-            for (var i = 0; i < viewResponse.MetadataKeys.Count && i < viewResponse.MetadataValues.Count; i++)
-            {
-                metadataMap[viewResponse.MetadataKeys[i]] = viewResponse.MetadataValues[i];
-            }
-
-            // Create MemberInfo for each endpoint with its metadata
-            var memberInfos = viewResponse.Endpoints.Select(e =>
-                new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata()))).ToList();
-
-            // Build the new view from the response - endpoints already contain node_id
-            var newView = new MembershipViewBuilder(
-                _options.ObserversPerSubject,
-                memberInfos,
-                viewResponse.MaxNodeId).BuildWithConfigurationId(responseConfigId);
+            // Build the new view from response
+            var memberInfos = BuildMemberInfosFromResponse(
+                viewResponse.Endpoints,
+                viewResponse.MetadataKeys,
+                viewResponse.MetadataValues);
+            var newView = BuildMembershipView(memberInfos, viewResponse.MaxNodeId, responseConfigId);
 
             // Check if we were kicked (not in the new membership)
             // Use EndpointAddressComparer to ignore NodeId when checking membership

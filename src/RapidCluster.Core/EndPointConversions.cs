@@ -125,33 +125,20 @@ internal static class MetadataConversions
 internal static class MembershipViewConversions
 {
     /// <summary>
-    /// Creates a ClusterMembershipView from an internal MembershipView and metadata.
+    /// Creates a ClusterMembershipView from an internal MembershipView.
+    /// Metadata is retrieved from the MemberInfo stored in the view.
     /// </summary>
     /// <param name="view">The internal membership view.</param>
-    /// <param name="protobufMetadata">The metadata dictionary (protobuf Endpoint -> Metadata).</param>
     /// <returns>A public ClusterMembershipView.</returns>
-    internal static ClusterMembershipView ToClusterMembershipView(
-        this MembershipView view,
-        IReadOnlyDictionary<Endpoint, Metadata>? protobufMetadata = null)
+    internal static ClusterMembershipView ToClusterMembershipView(this MembershipView view)
     {
         var membersBuilder = ImmutableArray.CreateBuilder<ClusterMember>(view.Size);
 
-        for (var i = 0; i < view.Members.Length; i++)
+        foreach (var memberInfo in view.MemberInfos)
         {
-            var pbEndpoint = view.Members[i];
-            var endPoint = pbEndpoint.ToEndPointPreferIP();
-            var nodeId = pbEndpoint.NodeId;
-
-            ClusterNodeMetadata metadata;
-            if (protobufMetadata is not null && protobufMetadata.TryGetValue(pbEndpoint, out var pbMetadata))
-            {
-                metadata = pbMetadata.ToClusterMetadata();
-            }
-            else
-            {
-                metadata = ClusterNodeMetadata.Empty;
-            }
-
+            var endPoint = memberInfo.Endpoint.ToEndPointPreferIP();
+            var nodeId = memberInfo.Endpoint.NodeId;
+            var metadata = memberInfo.Metadata.ToClusterMetadata();
             membersBuilder.Add(new ClusterMember(endPoint, nodeId, metadata));
         }
 

@@ -30,7 +30,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
 
         var clusterId = cluster.CurrentView.ConfigurationId.ClusterId;
 
-        Assert.NotEqual(ClusterId.Empty, clusterId);
+        Assert.NotEqual(ClusterId.None, clusterId);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var seedClusterId = seed.CurrentView.ConfigurationId.ClusterId;
         var joinerClusterId = joiner.CurrentView.ConfigurationId.ClusterId;
 
-        Assert.NotEqual(ClusterId.Empty, seedClusterId);
+        Assert.NotEqual(ClusterId.None, seedClusterId);
         Assert.Equal(seedClusterId, joinerClusterId);
     }
 
@@ -71,7 +71,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var joiner1ClusterId = joiner1.CurrentView.ConfigurationId.ClusterId;
         var joiner2ClusterId = joiner2.CurrentView.ConfigurationId.ClusterId;
 
-        Assert.NotEqual(ClusterId.Empty, seedClusterId);
+        Assert.NotEqual(ClusterId.None, seedClusterId);
         Assert.Equal(seedClusterId, joiner1ClusterId);
         Assert.Equal(seedClusterId, joiner2ClusterId);
     }
@@ -95,7 +95,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         // ClusterId should remain stable
         var afterJoinClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
-        Assert.NotEqual(ClusterId.Empty, initialClusterId);
+        Assert.NotEqual(ClusterId.None, initialClusterId);
         Assert.Equal(initialClusterId, afterJoinClusterId);
     }
 

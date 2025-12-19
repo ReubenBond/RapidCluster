@@ -12,7 +12,7 @@ public class ConfigurationIdTests
     [Fact]
     public void ClusterId_Empty_Has_Value_Zero()
     {
-        Assert.Equal(0, ClusterId.Empty.Value);
+        Assert.Equal(0, ClusterId.None.Value);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class ConfigurationIdTests
     [Fact]
     public void Empty_Has_Empty_ClusterId()
     {
-        Assert.Equal(ClusterId.Empty, ConfigurationId.Empty.ClusterId);
+        Assert.Equal(ClusterId.None, ConfigurationId.Empty.ClusterId);
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public class ConfigurationIdTests
     [Fact]
     public void CompareTo_With_Empty_ClusterId_On_Left_Throws()
     {
-        var config1 = new ConfigurationId(ClusterId.Empty, 5);
+        var config1 = new ConfigurationId(ClusterId.None, 5);
         var config2 = new ConfigurationId(new ClusterId(100), 10);
 
         var ex = Assert.Throws<InvalidOperationException>(() => config1.CompareTo(config2));
@@ -216,7 +216,7 @@ public class ConfigurationIdTests
     public void CompareTo_With_Empty_ClusterId_On_Right_Throws()
     {
         var config1 = new ConfigurationId(new ClusterId(100), 10);
-        var config2 = new ConfigurationId(ClusterId.Empty, 5);
+        var config2 = new ConfigurationId(ClusterId.None, 5);
 
         var ex = Assert.Throws<InvalidOperationException>(() => config1.CompareTo(config2));
         Assert.Contains("Cannot compare ConfigurationIds with different ClusterIds", ex.Message, StringComparison.Ordinal);
@@ -225,8 +225,8 @@ public class ConfigurationIdTests
     [Fact]
     public void CompareTo_With_Both_Empty_ClusterIds_Compares_Versions()
     {
-        var config1 = new ConfigurationId(ClusterId.Empty, 5);
-        var config2 = new ConfigurationId(ClusterId.Empty, 10);
+        var config1 = new ConfigurationId(ClusterId.None, 5);
+        var config2 = new ConfigurationId(ClusterId.None, 10);
         Assert.True(config1.CompareTo(config2) < 0);
     }
 

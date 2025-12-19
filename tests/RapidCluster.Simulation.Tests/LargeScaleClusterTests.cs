@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using RapidCluster.Simulation.Tests.Infrastructure;
-using Xunit.v3;
 
 namespace RapidCluster.Simulation.Tests;
 

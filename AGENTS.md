@@ -58,11 +58,17 @@ Code coverage is collected using `Microsoft.Testing.Extensions.CodeCoverage`. Us
 
 ## Work Item Management
 
-Pending work items are stored as markdown files in the `todo/` directory. When completing a work item:
+Work items are stored as markdown files under the `tasks/` directory:
+- `tasks/todo/` - New/unstarted work items
+- `tasks/in-progress/` - Actively being worked on (update content as you go)
+- `tasks/done/` - Fully completed work items (only after all tests pass)
 
-1. **Update the work item file** with completion notes, implementation details, or any relevant findings
-2. **Move the file** from `todo/` to `done/` (create the `done/` directory if it doesn't exist)
-3. **Check for remaining work items** in the `todo/` directory and start work on them if any exist
+Workflow:
+1. **Create** new work items in `tasks/todo/`
+2. **Move** the work item to `tasks/in-progress/` when you start work
+3. **Update** the work item with notes, decisions, and findings while working
+4. **Run tests** relevant to the change(s)
+5. **Move** the work item to `tasks/done/` once it’s complete *and* all tests pass
 
 Work item files should be named descriptively (e.g., `001_PaxosMonotonicIds.md`) and contain:
 - Problem description

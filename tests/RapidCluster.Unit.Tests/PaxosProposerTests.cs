@@ -21,7 +21,7 @@ public sealed class PaxosProposerTests
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
-        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var isDecided = () => false;
         var proposer = new PaxosProposer(
             myAddr,
             configId,
@@ -29,7 +29,7 @@ public sealed class PaxosProposerTests
             broadcaster,
             membershipViewAccessor,
             CreateMetrics(),
-            decidedTcs.Task,
+            isDecided,
             NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
@@ -57,7 +57,7 @@ public sealed class PaxosProposerTests
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
-        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var isDecided = () => false;
         var proposer = new PaxosProposer(
             myAddr,
             configId,
@@ -65,7 +65,7 @@ public sealed class PaxosProposerTests
             broadcaster,
             membershipViewAccessor,
             CreateMetrics(),
-            decidedTcs.Task,
+            isDecided,
             NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
@@ -93,7 +93,7 @@ public sealed class PaxosProposerTests
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
 
-        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var isDecided = () => false;
         var proposer = new PaxosProposer(
             myAddr,
             configId,
@@ -101,7 +101,7 @@ public sealed class PaxosProposerTests
             broadcaster,
             membershipViewAccessor,
             CreateMetrics(),
-            decidedTcs.Task,
+            isDecided,
             NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
@@ -136,7 +136,7 @@ public sealed class PaxosProposerTests
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
 
-        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var isDecided = () => false;
         var proposer = new PaxosProposer(
             myAddr,
             configId,
@@ -144,7 +144,7 @@ public sealed class PaxosProposerTests
             broadcaster,
             membershipViewAccessor,
             CreateMetrics(),
-            decidedTcs.Task,
+            isDecided,
             NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
@@ -192,7 +192,7 @@ public sealed class PaxosProposerTests
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
-        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var isDecided = () => false;
         var proposer = new PaxosProposer(
             myAddr,
             configId,
@@ -200,7 +200,7 @@ public sealed class PaxosProposerTests
             broadcaster,
             membershipViewAccessor,
             CreateMetrics(),
-            decidedTcs.Task,
+            isDecided,
             NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
@@ -229,7 +229,7 @@ public sealed class PaxosProposerTests
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
-        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var isDecided = () => false;
         var proposer = new PaxosProposer(
             myAddr,
             configId,
@@ -237,7 +237,7 @@ public sealed class PaxosProposerTests
             broadcaster,
             membershipViewAccessor,
             CreateMetrics(),
-            decidedTcs.Task,
+            isDecided,
             NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);

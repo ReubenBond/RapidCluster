@@ -88,9 +88,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             metrics,
             paxosLogger);
 
-        var paxosDecidedTcs = new TaskCompletionSource<ConsensusResult>();
-        _paxosLearner.RegisterDecidedCallback(result => paxosDecidedTcs.TrySetResult(result));
-
         _paxosProposer = new PaxosProposer(
             myAddr,
             configurationId,
@@ -98,7 +95,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             broadcaster,
             membershipViewAccessor,
             metrics,
-            decided: paxosDecidedTcs.Task,
+            isDecided: () => _paxosLearner.IsDecided,
             paxosLogger);
 
         _log.Initialized(myAddr, configurationId, membershipSize);

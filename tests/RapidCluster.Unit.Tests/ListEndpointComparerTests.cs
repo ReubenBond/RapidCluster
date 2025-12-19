@@ -1,5 +1,6 @@
 using CsCheck;
 using Google.Protobuf;
+using RapidCluster;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Unit.Tests;
@@ -384,7 +385,7 @@ public class ListEndpointComparerTests
 
     private static MembershipProposal CreateProposal(Endpoint[] endpoints, long configId)
     {
-        var proposal = new MembershipProposal { ConfigurationId = configId };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), configId).ToProtobuf() };
         var counter = 0L;
         foreach (var endpoint in endpoints)
         {

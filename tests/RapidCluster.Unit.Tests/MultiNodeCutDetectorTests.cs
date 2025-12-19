@@ -12,17 +12,17 @@ public class MultiNodeCutDetectorTests
     private const int K = 10;
     private const int H = 8;
     private const int L = 2;
-    private const long ConfigurationId = -1; // Should not affect the following tests
+    private static readonly ConfigurationId DefaultConfigId = new(new ClusterId(888), -1); // Should not affect the following tests
 
     private static AlertMessage CreateAlertMessage(Endpoint src, Endpoint dst, EdgeStatus status,
-        long configurationId, int ringNumber)
+        ConfigurationId configurationId, int ringNumber)
     {
         var msg = new AlertMessage
         {
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = status,
-            ConfigurationId = configurationId
+            ConfigurationId = configurationId.ToProtobuf()
         };
         msg.RingNumber.Add(ringNumber);
         return msg;
@@ -56,13 +56,13 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Single(ret);
         Assert.Equal(1, detector.GetNumProposals());
     }
@@ -79,7 +79,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -87,18 +87,18 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(ret);
         Assert.Equal(0, detector.GetNumProposals());
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst2, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst2, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Equal(2, ret.Count);
         Assert.Equal(1, detector.GetNumProposals());
     }
@@ -116,7 +116,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -124,7 +124,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -132,23 +132,23 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst3, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst3, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(ret);
         Assert.Equal(0, detector.GetNumProposals());
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst3, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst3, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(ret);
         Assert.Equal(0, detector.GetNumProposals());
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst2, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst2, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Equal(3, ret.Count);
         Assert.Equal(1, detector.GetNumProposals());
     }
@@ -166,7 +166,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -174,7 +174,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -182,28 +182,28 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst3, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst3, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
 
         // Unlike the previous test, add more reports for dst1 and dst3 past the H boundary.
         detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H + 1), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H + 1), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(ret);
         Assert.Equal(0, detector.GetNumProposals());
 
         detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst3, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst3, EdgeStatus.Up, DefaultConfigId, H - 1));
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H + 1), dst3, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H + 1), dst3, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(ret);
         Assert.Equal(0, detector.GetNumProposals());
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst2, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst2, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Equal(3, ret.Count);
         Assert.Equal(1, detector.GetNumProposals());
     }
@@ -221,7 +221,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -230,7 +230,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < L - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -238,18 +238,18 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst3, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst3, EdgeStatus.Up, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(ret);
         Assert.Equal(0, detector.GetNumProposals());
 
         ret = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst3, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst3, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Equal(2, ret.Count);
         Assert.Equal(1, detector.GetNumProposals());
     }
@@ -274,7 +274,7 @@ public class MultiNodeCutDetectorTests
             {
                 proposal.AddRange(detector.AggregateForProposal(CreateAlertMessage(
                     Utils.HostFromParts("127.0.0.1", 1), endpoint, EdgeStatus.Up,
-                    ConfigurationId, ringNumber)));
+                    DefaultConfigId, ringNumber)));
             }
         }
 
@@ -308,7 +308,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             ret = detector.AggregateForProposal(CreateAlertMessage(observers[i], dst,
-                EdgeStatus.Down, ConfigurationId, i));
+                EdgeStatus.Down, DefaultConfigId, i));
             Assert.Empty(ret);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -322,7 +322,7 @@ public class MultiNodeCutDetectorTests
             for (var j = 0; j < K; j++)
             {
                 ret = detector.AggregateForProposal(CreateAlertMessage(observersOfObserver[j], observers[i],
-                    EdgeStatus.Down, ConfigurationId, j));
+                    EdgeStatus.Down, DefaultConfigId, j));
                 Assert.Empty(ret);
                 Assert.Equal(0, detector.GetNumProposals());
             }
@@ -422,7 +422,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < K; i++)
         {
             detector1.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.Equal(1, detector1.GetNumProposals());
@@ -444,7 +444,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < K; i++)
         {
             detector1.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.Equal(1, detector1.GetNumProposals());
@@ -455,7 +455,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < K; i++)
         {
             detector2.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.Equal(1, detector2.GetNumProposals());
@@ -483,9 +483,9 @@ public class MultiNodeCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result3 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result3 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Empty(result1);
         Assert.Empty(result2);
@@ -500,8 +500,8 @@ public class MultiNodeCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 1));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 1));
 
         Assert.Empty(result1);
         Assert.Empty(result2);
@@ -520,7 +520,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = DefaultConfigId.ToProtobuf()
         };
         for (var i = 0; i < K; i++)
         {
@@ -542,7 +542,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < K; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.Equal(1, detector.GetNumProposals());
@@ -558,7 +558,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < K; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Down, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Down, DefaultConfigId, i));
         }
 
         Assert.Equal(1, detector.GetNumProposals());
@@ -576,7 +576,7 @@ public class MultiNodeCutDetectorTests
             detector.AggregateForProposal(CreateAlertMessage(
                 Utils.HostFromParts("127.0.0.1", i + 1), dst,
                 i % 2 == 0 ? EdgeStatus.Up : EdgeStatus.Down,
-                ConfigurationId, i));
+                DefaultConfigId, i));
         }
 
         Assert.Equal(1, detector.GetNumProposals());
@@ -591,7 +591,7 @@ public class MultiNodeCutDetectorTests
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         Assert.Throws<ArgumentException>(() =>
-            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, K)));
+            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, K)));
     }
 
     [Fact]
@@ -603,7 +603,7 @@ public class MultiNodeCutDetectorTests
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         Assert.Throws<ArgumentException>(() =>
-            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, -1)));
+            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, -1)));
     }
 
     [Fact]
@@ -614,7 +614,7 @@ public class MultiNodeCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Empty(result);
     }
@@ -627,7 +627,7 @@ public class MultiNodeCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, K - 1));
+        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, K - 1));
 
         Assert.Empty(result);
     }
@@ -643,20 +643,20 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 100), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 100), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.Equal(0, detector.GetNumProposals());
 
         var result1 = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(result1);
         Assert.Equal(0, detector.GetNumProposals());
 
         var result2 = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H + 100), dst2, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H + 100), dst2, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Equal(2, result2.Count);
         Assert.Equal(1, detector.GetNumProposals());
     }
@@ -676,7 +676,7 @@ public class MultiNodeCutDetectorTests
             for (var i = 0; i < K; i++)
             {
                 var result = detector.AggregateForProposal(CreateAlertMessage(
-                    Utils.HostFromParts("192.168.0." + (i + 1), 1000 + d), dst, EdgeStatus.Up, ConfigurationId, i));
+                    Utils.HostFromParts("192.168.0." + (i + 1), 1000 + d), dst, EdgeStatus.Up, DefaultConfigId, i));
 
                 if (result.Count > 0)
                 {
@@ -698,7 +698,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         var result = detector.InvalidateFailingEdges();
@@ -739,7 +739,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = DefaultConfigId.ToProtobuf()
         };
         for (var i = 0; i < K; i++)
         {
@@ -771,7 +771,7 @@ public class MultiNodeCutDetectorTests
 
         // Create message with only ring 0
         var msg = CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", 1), dst, EdgeStatus.Up, ConfigurationId, 0);
+            Utils.HostFromParts("127.0.0.1", 1), dst, EdgeStatus.Up, DefaultConfigId, 0);
 
         // Process ring 0 - should work
         var result0 = detector.AggregateForProposalSingleRing(msg, 0);
@@ -800,7 +800,7 @@ public class MultiNodeCutDetectorTests
         var msg = CreateAlertMessage(
             Utils.HostFromParts("127.0.0.1", 1),
             Utils.HostFromParts("127.0.0.2", 2),
-            EdgeStatus.Up, ConfigurationId, 0);
+            EdgeStatus.Up, DefaultConfigId, 0);
 
         Assert.Throws<ArgumentException>(() => detector.AggregateForProposalSingleRing(msg, K));
         Assert.Throws<ArgumentException>(() => detector.AggregateForProposalSingleRing(msg, -1));
@@ -818,7 +818,7 @@ public class MultiNodeCutDetectorTests
             EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = DefaultConfigId.ToProtobuf()
         };
         for (var i = 0; i < H; i++)
         {
@@ -863,7 +863,7 @@ public class MultiNodeCutDetectorTests
             for (var ring = 0; ring < K; ring++)
             {
                 var result = detector.AggregateForProposal(CreateAlertMessage(
-                    Utils.HostFromParts("127.0.0.1", ring + 1), dst, EdgeStatus.Up, ConfigurationId, ring));
+                    Utils.HostFromParts("127.0.0.1", ring + 1), dst, EdgeStatus.Up, DefaultConfigId, ring));
                 if (result.Count > 0)
                 {
                     proposalCount++;
@@ -899,7 +899,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = DefaultConfigId.ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -956,7 +956,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = observer,
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = DefaultConfigId.ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -1008,19 +1008,19 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // Bring dst2 to L reports (in preProposal)
         for (var i = 0; i < L; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // Push dst1 to H - should NOT trigger because dst2 is blocking
         var result = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
 
         Assert.Empty(result);
         Assert.Equal(0, detector.GetNumProposals());
@@ -1029,7 +1029,7 @@ public class MultiNodeCutDetectorTests
         for (var i = L; i < H; i++)
         {
             result = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.Equal(2, result.Count);
@@ -1054,7 +1054,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < L - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // Bring dst1 to H reports
@@ -1062,7 +1062,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H; i++)
         {
             result = detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 100), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 100), dst1, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // dst1 should be proposed (dst2 below L doesn't block)
@@ -1095,7 +1095,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = DefaultConfigId.ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -1132,7 +1132,7 @@ public class MultiNodeCutDetectorTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = ConfigurationId
+                ConfigurationId = DefaultConfigId.ToProtobuf()
             };
             for (var r = 0; r < K; r++)
             {
@@ -1185,7 +1185,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             var result = detector.AggregateForProposal(CreateAlertMessage(observers[i], dst,
-                EdgeStatus.Down, ConfigurationId, i));
+                EdgeStatus.Down, DefaultConfigId, i));
             Assert.Empty(result);
             Assert.Equal(0, detector.GetNumProposals());
         }
@@ -1199,7 +1199,7 @@ public class MultiNodeCutDetectorTests
             for (var j = 0; j < K; j++)
             {
                 var result = detector.AggregateForProposal(CreateAlertMessage(observersOfObserver[j], observers[i],
-                    EdgeStatus.Down, ConfigurationId, j));
+                    EdgeStatus.Down, DefaultConfigId, j));
                 Assert.Empty(result);
                 Assert.Equal(0, detector.GetNumProposals());
             }
@@ -1231,7 +1231,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // InvalidateFailingEdges should return empty (no DOWN events)
@@ -1261,7 +1261,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < L; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                endpoints[i + 1], failingNode, EdgeStatus.Down, ConfigurationId, i));
+                endpoints[i + 1], failingNode, EdgeStatus.Down, DefaultConfigId, i));
         }
 
         // InvalidateFailingEdges should be callable (may or may not produce results)
@@ -1850,7 +1850,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < L; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.True(detector.HasNodesInUnstableMode());
@@ -1867,7 +1867,7 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.False(detector.HasNodesInUnstableMode());
@@ -1896,14 +1896,14 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // Bring dst2 to L reports (unstable)
         for (var i = 0; i < L; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 100), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 100), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         Assert.True(detector.HasNodesInUnstableMode());
@@ -1932,19 +1932,19 @@ public class MultiNodeCutDetectorTests
         for (var i = 0; i < H - 1; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 1), dst1, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // Bring dst2 to L reports (unstable - blocking dst1)
         for (var i = 0; i < L; i++)
         {
             detector.AggregateForProposal(CreateAlertMessage(
-                Utils.HostFromParts("127.0.0.1", i + 100), dst2, EdgeStatus.Up, ConfigurationId, i));
+                Utils.HostFromParts("127.0.0.1", i + 100), dst2, EdgeStatus.Up, DefaultConfigId, i));
         }
 
         // Now bring dst1 to H (should NOT trigger proposal due to dst2 blocking)
         var intermediateResult = detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, ConfigurationId, H - 1));
+            Utils.HostFromParts("127.0.0.1", H), dst1, EdgeStatus.Up, DefaultConfigId, H - 1));
         Assert.Empty(intermediateResult); // Blocked
 
         // Force promote - both should be included

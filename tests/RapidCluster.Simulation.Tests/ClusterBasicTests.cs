@@ -40,7 +40,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
 
         Assert.NotNull(seedNode.CurrentView);
-        Assert.True(seedNode.CurrentView.ConfigurationId >= 0);
+        Assert.True(seedNode.CurrentView.ConfigurationId.Version >= 0);
     }
 
     [Fact]

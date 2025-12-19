@@ -34,13 +34,13 @@ public sealed partial class PingPongFailureDetectorFactory(
     /// local node was kicked (not in view) or just missed consensus rounds (still in view).
     /// Parameters: (remoteEndpoint, remoteConfigId, localConfigId)
     /// </summary>
-    public Action<Endpoint, long, long>? OnStaleViewDetected { get; set; }
+    public Action<Endpoint, ConfigurationId, ConfigurationId>? OnStaleViewDetected { get; set; }
 
     /// <summary>
-    /// Gets or sets a function that returns the current local configuration ID.
+    /// Gets or sets the view accessor to retrieve the current local configuration ID.
     /// Used to detect stale views.
     /// </summary>
-    public Func<long>? GetLocalConfigurationId { get; set; }
+    internal IMembershipViewAccessor? ViewAccessor { get; set; }
 
     public IEdgeFailureDetector CreateInstance(Endpoint subject, Action notifier) =>
         new PingPongFailureDetector(
@@ -52,7 +52,7 @@ public sealed partial class PingPongFailureDetectorFactory(
             _protocolOptions.FailureDetectorConsecutiveFailures,
             _protocolOptions.FailureDetectorInterval,
             OnStaleViewDetected,
-            GetLocalConfigurationId,
+            ViewAccessor,
             _metrics,
             _logger);
 }
@@ -72,8 +72,8 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     private readonly Action _notifier;
     private readonly int _consecutiveFailuresThreshold;
     private readonly TimeSpan _probeInterval;
-    private readonly Action<Endpoint, long, long>? _onStaleViewDetected;
-    private readonly Func<long>? _getLocalConfigurationId;
+    private readonly Action<Endpoint, ConfigurationId, ConfigurationId>? _onStaleViewDetected;
+    private readonly IMembershipViewAccessor? _viewAccessor;
     private readonly RapidClusterMetrics _metrics;
     private readonly ILogger<PingPongFailureDetector> _logger;
     private readonly CancellationTokenSource _cts = new();
@@ -92,10 +92,10 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     /// <param name="consecutiveFailuresThreshold">Number of consecutive failures required before declaring node down.</param>
     /// <param name="probeInterval">Interval between failure detector probes.</param>
     /// <param name="onStaleViewDetected">Optional callback when stale view is detected (learner role).</param>
-    /// <param name="getLocalConfigurationId">Optional function to get local configuration ID.</param>
+    /// <param name="viewAccessor">Optional view accessor to get local configuration ID.</param>
     /// <param name="metrics">Metrics for recording probe statistics.</param>
     /// <param name="logger">Optional logger.</param>
-    public PingPongFailureDetector(
+    internal PingPongFailureDetector(
         Endpoint subject,
         Endpoint observer,
         IMessagingClient client,
@@ -103,8 +103,8 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         Action notifier,
         int consecutiveFailuresThreshold = 3,
         TimeSpan probeInterval = default,
-        Action<Endpoint, long, long>? onStaleViewDetected = null,
-        Func<long>? getLocalConfigurationId = null,
+        Action<Endpoint, ConfigurationId, ConfigurationId>? onStaleViewDetected = null,
+        IMembershipViewAccessor? viewAccessor = null,
         RapidClusterMetrics? metrics = null,
         ILogger<PingPongFailureDetector>? logger = null)
     {
@@ -116,7 +116,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         _consecutiveFailuresThreshold = consecutiveFailuresThreshold;
         _probeInterval = probeInterval == default ? TimeSpan.FromSeconds(1) : probeInterval;
         _onStaleViewDetected = onStaleViewDetected;
-        _getLocalConfigurationId = getLocalConfigurationId;
+        _viewAccessor = viewAccessor;
         _metrics = metrics!;
         _logger = logger ?? NullLogger<PingPongFailureDetector>.Instance;
     }
@@ -134,7 +134,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     private partial void LogProbeSucceeded(LoggableEndpoint Subject);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stale view detected from {Subject}: remote config {RemoteConfigId} > local config {LocalConfigId}")]
-    private partial void LogStaleViewDetected(LoggableEndpoint Subject, long RemoteConfigId, long LocalConfigId);
+    private partial void LogStaleViewDetected(LoggableEndpoint Subject, ConfigurationId RemoteConfigId, ConfigurationId LocalConfigId);
 
     public void Start()
     {
@@ -166,8 +166,8 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
 #pragma warning disable CA1031
         try
         {
-            var localConfigId = _getLocalConfigurationId?.Invoke() ?? 0;
-            var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId }.ToRapidClusterRequest();
+            var localConfigId = _viewAccessor?.CurrentView.ConfigurationId ?? ConfigurationId.Empty;
+            var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId.ToProtobuf() }.ToRapidClusterRequest();
             var response = await _client.SendMessageAsync(_subject, request, _cts.Token).ConfigureAwait(true);
             stopwatch.Stop();
 
@@ -217,10 +217,10 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     {
         // Check if we have a stale view (remote has higher config ID)
         // The callback will determine if we were kicked (not in new view) or just missed consensus
-        if (_onStaleViewDetected != null && _getLocalConfigurationId != null)
+        if (_onStaleViewDetected != null && _viewAccessor != null)
         {
-            var localConfigId = _getLocalConfigurationId();
-            var remoteConfigId = probeResponse.ConfigurationId;
+            var localConfigId = _viewAccessor.CurrentView.ConfigurationId;
+            var remoteConfigId = ConfigurationId.FromProtobuf(probeResponse.ConfigurationId);
 
             if (remoteConfigId > localConfigId)
             {

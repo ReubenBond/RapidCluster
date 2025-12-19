@@ -14,6 +14,12 @@ message Endpoint
     int64 node_id = 3;  // Monotonically increasing ID assigned during join for Paxos correctness
 }
 
+message ConfigurationId
+{
+    uint64 clusterId = 1;
+    int64 version = 2;
+}
+
 
 // All-in-one message type.
 message RapidClusterRequest
@@ -52,7 +58,7 @@ message PreJoinMessage
 {
    Endpoint sender = 1;
    repeated int32 ringNumber = 2;
-   int64 configurationId = 3;
+   ConfigurationId configurationId = 3;
 }
 
 // Phase 2 of join protocol: joiner contacts observers to announce intent to join
@@ -60,7 +66,7 @@ message JoinMessage
 {
    Endpoint sender = 1;
    repeated int32 ringNumber = 2;
-   int64 configurationId = 3;
+   ConfigurationId configurationId = 3;
    Metadata metadata = 4;
 }
 
@@ -68,7 +74,7 @@ message JoinResponse
 {
    Endpoint sender = 1;
    JoinStatusCode statusCode = 2;
-   int64 configurationId = 3;
+   ConfigurationId configurationId = 3;
    repeated Endpoint endpoints = 4;
    repeated Endpoint metadataKeys = 5;
    repeated Metadata metadataValues = 6;
@@ -95,7 +101,7 @@ message AlertMessage
     Endpoint edgeSrc = 1;
     Endpoint edgeDst = 2;
     EdgeStatus edgeStatus = 3;
-    int64 configurationId = 4;
+    ConfigurationId configurationId = 4;
     repeated int32 ringNumber = 5;
     Metadata metadata = 6;                // Required only for join protocol
 }
@@ -117,7 +123,7 @@ message Response
 message MembershipProposal
 {
     // The new configuration ID (version) for this view
-    int64 configurationId = 1;
+    ConfigurationId configurationId = 1;
 
     // All members in the new view (Endpoint contains node_id)
     repeated Endpoint members = 2;
@@ -135,7 +141,7 @@ message MembershipProposal
 message FastRoundPhase2bMessage
 {
     Endpoint sender = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     MembershipProposal proposal = 3;
 }
 
@@ -150,14 +156,14 @@ message Rank
 message Phase1aMessage
 {
     Endpoint sender = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     Rank rank = 3;
 }
 
 message Phase1bMessage
 {
     Endpoint sender = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     Rank rnd = 3;
     Rank vrnd = 4;
     MembershipProposal proposal = 5;
@@ -166,7 +172,7 @@ message Phase1bMessage
 message Phase2aMessage
 {
     Endpoint sender = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     Rank rnd = 3;
     MembershipProposal proposal = 4;
 }
@@ -174,7 +180,7 @@ message Phase2aMessage
 message Phase2bMessage
 {
     Endpoint sender = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     Rank rnd = 3;
     MembershipProposal proposal = 4;
 }
@@ -204,13 +210,13 @@ message ProbeMessage
 {
     Endpoint sender = 1;
     repeated bytes payload = 2;
-    int64 configurationId = 3;  // Sender's configuration ID for bidirectional stale view detection
+    ConfigurationId configurationId = 3;  // Sender's configuration ID for bidirectional stale view detection
 }
 
 message ProbeResponse
 {
     NodeStatus status = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     bool senderInMembership = 3;  // Indicates if the probe sender is in the responder's membership view
 }
 
@@ -231,7 +237,7 @@ enum NodeStatus {
 message MembershipViewRequest
 {
     Endpoint sender = 1;
-    int64 currentConfigurationId = 2;  // The requester's current configuration ID
+    ConfigurationId currentConfigurationId = 2;  // The requester's current configuration ID
 }
 
 // Response containing the full membership view.
@@ -239,7 +245,7 @@ message MembershipViewRequest
 message MembershipViewResponse
 {
     Endpoint sender = 1;
-    int64 configurationId = 2;
+    ConfigurationId configurationId = 2;
     repeated Endpoint endpoints = 3;
     repeated Endpoint metadataKeys = 4;
     repeated Metadata metadataValues = 5;

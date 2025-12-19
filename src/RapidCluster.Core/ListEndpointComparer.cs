@@ -85,7 +85,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         if (x is null || y is null) return false;
 
         // Compare by configurationId and member endpoints
-        if (x.ConfigurationId != y.ConfigurationId) return false;
+        if (x.ConfigurationId.ToConfigurationId() != y.ConfigurationId.ToConfigurationId()) return false;
         if (x.Members.Count != y.Members.Count) return false;
 
         for (var i = 0; i < x.Members.Count; i++)
@@ -120,7 +120,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         if (y is null) return 1;
 
         // First compare by configurationId
-        var configCompare = x.ConfigurationId.CompareTo(y.ConfigurationId);
+        var configCompare = x.ConfigurationId.ToConfigurationId().CompareTo(y.ConfigurationId.ToConfigurationId());
         if (configCompare != 0) return configCompare;
 
         // Then by member count

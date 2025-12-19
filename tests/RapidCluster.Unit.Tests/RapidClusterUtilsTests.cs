@@ -147,14 +147,14 @@ public class RapidClusterUtilsTests
         var msg = new JoinMessage
         {
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = 100
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
         };
 
         var request = msg.ToRapidClusterRequest();
 
         Assert.NotNull(request.JoinMessage);
         Assert.Equal(msg.Sender, request.JoinMessage.Sender);
-        Assert.Equal(100, request.JoinMessage.ConfigurationId);
+        Assert.Equal(1, request.JoinMessage.ConfigurationId.Version);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class RapidClusterUtilsTests
             EdgeSrc = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             EdgeDst = RapidClusterUtils.HostFromParts("127.0.0.1", 1235),
             EdgeStatus = EdgeStatus.Down,
-            ConfigurationId = 100
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
         });
 
         var request = msg.ToRapidClusterRequest();
@@ -192,14 +192,14 @@ public class RapidClusterUtilsTests
     [Fact]
     public void ToRapidClusterRequestFastRoundPhase2bMessageWrapsCorrectly()
     {
-        var proposal = new MembershipProposal { ConfigurationId = 100 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf() };
         var endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235);
         endpoint.NodeId = 12345L;
         proposal.Members.Add(endpoint);
 
         var msg = new FastRoundPhase2bMessage
         {
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Proposal = proposal
         };
@@ -207,7 +207,7 @@ public class RapidClusterUtilsTests
         var request = msg.ToRapidClusterRequest();
 
         Assert.NotNull(request.FastRoundPhase2BMessage);
-        Assert.Equal(100, request.FastRoundPhase2BMessage.ConfigurationId);
+        Assert.Equal(1, request.FastRoundPhase2BMessage.ConfigurationId.Version);
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public class RapidClusterUtilsTests
     {
         var msg = new Phase1aMessage
         {
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rank = new Rank { Round = 2, NodeIndex = 5 }
         };
@@ -231,7 +231,7 @@ public class RapidClusterUtilsTests
     {
         var msg = new Phase1bMessage
         {
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 2, NodeIndex = 5 },
             Vrnd = new Rank { Round = 1, NodeIndex = 3 }
@@ -246,14 +246,14 @@ public class RapidClusterUtilsTests
     [Fact]
     public void ToRapidClusterRequestPhase2aMessageWrapsCorrectly()
     {
-        var proposal = new MembershipProposal { ConfigurationId = 100 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf() };
         var endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235);
         endpoint.NodeId = 12345L;
         proposal.Members.Add(endpoint);
 
         var msg = new Phase2aMessage
         {
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 2, NodeIndex = 5 },
             Proposal = proposal
@@ -268,14 +268,14 @@ public class RapidClusterUtilsTests
     [Fact]
     public void ToRapidClusterRequestPhase2bMessageWrapsCorrectly()
     {
-        var proposal = new MembershipProposal { ConfigurationId = 100 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf() };
         var endpoint = RapidClusterUtils.HostFromParts("127.0.0.1", 1235);
         endpoint.NodeId = 12345L;
         proposal.Members.Add(endpoint);
 
         var msg = new Phase2bMessage
         {
-            ConfigurationId = 100,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 2, NodeIndex = 5 },
             Proposal = proposal
@@ -307,7 +307,7 @@ public class RapidClusterUtilsTests
         var msg = new JoinResponse
         {
             StatusCode = JoinStatusCode.SafeToJoin,
-            ConfigurationId = 100
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
         };
         msg.Endpoints.Add(RapidClusterUtils.HostFromParts("127.0.0.1", 1234));
 

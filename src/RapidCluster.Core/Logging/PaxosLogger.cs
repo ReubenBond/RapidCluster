@@ -19,8 +19,8 @@ internal sealed partial class PaxosLogger(ILogger<Paxos> logger)
     public partial void BroadcastingPhase1a();
 
     [LoggerMessage(EventName = nameof(PaxosInitialized), Level = LogLevel.Debug, Message = "Paxos initialized: myAddr={MyAddr}, configId={ConfigId}, n={N}")]
-    private partial void PaxosInitializedCore(LoggableEndpoint myAddr, long configId, int n);
-    public void PaxosInitialized(Endpoint myAddr, long configId, int n) => PaxosInitializedCore(new(myAddr), configId, n);
+    private partial void PaxosInitializedCore(LoggableEndpoint myAddr, ConfigurationId configId, int n);
+    public void PaxosInitialized(Endpoint myAddr, ConfigurationId configId, int n) => PaxosInitializedCore(new(myAddr), configId, n);
 
     [LoggerMessage(EventName = nameof(RegisterFastRoundVote), Level = LogLevel.Debug, Message = "RegisterFastRoundVote: proposal={Proposal}, voteCount={VoteCount}")]
     private partial void RegisterFastRoundVoteCore(LoggableMembershipProposal proposal, int voteCount);
@@ -30,11 +30,11 @@ internal sealed partial class PaxosLogger(ILogger<Paxos> logger)
     public partial void StartPhase1aSkipped(int currentRound, int requestedRound);
 
     [LoggerMessage(EventName = nameof(HandlePhase1aReceived), Level = LogLevel.Debug, Message = "HandlePhase1aMessage: received from {Sender}, rank={Rank}, configId={ConfigId}")]
-    private partial void HandlePhase1aReceivedCore(LoggableEndpoint sender, Rank rank, long configId);
-    public void HandlePhase1aReceived(Endpoint sender, Rank rank, long configId) => HandlePhase1aReceivedCore(new(sender), rank, configId);
+    private partial void HandlePhase1aReceivedCore(LoggableEndpoint sender, Rank rank, ConfigurationId configId);
+    public void HandlePhase1aReceived(Endpoint sender, Rank rank, ConfigurationId configId) => HandlePhase1aReceivedCore(new(sender), rank, configId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase1aMessage: config mismatch, expected={Expected}, got={Got}")]
-    public partial void Phase1aConfigMismatch(long expected, long got);
+    public partial void Phase1aConfigMismatch(ConfigurationId expected, ConfigurationId got);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase1aMessage: rank too low, received={Received}, current={Current}")]
     public partial void Phase1aRankTooLow(Rank received, Rank current);
@@ -44,11 +44,11 @@ internal sealed partial class PaxosLogger(ILogger<Paxos> logger)
     public void SendingPhase1b(Endpoint destination, Rank rnd, Rank vrnd, MembershipProposal? vval) => SendingPhase1bCore(new(destination), rnd, vrnd, new(vval));
 
     [LoggerMessage(EventName = nameof(HandlePhase1bReceived), Level = LogLevel.Debug, Message = "HandlePhase1bMessage: received from {Sender}, rnd={Rnd}, vrnd={Vrnd}, configId={ConfigId}")]
-    private partial void HandlePhase1bReceivedCore(LoggableEndpoint sender, Rank rnd, Rank vrnd, long configId);
-    public void HandlePhase1bReceived(Endpoint sender, Rank rnd, Rank vrnd, long configId) => HandlePhase1bReceivedCore(new(sender), rnd, vrnd, configId);
+    private partial void HandlePhase1bReceivedCore(LoggableEndpoint sender, Rank rnd, Rank vrnd, ConfigurationId configId);
+    public void HandlePhase1bReceived(Endpoint sender, Rank rnd, Rank vrnd, ConfigurationId configId) => HandlePhase1bReceivedCore(new(sender), rnd, vrnd, configId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase1bMessage: config mismatch, expected={Expected}, got={Got}")]
-    public partial void Phase1bConfigMismatch(long expected, long got);
+    public partial void Phase1bConfigMismatch(ConfigurationId expected, ConfigurationId got);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase1bMessage: round mismatch, expected={Expected}, got={Got}")]
     public partial void Phase1bRoundMismatch(Rank expected, Rank got);
@@ -61,11 +61,11 @@ internal sealed partial class PaxosLogger(ILogger<Paxos> logger)
     public void Phase1bChosenValue(MembershipProposal? chosenValue) => Phase1bChosenValueCore(new(chosenValue));
 
     [LoggerMessage(EventName = nameof(HandlePhase2aReceived), Level = LogLevel.Debug, Message = "HandlePhase2aMessage: received from {Sender}, rnd={Rnd}, vval={Vval}, configId={ConfigId}")]
-    private partial void HandlePhase2aReceivedCore(LoggableEndpoint sender, Rank rnd, LoggableMembershipProposal vval, long configId);
-    public void HandlePhase2aReceived(Endpoint sender, Rank rnd, MembershipProposal? vval, long configId) => HandlePhase2aReceivedCore(new(sender), rnd, new(vval), configId);
+    private partial void HandlePhase2aReceivedCore(LoggableEndpoint sender, Rank rnd, LoggableMembershipProposal vval, ConfigurationId configId);
+    public void HandlePhase2aReceived(Endpoint sender, Rank rnd, MembershipProposal? vval, ConfigurationId configId) => HandlePhase2aReceivedCore(new(sender), rnd, new(vval), configId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase2aMessage: config mismatch, expected={Expected}, got={Got}")]
-    public partial void Phase2aConfigMismatch(long expected, long got);
+    public partial void Phase2aConfigMismatch(ConfigurationId expected, ConfigurationId got);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase2aMessage: rank too low, received={Received}, current={Current}")]
     public partial void Phase2aRankTooLow(Rank received, Rank current);
@@ -75,11 +75,11 @@ internal sealed partial class PaxosLogger(ILogger<Paxos> logger)
     public void SendingPhase2b(Endpoint destination, Rank rnd, MembershipProposal? vval) => SendingPhase2bCore(new(destination), rnd, new(vval));
 
     [LoggerMessage(EventName = nameof(HandlePhase2bReceived), Level = LogLevel.Debug, Message = "HandlePhase2bMessage: received from {Sender}, rnd={Rnd}, endpoints={Endpoints}, configId={ConfigId}")]
-    private partial void HandlePhase2bReceivedCore(LoggableEndpoint sender, Rank rnd, LoggableMembershipProposal endpoints, long configId);
-    public void HandlePhase2bReceived(Endpoint sender, Rank rnd, MembershipProposal? endpoints, long configId) => HandlePhase2bReceivedCore(new(sender), rnd, new(endpoints), configId);
+    private partial void HandlePhase2bReceivedCore(LoggableEndpoint sender, Rank rnd, LoggableMembershipProposal endpoints, ConfigurationId configId);
+    public void HandlePhase2bReceived(Endpoint sender, Rank rnd, MembershipProposal? endpoints, ConfigurationId configId) => HandlePhase2bReceivedCore(new(sender), rnd, new(endpoints), configId);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase2bMessage: config mismatch, expected={Expected}, got={Got}")]
-    public partial void Phase2bConfigMismatch(long expected, long got);
+    public partial void Phase2bConfigMismatch(ConfigurationId expected, ConfigurationId got);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandlePhase2bMessage: collected {Count} accept responses for round {Rnd}, threshold={Threshold}, f={F}")]
     public partial void Phase2bCollected(int count, Rank rnd, int threshold, int f);

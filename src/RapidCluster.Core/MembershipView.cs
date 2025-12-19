@@ -368,7 +368,7 @@ public sealed class MembershipViewConfiguration
     /// <summary>
     /// Gets the configuration ID for this configuration (version 0).
     /// </summary>
-    public ConfigurationId ConfigurationId => new(0);
+    public ConfigurationId ConfigurationId => new(ConfigurationId.Empty.ClusterId, 0);
 
     private string DebuggerDisplay => $"MembershipViewConfiguration(Endpoints={Endpoints.Length}, MaxNodeId={MaxNodeId})";
 }

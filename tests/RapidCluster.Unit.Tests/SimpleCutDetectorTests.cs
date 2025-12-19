@@ -9,17 +9,17 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class SimpleCutDetectorTests
 {
-    private const long ConfigurationId = -1; // Should not affect the following tests
+    private static readonly ConfigurationId DefaultConfigId = new(new ClusterId(888), -1); // Should not affect the following tests
 
     private static AlertMessage CreateAlertMessage(Endpoint src, Endpoint dst, EdgeStatus status,
-        long configurationId, int ringNumber)
+        ConfigurationId configurationId, int ringNumber)
     {
         var msg = new AlertMessage
         {
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = status,
-            ConfigurationId = configurationId
+            ConfigurationId = configurationId.ToProtobuf()
         };
         msg.RingNumber.Add(ringNumber);
         return msg;
@@ -87,7 +87,7 @@ public class SimpleCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Single(result);
         Assert.Equal(dst, result[0]);
@@ -102,8 +102,8 @@ public class SimpleCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Single(result1);
         Assert.Empty(result2);
@@ -119,8 +119,8 @@ public class SimpleCutDetectorTests
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst1, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst2, EdgeStatus.Up, ConfigurationId, 0));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst1, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst2, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Single(result1);
         Assert.Single(result2);
@@ -135,7 +135,7 @@ public class SimpleCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Empty(result);
         Assert.Equal(0, detector.GetNumProposals());
@@ -150,8 +150,8 @@ public class SimpleCutDetectorTests
         var src2 = Utils.HostFromParts("127.0.0.1", 2);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src1, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src2, dst, EdgeStatus.Up, ConfigurationId, 1));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src1, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src2, dst, EdgeStatus.Up, DefaultConfigId, 1));
 
         Assert.Empty(result1);
         Assert.Single(result2);
@@ -169,8 +169,8 @@ public class SimpleCutDetectorTests
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Both votes for ring 0
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src1, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src2, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src1, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src2, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Empty(result1);
         Assert.Empty(result2); // Duplicate ring number ignored
@@ -188,12 +188,12 @@ public class SimpleCutDetectorTests
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 
         // One vote for dst1
-        detector.AggregateForProposal(CreateAlertMessage(src1, dst1, EdgeStatus.Up, ConfigurationId, 0));
+        detector.AggregateForProposal(CreateAlertMessage(src1, dst1, EdgeStatus.Up, DefaultConfigId, 0));
         Assert.Equal(0, detector.GetNumProposals());
 
         // Two votes for dst2
-        detector.AggregateForProposal(CreateAlertMessage(src1, dst2, EdgeStatus.Up, ConfigurationId, 0));
-        var result = detector.AggregateForProposal(CreateAlertMessage(src2, dst2, EdgeStatus.Up, ConfigurationId, 1));
+        detector.AggregateForProposal(CreateAlertMessage(src1, dst2, EdgeStatus.Up, DefaultConfigId, 0));
+        var result = detector.AggregateForProposal(CreateAlertMessage(src2, dst2, EdgeStatus.Up, DefaultConfigId, 1));
 
         Assert.Single(result);
         Assert.Equal(dst2, result[0]);
@@ -211,7 +211,7 @@ public class SimpleCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        detector1.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        detector1.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
         Assert.Equal(1, detector1.GetNumProposals());
 
         // Create new detector (simulating view change)
@@ -227,13 +227,13 @@ public class SimpleCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        detector1.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        detector1.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         // Create new detector (simulating view change)
         var detector2 = new SimpleCutDetector(view);
 
         // Same message should trigger proposal again on new detector
-        var result = detector2.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result = detector2.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
         Assert.Single(result);
         Assert.Equal(1, detector2.GetNumProposals());
     }
@@ -247,8 +247,8 @@ public class SimpleCutDetectorTests
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 
-        var resultUp = detector.AggregateForProposal(CreateAlertMessage(src, dst1, EdgeStatus.Up, ConfigurationId, 0));
-        var resultDown = detector.AggregateForProposal(CreateAlertMessage(src, dst2, EdgeStatus.Down, ConfigurationId, 0));
+        var resultUp = detector.AggregateForProposal(CreateAlertMessage(src, dst1, EdgeStatus.Up, DefaultConfigId, 0));
+        var resultDown = detector.AggregateForProposal(CreateAlertMessage(src, dst2, EdgeStatus.Down, DefaultConfigId, 0));
 
         Assert.Single(resultUp);
         Assert.Single(resultDown);
@@ -268,7 +268,7 @@ public class SimpleCutDetectorTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = ConfigurationId
+            ConfigurationId = DefaultConfigId.ToProtobuf()
         };
         // For K=1, only ring 0 is valid, but the message might contain it
         msg.RingNumber.Add(0);
@@ -289,7 +289,7 @@ public class SimpleCutDetectorTests
 
         // Ring number 5 is larger than K=1, should throw
         Assert.Throws<ArgumentException>(() =>
-            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 5)));
+            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 5)));
     }
 
     [Fact]
@@ -301,7 +301,7 @@ public class SimpleCutDetectorTests
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         Assert.Throws<ArgumentException>(() =>
-            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, -1)));
+            detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, -1)));
     }
 
     [Fact]
@@ -312,7 +312,7 @@ public class SimpleCutDetectorTests
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
-        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        var result = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.Empty(result); // Need 2 votes for K=2
     }
@@ -326,8 +326,8 @@ public class SimpleCutDetectorTests
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Two different ring numbers from the same source count as two votes
-        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
-        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 1));
+        var result1 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
+        var result2 = detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 1));
 
         Assert.Empty(result1);
         Assert.Single(result2); // Second vote triggers proposal
@@ -352,7 +352,7 @@ public class SimpleCutDetectorTests
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Only UP events, no DOWN
-        detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, ConfigurationId, 0));
+        detector.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         var result = detector.InvalidateFailingEdges();
 
@@ -485,7 +485,7 @@ public class SimpleCutDetectorTests
 
         // Add 1 report (pending, needs 2)
         detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", 1), dst, EdgeStatus.Up, ConfigurationId, 0));
+            Utils.HostFromParts("127.0.0.1", 1), dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.True(detector.HasNodesInUnstableMode());
     }
@@ -499,7 +499,7 @@ public class SimpleCutDetectorTests
 
         // Add 1 report (pending, needs 2)
         detector.AggregateForProposal(CreateAlertMessage(
-            Utils.HostFromParts("127.0.0.1", 1), dst, EdgeStatus.Up, ConfigurationId, 0));
+            Utils.HostFromParts("127.0.0.1", 1), dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         Assert.True(detector.HasNodesInUnstableMode());
         Assert.Equal(0, detector.GetNumProposals());

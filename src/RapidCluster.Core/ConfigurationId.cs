@@ -1,71 +1,94 @@
 using System.Diagnostics;
+using RapidCluster.Pb;
 
 namespace RapidCluster;
 
 /// <summary>
-/// Represents a configuration identifier as a monotonically incrementing version counter.
-/// Each configuration change (node join or leave) results in a new ConfigurationId with
-/// an incremented version number.
+/// Uniquely identifies a Rapid cluster instance. 
+/// Computed exactly once during cluster bootstrapping and stays constant for the life of the cluster.
 /// </summary>
 /// <remarks>
-/// The struct is designed to be wire-compatible with the int64 configurationId in protobuf messages.
+/// Initializes a new ClusterId with the specified value.
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
-public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparable<ConfigurationId>
+public readonly struct ClusterId(long value) : IEquatable<ClusterId>
 {
     /// <summary>
-    /// The default/empty configuration ID with version 0.
+    /// The empty cluster ID (0).
     /// </summary>
-    public static readonly ConfigurationId Empty = new(0);
+    public static readonly ClusterId Empty = new(0);
+
+    /// <summary>
+    /// Gets the underlying 64-bit value.
+    /// </summary>
+    public long Value { get; } = value;
+
+    public bool Equals(ClusterId other) => Value == other.Value;
+    public override bool Equals(object? obj) => obj is ClusterId other && Equals(other);
+    public override int GetHashCode() => Value.GetHashCode();
+    public override string ToString() => $"ClusterId({Value:X16})";
+
+    public static bool operator ==(ClusterId left, ClusterId right) => left.Equals(right);
+    public static bool operator !=(ClusterId left, ClusterId right) => !left.Equals(right);
+}
+
+/// <summary>
+/// Represents a configuration identifier that combines a stable <see cref="ClusterId"/> 
+/// with a monotonically incrementing version counter.
+/// </summary>
+/// <remarks>
+/// Initializes a new ConfigurationId with the specified cluster ID and version.
+/// </remarks>
+[DebuggerDisplay("{ToString(),nq}")]
+public readonly struct ConfigurationId(ClusterId clusterId, long version) : IEquatable<ConfigurationId>, IComparable<ConfigurationId>
+{
+    /// <summary>
+    /// The default/empty configuration ID with ClusterId.Empty and version 0.
+    /// </summary>
+    public static readonly ConfigurationId Empty = new(ClusterId.Empty, 0);
+
+    /// <summary>
+    /// Gets the unique cluster identifier.
+    /// </summary>
+    public ClusterId ClusterId { get; } = clusterId;
 
     /// <summary>
     /// Gets the monotonic version counter that increments with each configuration change.
     /// </summary>
-    public long Version { get; }
+    public long Version { get; } = version;
 
     /// <summary>
-    /// Initializes a new ConfigurationId with the specified version.
-    /// </summary>
-    /// <param name="version">The monotonic version counter.</param>
-    public ConfigurationId(long version)
-    {
-        Version = version;
-    }
-
-    /// <summary>
-    /// Creates a new ConfigurationId with an incremented version.
+    /// Creates a new ConfigurationId with an incremented version, preserving the ClusterId.
     /// </summary>
     /// <returns>A new ConfigurationId with version incremented by 1.</returns>
-    public ConfigurationId Next() => new(Version + 1);
-
-    /// <summary>
-    /// Converts the ConfigurationId to a 64-bit integer for wire transmission.
-    /// </summary>
-    /// <returns>A 64-bit integer representation.</returns>
-    public long ToInt64() => Version;
-
-    /// <summary>
-    /// Creates a ConfigurationId from a 64-bit integer (wire format).
-    /// </summary>
-    /// <param name="value">The 64-bit integer representation.</param>
-    /// <returns>A ConfigurationId.</returns>
-    public static ConfigurationId FromInt64(long value) => new(value);
+    public ConfigurationId Next() => new(ClusterId, Version + 1);
 
     /// <summary>
     /// Compares this ConfigurationId to another for ordering.
+    /// Comparisons are only valid when ClusterIds match exactly.
     /// </summary>
-    public int CompareTo(ConfigurationId other) => Version.CompareTo(other.Version);
+    /// <exception cref="InvalidOperationException">Thrown if ClusterIds do not match.</exception>
+    public int CompareTo(ConfigurationId other)
+    {
+        if (ClusterId != other.ClusterId)
+        {
+            throw new InvalidOperationException(
+                $"Cannot compare ConfigurationIds with different ClusterIds: {ClusterId} vs {other.ClusterId}");
+        }
+        return Version.CompareTo(other.Version);
+    }
 
     /// <summary>
     /// Checks equality with another ConfigurationId.
+    /// Both ClusterId and Version must match.
     /// </summary>
-    public bool Equals(ConfigurationId other) => Version == other.Version;
+    public bool Equals(ConfigurationId other) => ClusterId == other.ClusterId && Version == other.Version;
 
     public override bool Equals(object? obj) => obj is ConfigurationId other && Equals(other);
 
-    public override int GetHashCode() => Version.GetHashCode();
+    public override int GetHashCode() => HashCode.Combine(ClusterId, Version);
 
-    public override string ToString() => $"ConfigurationId(v{Version})";
+    public override string ToString() => $"ConfigurationId({ClusterId}, v{Version})";
 
     public static bool operator ==(ConfigurationId left, ConfigurationId right) => left.Equals(right);
     public static bool operator !=(ConfigurationId left, ConfigurationId right) => !left.Equals(right);
@@ -75,12 +98,28 @@ public readonly struct ConfigurationId : IEquatable<ConfigurationId>, IComparabl
     public static bool operator >=(ConfigurationId left, ConfigurationId right) => left.CompareTo(right) >= 0;
 
     /// <summary>
-    /// Implicit conversion to long for backward compatibility.
+    /// Converts to the protobuf message format.
     /// </summary>
-    public static implicit operator long(ConfigurationId configId) => configId.ToInt64();
+    public Pb.ConfigurationId ToProtobuf() => new()
+    {
+        ClusterId = (ulong)ClusterId.Value,
+        Version = Version
+    };
 
     /// <summary>
-    /// Explicit conversion from long.
+    /// Creates from the protobuf message format.
     /// </summary>
-    public static explicit operator ConfigurationId(long value) => FromInt64(value);
+    public static ConfigurationId FromProtobuf(Pb.ConfigurationId? proto)
+    {
+        if (proto is null) return Empty;
+        return new(new ClusterId((long)proto.ClusterId), proto.Version);
+    }
+}
+
+/// <summary>
+/// Extension methods for converting between ConfigurationId and its protobuf representation.
+/// </summary>
+internal static class ConfigurationIdExtensions
+{
+    public static ConfigurationId ToConfigurationId(this Pb.ConfigurationId? proto) => ConfigurationId.FromProtobuf(proto);
 }

@@ -229,7 +229,7 @@ internal sealed partial class ClusterStatusLogger : BackgroundService
             var cluster = _serviceProvider.GetRequiredService<IRapidCluster>();
             await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
             {
-                LogViewChange(_logger, view.ConfigurationId, view.Members.Length);
+                LogViewChange(_logger, view.ConfigurationId.Version, view.Members.Length);
             }
         }
         catch (OperationCanceledException)

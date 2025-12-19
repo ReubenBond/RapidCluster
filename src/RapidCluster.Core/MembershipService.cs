@@ -121,6 +121,40 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
+    /// Result of the unified join/rejoin operation.
+    /// </summary>
+    private enum JoinInternalResult
+    {
+        /// <summary>Join succeeded and membership view was applied.</summary>
+        Success,
+        /// <summary>Join completed via learner protocol (already in membership).</summary>
+        AlreadyJoined,
+        /// <summary>Join completed via bootstrap coordinator path.</summary>
+        BootstrapCoordinator,
+        /// <summary>All join attempts failed.</summary>
+        Failed
+    }
+
+    /// <summary>
+    /// Configuration options for the unified join/rejoin operation.
+    /// </summary>
+    private readonly struct JoinOptions
+    {
+        /// <summary>Maximum number of retry attempts (0 = try each seed once).</summary>
+        public required int MaxRetries { get; init; }
+        /// <summary>Base delay between retries.</summary>
+        public required TimeSpan RetryBaseDelay { get; init; }
+        /// <summary>Maximum delay between retries.</summary>
+        public required TimeSpan RetryMaxDelay { get; init; }
+        /// <summary>Multiplier for exponential backoff.</summary>
+        public required double RetryBackoffMultiplier { get; init; }
+        /// <summary>Whether to check if this node should wait as bootstrap coordinator.</summary>
+        public required bool CheckBootstrapCoordinator { get; init; }
+        /// <summary>Whether to perform rejoin cleanup (cancel pending joiners, clear metadata).</summary>
+        public required bool PerformRejoinCleanup { get; init; }
+    }
+
+    /// <summary>
     /// Creates a new MembershipService instance.
     /// Call <see cref="InitializeAsync"/> after construction to start or join a cluster.
     /// </summary>
@@ -209,19 +243,18 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             _log.StartingNewCluster(_myAddr);
 
             // Create endpoint with node ID = 1 for the seed node
-            var seedEndpoint = new Endpoint
-            {
-                Hostname = _myAddr.Hostname,
-                Port = _myAddr.Port,
-                NodeId = 1
-            };
+            var seedEndpoint = CreateEndpointWithNodeId(_myAddr, nodeId: 1);
 
             // Create MemberInfo with endpoint and metadata - stores metadata directly in the view
             var seedMember = new MemberInfo(seedEndpoint, _nodeMetadata);
             _membershipView = BuildMembershipView([seedMember], maxNodeId: 1, configurationId: null);
-            _cutDetection = _cutDetectorFactory.Create(_membershipView);
 
-            FinalizeInitialization();
+            // Apply the view (SetMembershipView handles all initialization)
+            lock (_membershipUpdateLock)
+            {
+                SetMembershipView(_membershipView);
+            }
+            _log.MembershipServiceInitialized(_myAddr, _membershipView);
         }
         else
         {
@@ -316,6 +349,230 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
+    /// Creates an endpoint with the specified node ID, preserving hostname and port from the source.
+    /// </summary>
+    private static Endpoint CreateEndpointWithNodeId(Endpoint source, long nodeId)
+    {
+        return new Endpoint
+        {
+            Hostname = source.Hostname,
+            Port = source.Port,
+            NodeId = nodeId
+        };
+    }
+
+    /// <summary>
+    /// Builds a MembershipView from a JoinResponse.
+    /// Combines BuildMemberInfosFromResponse and BuildMembershipView into a single operation.
+    /// </summary>
+    private MembershipView BuildMembershipViewFromJoinResponse(JoinResponse response)
+    {
+        var memberInfos = BuildMemberInfosFromResponse(
+            response.Endpoints,
+            response.MetadataKeys,
+            response.MetadataValues);
+        return BuildMembershipView(
+            memberInfos,
+            response.MaxNodeId,
+            ConfigurationId.FromProtobuf(response.ConfigurationId));
+    }
+
+    /// <summary>
+    /// Unified join/rejoin implementation. Iterates through candidate seeds with configurable retry logic,
+    /// performs the join protocol, and applies the resulting membership view.
+    /// 
+    /// This method handles both initial join and rejoin scenarios with the following differences:
+    /// - Initial join: Uses retry with exponential backoff, checks bootstrap coordinator, records metrics
+    /// - Rejoin: Simple iteration through seeds, performs state cleanup before applying view
+    /// </summary>
+    /// <param name="candidateSeeds">Seeds to try in order.</param>
+    /// <param name="metadata">Node metadata to include in join requests.</param>
+    /// <param name="options">Configuration for retry behavior and cleanup.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result indicating success, already joined, bootstrap coordinator, or failure.</returns>
+    private async Task<(JoinInternalResult Result, string? FailureReason)> JoinInternalAsync(
+        List<Endpoint> candidateSeeds,
+        Metadata metadata,
+        JoinOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (candidateSeeds.Count == 0)
+        {
+            return (JoinInternalResult.Failed, "No candidate seeds available");
+        }
+
+        var retryDelay = options.RetryBaseDelay;
+        string? lastFailureReason = null;
+        var seedIndex = 0;
+
+        for (var attempt = 0; attempt <= options.MaxRetries; attempt++)
+        {
+            // Check if we've already joined via the learner protocol (stale view detection).
+            // This can happen when failure detection probes reveal we're behind and we learn
+            // the current membership view from another node.
+            //
+            // IMPORTANT: Skip this check during rejoin (PerformRejoinCleanup = true) because:
+            // - When a node is kicked, it doesn't update its local view (since it's not in the new view)
+            // - So IsHostPresent(_myAddr) would return true against the old/stale view
+            // - This would incorrectly short-circuit the rejoin, leaving the node stuck with the stale view
+            // - During rejoin, we must actually contact seeds to learn the current view and join it
+            if (!options.PerformRejoinCleanup && _membershipView.IsHostPresent(_myAddr))
+            {
+                _log.JoinCompletedViaLearnerProtocol(_myAddr, _membershipView);
+                return (JoinInternalResult.AlreadyJoined, null);
+            }
+
+            // During bootstrap, check if we should be the coordinator (smallest node)
+            // If so, wait for others to contact us instead of continuing to join
+            if (options.CheckBootstrapCoordinator && _isBootstrapping && ShouldWaitAsBootstrapCoordinator())
+            {
+                await WaitForBootstrapCompletionAsync(cancellationToken).ConfigureAwait(true);
+                return (JoinInternalResult.BootstrapCoordinator, null);
+            }
+
+            // Check cancellation before attempting
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return (JoinInternalResult.Failed, "Cancelled");
+            }
+
+            // Select seed in round-robin fashion
+            var currentSeed = candidateSeeds[seedIndex % candidateSeeds.Count];
+            seedIndex++;
+
+            _log.JoinAttemptWithSeed(attempt + 1, currentSeed);
+
+            JoinAttemptResult result;
+            try
+            {
+                result = await TryJoinClusterAsync(currentSeed, metadata, cancellationToken).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Network errors during rejoin - try next seed
+                lastFailureReason = ex.Message;
+                if (attempt < options.MaxRetries)
+                {
+                    retryDelay = await ApplyRetryDelayAsync(retryDelay, options, cancellationToken).ConfigureAwait(true);
+                    continue;
+                }
+                break;
+            }
+
+            switch (result.Status)
+            {
+                case JoinAttemptStatus.Success:
+                    // Apply the membership view
+                    await ApplyJoinResponseAsync(result.Response!, options).ConfigureAwait(true);
+                    return (JoinInternalResult.Success, null);
+
+                case JoinAttemptStatus.RetryNeeded when attempt < options.MaxRetries:
+                    _log.JoinRetry(attempt + 1, result.FailureReason!, retryDelay.TotalMilliseconds);
+                    retryDelay = await ApplyRetryDelayAsync(retryDelay, options, cancellationToken).ConfigureAwait(true);
+                    continue;
+
+                case JoinAttemptStatus.RetryNeeded:
+                    // Last attempt failed with retryable error
+                    lastFailureReason = result.FailureReason;
+                    break;
+
+                case JoinAttemptStatus.Failed:
+                    // Permanent failure from this seed - continue to next seed
+                    lastFailureReason = result.FailureReason;
+                    if (attempt < options.MaxRetries)
+                    {
+                        _log.JoinRetry(attempt + 1, result.FailureReason!, retryDelay.TotalMilliseconds);
+                        retryDelay = await ApplyRetryDelayAsync(retryDelay, options, cancellationToken).ConfigureAwait(true);
+                        continue;
+                    }
+                    break;
+            }
+
+            // Exhausted retries
+            break;
+        }
+
+        return (JoinInternalResult.Failed, lastFailureReason ?? "All join attempts failed");
+    }
+
+    /// <summary>
+    /// Applies retry delay with exponential backoff and returns the next delay value.
+    /// </summary>
+    private async Task<TimeSpan> ApplyRetryDelayAsync(TimeSpan currentDelay, JoinOptions options, CancellationToken cancellationToken)
+    {
+        if (currentDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(currentDelay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
+        }
+
+        var nextDelay = TimeSpan.FromTicks((long)(currentDelay.Ticks * options.RetryBackoffMultiplier));
+        if (nextDelay > options.RetryMaxDelay)
+        {
+            nextDelay = options.RetryMaxDelay;
+        }
+        return nextDelay;
+    }
+
+    /// <summary>
+    /// Applies a successful join response by updating the membership view.
+    /// Handles rejoin-specific cleanup if configured.
+    /// </summary>
+    private async Task ApplyJoinResponseAsync(JoinResponse response, JoinOptions options)
+    {
+        var newView = BuildMembershipViewFromJoinResponse(response);
+
+        ConsensusCoordinator? oldConsensus;
+        lock (_membershipUpdateLock)
+        {
+            if (options.PerformRejoinCleanup)
+            {
+                // Cancel pending join requests - joiners will retry with ConfigChanged response
+                CancelAllPendingJoiners();
+                _joinerMetadata.Clear();
+                _pendingConsensusMessages.Clear();
+            }
+
+            oldConsensus = SetMembershipView(newView);
+        }
+
+        // Dispose old consensus instance
+        if (oldConsensus != null)
+        {
+            await oldConsensus.DisposeAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Checks if this node should wait as the bootstrap coordinator rather than continue trying to join.
+    /// This happens when:
+    /// 1. We're in bootstrap mode
+    /// 2. We're the smallest known node (no node precedes us lexicographically)
+    /// 3. We've contacted at least one other seed (so we know about others)
+    /// </summary>
+    private bool ShouldWaitAsBootstrapCoordinator()
+    {
+        lock (_membershipUpdateLock)
+        {
+            // Only relevant during bootstrap
+            if (!_isBootstrapping || _clusterOptions.BootstrapExpect <= 0)
+            {
+                return false;
+            }
+
+            // We need to know about at least one other node (contacted at least one seed)
+            // Otherwise we don't know if we're the smallest yet
+            if (_bootstrapKnownNodes.Count <= 1)
+            {
+                return false;
+            }
+
+            // Check if we're the smallest known node
+            var smallestNode = GetSmallestKnownNode();
+            return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
+        }
+    }
+
+    /// <summary>
     /// Joins an existing cluster through the configured seed nodes.
     /// Cycles through seeds in round-robin fashion until join succeeds or max retries exhausted.
     /// 
@@ -329,134 +586,32 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         _log.JoiningClusterWithSeeds(_seedAddresses.Count, _myAddr);
 
         var joinStopwatch = Stopwatch.StartNew();
-        var maxRetries = _options.MaxJoinRetries;
-        var retryDelay = _options.JoinRetryBaseDelay;
-        JoinResponse? successfulResponse = null;
-        string? lastFailureReason = null;
-        var seedIndex = 0;
 
-        for (var attempt = 0; attempt <= maxRetries; attempt++)
+        var options = new JoinOptions
         {
-            // Check if we've already joined via the learner protocol (stale view detection).
-            // This can happen when failure detection probes reveal we're behind and we learn
-            // the current membership view from another node. If our address is already in the
-            // membership, we're effectively joined and can skip the join protocol.
-            if (_membershipView.IsHostPresent(_myAddr))
-            {
-                _log.JoinCompletedViaLearnerProtocol(_myAddr, _membershipView);
+            MaxRetries = _options.MaxJoinRetries,
+            RetryBaseDelay = _options.JoinRetryBaseDelay,
+            RetryMaxDelay = _options.JoinRetryMaxDelay,
+            RetryBackoffMultiplier = _options.JoinRetryBackoffMultiplier,
+            CheckBootstrapCoordinator = _isBootstrapping,
+            PerformRejoinCleanup = false
+        };
+
+        var (result, failureReason) = await JoinInternalAsync(_seedAddresses, _nodeMetadata, options, cancellationToken).ConfigureAwait(true);
+
+        switch (result)
+        {
+            case JoinInternalResult.Success:
+            case JoinInternalResult.AlreadyJoined:
+            case JoinInternalResult.BootstrapCoordinator:
                 _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
-                return;
-            }
+                _log.MembershipServiceInitialized(_myAddr, _membershipView);
+                break;
 
-            // During bootstrap, check if we should be the coordinator (smallest node)
-            // If so, wait for others to contact us instead of continuing to join
-            if (_isBootstrapping && ShouldWaitAsBootstrapCoordinator())
-            {
-                await WaitForBootstrapCompletionAsync(cancellationToken).ConfigureAwait(true);
-                _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
-                return;
-            }
-
-            // Select seed in round-robin fashion
-            var currentSeed = _seedAddresses[seedIndex % _seedAddresses.Count];
-            seedIndex++;
-
-            _log.JoinAttemptWithSeed(attempt + 1, currentSeed);
-
-            var result = await TryJoinClusterAsync(currentSeed, _nodeMetadata, cancellationToken).ConfigureAwait(true);
-
-            switch (result.Status)
-            {
-                case JoinAttemptStatus.Success:
-                    successfulResponse = result.Response;
-                    break;
-
-                case JoinAttemptStatus.RetryNeeded when attempt < maxRetries:
-                    _log.JoinRetry(attempt + 1, result.FailureReason!, retryDelay.TotalMilliseconds);
-                    await Task.Delay(retryDelay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
-                    retryDelay = TimeSpan.FromTicks((long)(retryDelay.Ticks * _options.JoinRetryBackoffMultiplier));
-
-                    // Cap at maximum delay
-                    if (retryDelay > _options.JoinRetryMaxDelay)
-                    {
-                        retryDelay = _options.JoinRetryMaxDelay;
-                    }
-                    continue;
-
-                case JoinAttemptStatus.RetryNeeded:
-                    // Last attempt failed with retryable error - treat as failure
-                    lastFailureReason = result.FailureReason;
-                    break;
-
-                case JoinAttemptStatus.Failed:
-                    // Permanent failure from this seed - continue to next seed (treat as retry)
-                    lastFailureReason = result.FailureReason;
-                    if (attempt < maxRetries)
-                    {
-                        _log.JoinRetry(attempt + 1, result.FailureReason!, retryDelay.TotalMilliseconds);
-                        await Task.Delay(retryDelay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
-                        retryDelay = TimeSpan.FromTicks((long)(retryDelay.Ticks * _options.JoinRetryBackoffMultiplier));
-                        if (retryDelay > _options.JoinRetryMaxDelay)
-                        {
-                            retryDelay = _options.JoinRetryMaxDelay;
-                        }
-                        continue;
-                    }
-                    break;
-            }
-
-            // Either succeeded or exhausted retries
-            break;
-        }
-
-        if (successfulResponse == null)
-        {
-            _log.JoinFailed(maxRetries + 1);
-            _metrics.RecordJoinLatency(MetricNames.Results.Failed, joinStopwatch);
-            throw new JoinException(lastFailureReason ?? $"Failed to join cluster after {maxRetries + 1} attempts");
-        }
-
-        // Initialize membership from response
-        var memberInfos = BuildMemberInfosFromResponse(
-            successfulResponse.Endpoints,
-            successfulResponse.MetadataKeys,
-            successfulResponse.MetadataValues);
-
-        _membershipView = BuildMembershipView(
-            memberInfos,
-            successfulResponse.MaxNodeId,
-            ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
-
-        FinalizeInitialization();
-        _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
-
-        // Checks if this node should wait as the bootstrap coordinator rather than continue trying to join.
-        // This happens when:
-        // 1. We're in bootstrap mode
-        // 2. We're the smallest known node (no node precedes us lexicographically)
-        // 3. We've contacted at least one other seed (so we know about others)
-        bool ShouldWaitAsBootstrapCoordinator()
-        {
-            lock (_membershipUpdateLock)
-            {
-                // Only relevant during bootstrap
-                if (!_isBootstrapping || _clusterOptions.BootstrapExpect <= 0)
-                {
-                    return false;
-                }
-
-                // We need to know about at least one other node (contacted at least one seed)
-                // Otherwise we don't know if we're the smallest yet
-                if (_bootstrapKnownNodes.Count <= 1)
-                {
-                    return false;
-                }
-
-                // Check if we're the smallest known node
-                var smallestNode = GetSmallestKnownNode();
-                return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
-            }
+            case JoinInternalResult.Failed:
+                _log.JoinFailed(_options.MaxJoinRetries + 1);
+                _metrics.RecordJoinLatency(MetricNames.Results.Failed, joinStopwatch);
+                throw new JoinException(failureReason ?? $"Failed to join cluster after {_options.MaxJoinRetries + 1} attempts");
         }
     }
 
@@ -751,30 +906,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             var smallestNode = GetSmallestKnownNode();
             return EndpointAddressComparer.Instance.Equals(smallestNode, _myAddr);
         }
-    }
-
-    /// <summary>
-    /// Finalizes initialization after the membership view is established.
-    /// Sets up broadcaster, consensus, failure detectors, and publishes initial view.
-    /// </summary>
-    private void FinalizeInitialization()
-    {
-        ConsensusCoordinator? oldConsensus;
-        lock (_membershipUpdateLock)
-        {
-            // SetMembershipView handles all the setup including computing membership changes
-            oldConsensus = SetMembershipView(_membershipView);
-        }
-
-        // Dispose the previous consensus instance if one existed.
-        // Since we are often called from synchronous contexts (or inside locks like in TriggerBootstrap),
-        // we cannot await this here. Fire-and-forget is acceptable for cleanup.
-        if (oldConsensus != null)
-        {
-            _ = oldConsensus.DisposeAsync();
-        }
-
-        _log.MembershipServiceInitialized(_myAddr, _membershipView);
     }
 
     /// <summary>
@@ -1206,12 +1337,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         for (var i = 0; i < sortedNodes.Count; i++)
         {
             var node = sortedNodes[i];
-            var endpointWithId = new Endpoint
-            {
-                Hostname = node.Hostname,
-                Port = node.Port,
-                NodeId = i + 1  // Node IDs start at 1
-            };
+            var endpointWithId = CreateEndpointWithNodeId(node, nodeId: i + 1);
             // Use own metadata for self, empty metadata for other nodes (metadata arrives with JoinMessage)
             var metadata = EndpointAddressComparer.Instance.Equals(node, _myAddr) ? _nodeMetadata : new Metadata();
             memberInfos.Add(new MemberInfo(endpointWithId, metadata));
@@ -1219,7 +1345,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
         // Build the initial membership view (null configId causes initial ConfigId to be generated)
         _membershipView = BuildMembershipView(memberInfos, maxNodeId: memberInfos.Count, configurationId: null);
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
 
         // Exit bootstrap mode
         _isBootstrapping = false;
@@ -1227,7 +1352,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         // Signal any waiting bootstrap completion source
         _bootstrapCompletionSource?.TrySetResult(true);
 
-        FinalizeInitialization();
+        // Apply the view (already under _membershipUpdateLock from caller)
+        SetMembershipView(_membershipView);
         _log.BootstrapComplete(_myAddr, _membershipView.Size, _membershipView.ConfigurationId);
     }
 
@@ -1905,12 +2031,50 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     /// <summary>
     /// Attempts to rejoin the cluster using the current seed addresses and last known members.
     /// </summary>
-    /// <returns>True if rejoin succeeded, false if all attempts failed.</returns>
+    /// <returns>True if rejoin succeeded, null if all attempts failed.</returns>
     private async Task<bool?> TryRejoinWithCurrentSeedsAsync(CancellationToken cancellationToken)
     {
         // Build combined seed list: configured seeds first, then last known members
-        // This ensures we try explicitly configured seeds before falling back to
-        // potentially stale membership view members
+        var candidateSeeds = BuildRejoinCandidateSeeds();
+
+        if (candidateSeeds.Count == 0)
+        {
+            return null; // No seeds available
+        }
+
+        _log.RejoinWithCandidateSeeds(candidateSeeds.Count, _seedAddresses.Count);
+
+        // Get our own metadata from the view, or use node metadata if not in view (we were kicked)
+        var metadata = _membershipView.GetMetadata(_myAddr) ?? _nodeMetadata;
+
+        // For rejoin: try each seed once without backoff delay, but still benefit from 
+        // the unified retry logic (learner protocol check, etc.)
+        var options = new JoinOptions
+        {
+            MaxRetries = candidateSeeds.Count - 1, // Try each seed once
+            RetryBaseDelay = TimeSpan.Zero, // No delay between attempts
+            RetryMaxDelay = TimeSpan.Zero,
+            RetryBackoffMultiplier = 1.0,
+            CheckBootstrapCoordinator = false, // Not relevant for rejoin
+            PerformRejoinCleanup = true
+        };
+
+        var (result, _) = await JoinInternalAsync(candidateSeeds, metadata, options, cancellationToken).ConfigureAwait(true);
+
+        if (result == JoinInternalResult.Success || result == JoinInternalResult.AlreadyJoined)
+        {
+            _log.RejoinSuccessful(_myAddr, _membershipView.Size, _membershipView.ConfigurationId.ToProtobuf());
+            return true;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds the list of candidate seeds for rejoin, combining configured seeds and last known members.
+    /// </summary>
+    private List<Endpoint> BuildRejoinCandidateSeeds()
+    {
         var candidateSeeds = new List<Endpoint>();
         var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
 
@@ -1932,84 +2096,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
             }
         }
 
-        if (candidateSeeds.Count == 0)
-        {
-            return null; // No seeds available
-        }
-
-        _log.RejoinWithCandidateSeeds(candidateSeeds.Count, _seedAddresses.Count);
-
-        // Get our own metadata from the view, or use node metadata if not in view (we were kicked)
-        var metadata = _membershipView.GetMetadata(_myAddr) ?? _nodeMetadata;
-
-        JoinResponse? successfulResponse = null;
-
-        foreach (var seed in candidateSeeds)
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return null;
-            }
-
-            try
-            {
-                var result = await TryJoinClusterAsync(seed, metadata, cancellationToken).ConfigureAwait(true);
-                if (result.Status == JoinAttemptStatus.Success)
-                {
-                    successfulResponse = result.Response;
-                    break;
-                }
-
-                _log.RejoinFailedThroughSeed(_myAddr, seed, result.FailureReason ?? "Unknown failure");
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _log.RejoinFailedThroughSeed(_myAddr, seed, ex.Message);
-                // Try next seed
-            }
-        }
-
-        if (successfulResponse == null)
-        {
-            return null; // All attempts failed
-        }
-
-        // Reset internal state with new membership
-        ConsensusCoordinator? oldConsensus;
-        lock (_membershipUpdateLock)
-        {
-            // Cancel pending join requests - joiners will retry with ConfigChanged response
-            CancelAllPendingJoiners();
-            _joinerMetadata.Clear();
-            _pendingConsensusMessages.Clear();
-
-            // Build new membership view from response
-            var memberInfos = BuildMemberInfosFromResponse(
-                successfulResponse.Endpoints,
-                successfulResponse.MetadataKeys,
-                successfulResponse.MetadataValues);
-            var newView = BuildMembershipView(
-                memberInfos,
-                successfulResponse.MaxNodeId,
-                ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
-
-            // SetMembershipView handles computing membership changes, metrics, and joiner notifications
-            oldConsensus = SetMembershipView(newView);
-        }
-
-        // Dispose old consensus instance.
-        if (oldConsensus != null)
-        {
-            await oldConsensus.DisposeAsync().ConfigureAwait(true);
-        }
-
-        _log.RejoinSuccessful(
-            _myAddr,
-            successfulResponse.Endpoints.Count,
-            successfulResponse.ConfigurationId);
-
-        return true;
+        return candidateSeeds;
     }
+
 
 
 

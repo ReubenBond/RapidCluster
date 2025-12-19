@@ -122,110 +122,14 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             _metrics.RecordConsensusRoundStarted(MetricNames.Protocols.FastPaxos);
 
             var fastRoundTimeout = GetRandomDelay();
+            var fastRoundResult = await RunFastRoundAsync(proposal, fastRoundTimeout, cancellationToken).ConfigureAwait(true);
 
-            using var fastRoundTimeoutCts = new CancellationTokenSource(fastRoundTimeout, _sharedResources.TimeProvider);
-            using var fastRoundCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, fastRoundTimeoutCts.Token);
-
-            var fastRoundResultTcs = new TaskCompletionSource<ConsensusResult>();
-            _fastPaxosProposer.RegisterResultCallback(result => fastRoundResultTcs.TrySetResult(result));
-
-            _fastPaxosProposer.RegisterTimeoutToken(fastRoundCts.Token);
-            _fastPaxosProposer.Propose(proposal, cancellationToken);
-
-            var fastRoundResult = await fastRoundResultTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(true);
-
-            switch (fastRoundResult)
+            if (TryHandleFastRoundTerminalResult(fastRoundResult, fastRoundTimeout, consensusStopwatch, cancellationToken))
             {
-                case ConsensusResult.Decided decided:
-                    _log.FastRoundDecided(_configurationId, decided.Value);
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success);
-                    _metrics.RecordConsensusLatency(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success, consensusStopwatch);
-                    _onDecidedTcs.TrySetResult(decided.Value);
-                    return;
-
-                case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
-                    _log.FastRoundFailedEarly();
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Conflict);
-                    _metrics.RecordConsensusConflict();
-                    break;
-
-                case ConsensusResult.Cancelled:
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        _log.ConsensusCancelled();
-                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Aborted);
-                        _onDecidedTcs.TrySetCanceled(cancellationToken);
-                        return;
-                    }
-                    _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
-                    _metrics.RecordConsensusConflict();
-                    break;
-
-                case ConsensusResult.Timeout:
-                    _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
-                    _metrics.RecordConsensusConflict();
-                    break;
+                return;
             }
 
-            var roundNumber = 2;
-            var maxRounds = _options.MaxConsensusRounds;
-
-            while (!cancellationToken.IsCancellationRequested && roundNumber <= maxRounds)
-            {
-                if (_paxosLearner.Decided is ConsensusResult.Decided alreadyDecided)
-                {
-                    _log.ClassicRoundDecided(roundNumber - 1, _configurationId, alreadyDecided.Value);
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
-                    _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
-                    _onDecidedTcs.TrySetResult(alreadyDecided.Value);
-                    return;
-                }
-
-                var delay = GetRetryDelay(roundNumber);
-                _log.StartingClassicRound(roundNumber, delay);
-                _metrics.RecordConsensusRoundStarted(MetricNames.Protocols.ClassicPaxos);
-
-                _paxosProposer.StartPhase1a(roundNumber, cancellationToken);
-
-                await Task.Delay(delay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
-
-                if (_paxosLearner.Decided is ConsensusResult.Decided decidedNow)
-                {
-                    _log.ClassicRoundDecided(roundNumber, _configurationId, decidedNow.Value);
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
-                    _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
-                    _onDecidedTcs.TrySetResult(decidedNow.Value);
-                    return;
-                }
-
-                if (_paxosLearner.Decided is ConsensusResult.Cancelled && cancellationToken.IsCancellationRequested)
-                {
-                    _log.ConsensusCancelled();
-                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted);
-                    _onDecidedTcs.TrySetCanceled(cancellationToken);
-                    return;
-                }
-
-                _log.ClassicRoundTimeout(roundNumber, delay);
-                _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Timeout);
-                roundNumber++;
-            }
-
-            if (cancellationToken.IsCancellationRequested)
-            {
-                _log.ConsensusCancelled();
-                _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted, consensusStopwatch);
-                _onDecidedTcs.TrySetCanceled(cancellationToken);
-            }
-            else
-            {
-                _log.ConsensusExhausted(maxRounds);
-                _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Failed, consensusStopwatch);
-                _onDecidedTcs.TrySetException(new InvalidOperationException(
-                    $"Consensus failed: exhausted all {maxRounds} rounds without reaching decision for configId={_configurationId}"));
-            }
+            await RunClassicRoundsAsync(consensusStopwatch, cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -233,6 +137,144 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             _metrics.RecordConsensusLatency(MetricNames.Protocols.FastPaxos, MetricNames.Results.Aborted, consensusStopwatch);
             _onDecidedTcs.TrySetCanceled(cancellationToken);
         }
+    }
+
+    private async Task<ConsensusResult> RunFastRoundAsync(
+        MembershipProposal proposal,
+        TimeSpan fastRoundTimeout,
+        CancellationToken cancellationToken)
+    {
+        using var fastRoundTimeoutCts = new CancellationTokenSource(fastRoundTimeout, _sharedResources.TimeProvider);
+        using var fastRoundCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, fastRoundTimeoutCts.Token);
+
+        var resultTcs = new TaskCompletionSource<ConsensusResult>();
+        _fastPaxosProposer.RegisterResultCallback(result => resultTcs.TrySetResult(result));
+
+        _fastPaxosProposer.RegisterTimeoutToken(fastRoundCts.Token);
+        _fastPaxosProposer.Propose(proposal, cancellationToken);
+
+        return await resultTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    private bool TryHandleFastRoundTerminalResult(
+        ConsensusResult fastRoundResult,
+        TimeSpan fastRoundTimeout,
+        Stopwatch consensusStopwatch,
+        CancellationToken cancellationToken)
+    {
+        switch (fastRoundResult)
+        {
+            case ConsensusResult.Decided decided:
+                _log.FastRoundDecided(_configurationId, decided.Value);
+                _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success);
+                _metrics.RecordConsensusLatency(MetricNames.Protocols.FastPaxos, MetricNames.Results.Success, consensusStopwatch);
+                _onDecidedTcs.TrySetResult(decided.Value);
+                return true;
+
+            case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
+                _log.FastRoundFailedEarly();
+                _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Conflict);
+                _metrics.RecordConsensusConflict();
+                return false;
+
+            case ConsensusResult.Cancelled:
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _log.ConsensusCancelled();
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Aborted);
+                    _onDecidedTcs.TrySetCanceled(cancellationToken);
+                    return true;
+                }
+
+                _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
+                _metrics.RecordConsensusConflict();
+                return false;
+
+            case ConsensusResult.Timeout:
+                _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.FastPaxos, MetricNames.Results.Timeout);
+                _metrics.RecordConsensusConflict();
+                return false;
+
+            default:
+                throw new UnreachableException($"Unexpected consensus result: {fastRoundResult}");
+        }
+    }
+
+    private async Task RunClassicRoundsAsync(Stopwatch consensusStopwatch, CancellationToken cancellationToken)
+    {
+        var maxRounds = _options.MaxConsensusRounds;
+
+        for (var roundNumber = 2; roundNumber <= maxRounds && !cancellationToken.IsCancellationRequested; roundNumber++)
+        {
+            if (TryCompleteClassicDecision(roundNumber - 1, consensusStopwatch))
+            {
+                return;
+            }
+
+            var delay = GetRetryDelay(roundNumber);
+            _log.StartingClassicRound(roundNumber, delay);
+            _metrics.RecordConsensusRoundStarted(MetricNames.Protocols.ClassicPaxos);
+
+            _paxosProposer.StartPhase1a(roundNumber, cancellationToken);
+
+            await Task.Delay(delay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
+
+            if (TryCompleteClassicDecision(roundNumber, consensusStopwatch))
+            {
+                return;
+            }
+
+            if (TryCompleteClassicCancellationIfRequested(cancellationToken))
+            {
+                return;
+            }
+
+            _log.ClassicRoundTimeout(roundNumber, delay);
+            _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Timeout);
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            _log.ConsensusCancelled();
+            _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted, consensusStopwatch);
+            _onDecidedTcs.TrySetCanceled(cancellationToken);
+        }
+        else
+        {
+            _log.ConsensusExhausted(maxRounds);
+            _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Failed, consensusStopwatch);
+            _onDecidedTcs.TrySetException(new InvalidOperationException(
+                $"Consensus failed: exhausted all {maxRounds} rounds without reaching decision for configId={_configurationId}"));
+        }
+    }
+
+    private bool TryCompleteClassicDecision(int roundNumber, Stopwatch consensusStopwatch)
+    {
+        if (_paxosLearner.Decided is not ConsensusResult.Decided decided)
+        {
+            return false;
+        }
+
+        _log.ClassicRoundDecided(roundNumber, _configurationId, decided.Value);
+        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
+        _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
+        _onDecidedTcs.TrySetResult(decided.Value);
+        return true;
+    }
+
+    private bool TryCompleteClassicCancellationIfRequested(CancellationToken cancellationToken)
+    {
+        if (_paxosLearner.Decided is not ConsensusResult.Cancelled || !cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        _log.ConsensusCancelled();
+        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted);
+        _onDecidedTcs.TrySetCanceled(cancellationToken);
+        return true;
     }
 
     public RapidClusterResponse HandleMessages(RapidClusterRequest request, CancellationToken cancellationToken = default)

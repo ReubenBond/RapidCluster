@@ -25,7 +25,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private readonly RapidClusterProtocolOptions _options;
     private readonly SharedResources _sharedResources;
 
-    private readonly FastPaxosProposer _fastPaxos;
+    private readonly FastPaxosProposer _fastPaxosProposer;
 
     // Classic Paxos roles.
     private readonly PaxosAcceptor _paxosAcceptor;
@@ -66,7 +66,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _jitterRate = 1 / (double)membershipSize;
 
-        _fastPaxos = new FastPaxosProposer(
+        _fastPaxosProposer = new FastPaxosProposer(
             myAddr,
             configurationId,
             membershipSize,
@@ -88,6 +88,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             metrics,
             paxosLogger);
 
+        var paxosDecidedTcs = new TaskCompletionSource<ConsensusResult>();
+        _paxosLearner.RegisterDecidedCallback(result => paxosDecidedTcs.TrySetResult(result));
+
         _paxosProposer = new PaxosProposer(
             myAddr,
             configurationId,
@@ -95,7 +98,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             broadcaster,
             membershipViewAccessor,
             metrics,
-            decided: _paxosLearner.Decided,
+            decided: paxosDecidedTcs.Task,
             paxosLogger);
 
         _log.Initialized(myAddr, configurationId, membershipSize);
@@ -126,10 +129,13 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             using var fastRoundTimeoutCts = new CancellationTokenSource(fastRoundTimeout, _sharedResources.TimeProvider);
             using var fastRoundCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, fastRoundTimeoutCts.Token);
 
-            _fastPaxos.RegisterTimeoutToken(fastRoundCts.Token);
-            _fastPaxos.Propose(proposal, cancellationToken);
+            var fastRoundResultTcs = new TaskCompletionSource<ConsensusResult>();
+            _fastPaxosProposer.RegisterResultCallback(result => fastRoundResultTcs.TrySetResult(result));
 
-            var fastRoundResult = await _fastPaxos.Result.WaitAsync(cancellationToken).ConfigureAwait(true);
+            _fastPaxosProposer.RegisterTimeoutToken(fastRoundCts.Token);
+            _fastPaxosProposer.Propose(proposal, cancellationToken);
+
+            var fastRoundResult = await fastRoundResultTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(true);
 
             switch (fastRoundResult)
             {
@@ -171,17 +177,13 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
             while (!cancellationToken.IsCancellationRequested && roundNumber <= maxRounds)
             {
-                if (_paxosLearner.Decided.IsCompletedSuccessfully)
+                if (_paxosLearner.Decided is ConsensusResult.Decided alreadyDecided)
                 {
-                    var paxosResult = await _paxosLearner.Decided.WaitAsync(cancellationToken).ConfigureAwait(true);
-                    if (paxosResult is ConsensusResult.Decided decided)
-                    {
-                        _log.ClassicRoundDecided(roundNumber - 1, _configurationId, decided.Value);
-                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
-                        _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
-                        _onDecidedTcs.TrySetResult(decided.Value);
-                        return;
-                    }
+                    _log.ClassicRoundDecided(roundNumber - 1, _configurationId, alreadyDecided.Value);
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
+                    _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
+                    _onDecidedTcs.TrySetResult(alreadyDecided.Value);
+                    return;
                 }
 
                 var delay = GetRetryDelay(roundNumber);
@@ -192,24 +194,21 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
                 await Task.Delay(delay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
 
-                if (_paxosLearner.Decided.IsCompletedSuccessfully)
+                if (_paxosLearner.Decided is ConsensusResult.Decided decidedNow)
                 {
-                    var paxosResult = await _paxosLearner.Decided.ConfigureAwait(true);
-                    if (paxosResult is ConsensusResult.Decided decided)
-                    {
-                        _log.ClassicRoundDecided(roundNumber, _configurationId, decided.Value);
-                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
-                        _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
-                        _onDecidedTcs.TrySetResult(decided.Value);
-                        return;
-                    }
-                    else if (paxosResult is ConsensusResult.Cancelled && cancellationToken.IsCancellationRequested)
-                    {
-                        _log.ConsensusCancelled();
-                        _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted);
-                        _onDecidedTcs.TrySetCanceled(cancellationToken);
-                        return;
-                    }
+                    _log.ClassicRoundDecided(roundNumber, _configurationId, decidedNow.Value);
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success);
+                    _metrics.RecordConsensusLatency(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Success, consensusStopwatch);
+                    _onDecidedTcs.TrySetResult(decidedNow.Value);
+                    return;
+                }
+
+                if (_paxosLearner.Decided is ConsensusResult.Cancelled && cancellationToken.IsCancellationRequested)
+                {
+                    _log.ConsensusCancelled();
+                    _metrics.RecordConsensusRoundCompleted(MetricNames.Protocols.ClassicPaxos, MetricNames.Results.Aborted);
+                    _onDecidedTcs.TrySetCanceled(cancellationToken);
+                    return;
                 }
 
                 _log.ClassicRoundTimeout(roundNumber, delay);
@@ -248,7 +247,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             switch (request.ContentCase)
             {
                 case RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage:
-                    _fastPaxos.HandleFastRoundProposalResponse(request.FastRoundPhase2BMessage);
+                    _fastPaxosProposer.HandleFastRoundProposalResponse(request.FastRoundPhase2BMessage);
                     break;
                 case RapidClusterRequest.ContentOneofCase.Phase1AMessage:
                     _paxosAcceptor.HandlePhase1aMessage(request.Phase1AMessage, cancellationToken);
@@ -319,7 +318,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _disposeCts.SafeCancel(_log.Logger);
 
-        _fastPaxos.Cancel();
+        _fastPaxosProposer.Cancel();
         _paxosLearner.Cancel();
 
         if (_consensusLoopTask is { } task)

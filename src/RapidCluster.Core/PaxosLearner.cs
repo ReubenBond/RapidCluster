@@ -25,7 +25,7 @@ internal sealed class PaxosLearner
         ConfigurationId configurationId,
         int membershipSize,
         RapidClusterMetrics metrics,
-        ILogger<Paxos> logger)
+        ILogger<PaxosProposer> logger)
     {
         _configurationId = configurationId;
         _membershipSize = membershipSize;

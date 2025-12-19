@@ -86,6 +86,9 @@ public static class RapidClusterMessageExtensions
     public static RapidClusterRequest ToRapidClusterRequest(this Phase2bMessage msg) =>
         new() { Phase2BMessage = msg };
 
+    public static RapidClusterRequest ToRapidClusterRequest(this PaxosNackMessage msg) =>
+        new() { PaxosNackMessage = msg };
+
     public static RapidClusterRequest ToRapidClusterRequest(this LeaveMessage msg) =>
         new() { LeaveMessage = msg };
 

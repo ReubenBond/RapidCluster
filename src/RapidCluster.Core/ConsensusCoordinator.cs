@@ -25,7 +25,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private readonly RapidClusterProtocolOptions _options;
     private readonly SharedResources _sharedResources;
 
-    private readonly FastPaxos _fastPaxos;
+    private readonly FastPaxosProposer _fastPaxos;
 
     // Classic Paxos roles.
     private readonly PaxosAcceptor _paxosAcceptor;
@@ -52,8 +52,8 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         SharedResources sharedResources,
         RapidClusterMetrics metrics,
         ILogger<ConsensusCoordinator> logger,
-        ILogger<FastPaxos> fastPaxosLogger,
-        ILogger<Paxos> paxosLogger)
+        ILogger<FastPaxosProposer> fastPaxosLogger,
+        ILogger<PaxosProposer> paxosLogger)
     {
         _myAddr = myAddr;
         _configurationId = configurationId;
@@ -66,7 +66,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _jitterRate = 1 / (double)membershipSize;
 
-        _fastPaxos = new FastPaxos(
+        _fastPaxos = new FastPaxosProposer(
             myAddr,
             configurationId,
             membershipSize,
@@ -261,6 +261,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     break;
                 case RapidClusterRequest.ContentOneofCase.Phase2BMessage:
                     _paxosLearner.HandlePhase2bMessage(request.Phase2BMessage);
+                    break;
+                case RapidClusterRequest.ContentOneofCase.PaxosNackMessage:
+                    _paxosProposer.HandlePaxosNackMessage(request.PaxosNackMessage, cancellationToken);
                     break;
                 default:
                     throw new ArgumentException($"Unexpected message case: {request.ContentCase}");

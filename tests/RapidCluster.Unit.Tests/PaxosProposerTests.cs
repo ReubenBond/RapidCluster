@@ -30,7 +30,7 @@ public sealed class PaxosProposerTests
             membershipViewAccessor,
             CreateMetrics(),
             decidedTcs.Task,
-            NullLogger<Paxos>.Instance);
+            NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
         broadcasted.Clear();
@@ -66,7 +66,7 @@ public sealed class PaxosProposerTests
             membershipViewAccessor,
             CreateMetrics(),
             decidedTcs.Task,
-            NullLogger<Paxos>.Instance);
+            NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
         broadcasted.Clear();
@@ -102,7 +102,7 @@ public sealed class PaxosProposerTests
             membershipViewAccessor,
             CreateMetrics(),
             decidedTcs.Task,
-            NullLogger<Paxos>.Instance);
+            NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
         broadcasted.Clear();
@@ -145,7 +145,7 @@ public sealed class PaxosProposerTests
             membershipViewAccessor,
             CreateMetrics(),
             decidedTcs.Task,
-            NullLogger<Paxos>.Instance);
+            NullLogger<PaxosProposer>.Instance);
 
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
         broadcasted.Clear();
@@ -177,6 +177,78 @@ public sealed class PaxosProposerTests
             Rnd = rnd,
             Vrnd = null,
             Proposal = null
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Empty(broadcasted);
+    }
+
+    [Fact]
+    public void HandlePaxosNackMessage_StartsHigherRound_WhenCurrentRoundRejected()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
+        var configId = new ConfigurationId(new ClusterId(888), version: 1);
+
+        var broadcasted = new List<RapidClusterRequest>();
+        var broadcaster = new CapturingBroadcaster(broadcasted);
+        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+
+        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var proposer = new PaxosProposer(
+            myAddr,
+            configId,
+            membershipSize: 3,
+            broadcaster,
+            membershipViewAccessor,
+            CreateMetrics(),
+            decidedTcs.Task,
+            NullLogger<PaxosProposer>.Instance);
+
+        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        broadcasted.Clear();
+
+        proposer.HandlePaxosNackMessage(new PaxosNackMessage
+        {
+            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
+            ConfigurationId = configId.ToProtobuf(),
+            Received = new Rank { Round = 2, NodeIndex = 123 },
+            Promised = new Rank { Round = 5, NodeIndex = 7 }
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Single(broadcasted);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1AMessage, broadcasted[0].ContentCase);
+        Assert.Equal(6, broadcasted[0].Phase1AMessage.Rank.Round);
+    }
+
+    [Fact]
+    public void HandlePaxosNackMessage_IgnoresConfigMismatch()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
+        var configId = new ConfigurationId(new ClusterId(888), version: 1);
+
+        var broadcasted = new List<RapidClusterRequest>();
+        var broadcaster = new CapturingBroadcaster(broadcasted);
+        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+
+        var decidedTcs = new TaskCompletionSource<ConsensusResult>();
+        var proposer = new PaxosProposer(
+            myAddr,
+            configId,
+            membershipSize: 3,
+            broadcaster,
+            membershipViewAccessor,
+            CreateMetrics(),
+            decidedTcs.Task,
+            NullLogger<PaxosProposer>.Instance);
+
+        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        broadcasted.Clear();
+
+        proposer.HandlePaxosNackMessage(new PaxosNackMessage
+        {
+            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
+            ConfigurationId = new ConfigurationId(new ClusterId(888), version: 999).ToProtobuf(),
+            Received = new Rank { Round = 2, NodeIndex = 123 },
+            Promised = new Rank { Round = 5, NodeIndex = 7 }
         }, TestContext.Current.CancellationToken);
 
         Assert.Empty(broadcasted);

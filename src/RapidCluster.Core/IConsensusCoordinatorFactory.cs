@@ -37,8 +37,8 @@ internal sealed class ConsensusCoordinatorFactory(
     SharedResources sharedResources,
     RapidClusterMetrics metrics,
     ILogger<ConsensusCoordinator> coordinatorLogger,
-    ILogger<FastPaxos> fastPaxosLogger,
-    ILogger<Paxos> paxosLogger) : IConsensusCoordinatorFactory
+    ILogger<FastPaxosProposer> fastPaxosLogger,
+    ILogger<PaxosProposer> paxosLogger) : IConsensusCoordinatorFactory
 {
     public ConsensusCoordinator Create(
         Endpoint myAddr,

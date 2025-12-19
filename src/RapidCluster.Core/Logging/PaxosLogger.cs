@@ -3,7 +3,7 @@ using RapidCluster.Pb;
 
 namespace RapidCluster.Logging;
 
-internal sealed partial class PaxosLogger(ILogger<Paxos> logger)
+internal sealed partial class PaxosLogger(ILogger<PaxosProposer> logger)
 {
     private readonly ILogger _logger = logger;
 

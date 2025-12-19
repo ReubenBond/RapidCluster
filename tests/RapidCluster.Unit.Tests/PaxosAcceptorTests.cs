@@ -27,7 +27,7 @@ public sealed class PaxosAcceptorTests
             client,
             broadcaster,
             CreateMetrics(),
-            NullLogger<Paxos>.Instance);
+            NullLogger<PaxosProposer>.Instance);
 
         var sender = Utils.HostFromParts("127.0.0.1", 2000);
 
@@ -44,7 +44,7 @@ public sealed class PaxosAcceptorTests
         Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1BMessage, sent[0].Request.ContentCase);
         Assert.Equal(2, sent[0].Request.Phase1BMessage.Rnd.Round);
 
-        // Lower/equal prepare: should not promise.
+        // Lower/equal prepare: should send NACK.
         acceptor.HandlePhase1aMessage(new Phase1aMessage
         {
             Sender = sender,
@@ -59,7 +59,40 @@ public sealed class PaxosAcceptorTests
             Rank = new Rank { Round = 1, NodeIndex = 99 }
         }, TestContext.Current.CancellationToken);
 
-        Assert.Single(sent);
+        Assert.Equal(3, sent.Count);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.PaxosNackMessage, sent[1].Request.ContentCase);
+        Assert.Equal(2, sent[1].Request.PaxosNackMessage.Promised.Round);
+        Assert.Equal(2, sent[2].Request.PaxosNackMessage.Promised.Round);
+    }
+
+    [Fact]
+    public void HandlePhase1a_DoesNotNackOnConfigMismatch()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var sent = new List<(Endpoint Remote, RapidClusterRequest Request)>();
+        using var client = new CapturingMessagingClient(sent);
+        var broadcaster = new NoopBroadcaster();
+
+        var acceptor = new PaxosAcceptor(
+            myAddr,
+            configId,
+            client,
+            broadcaster,
+            CreateMetrics(),
+            NullLogger<PaxosProposer>.Instance);
+
+        var sender = Utils.HostFromParts("127.0.0.1", 2000);
+
+        acceptor.HandlePhase1aMessage(new Phase1aMessage
+        {
+            Sender = sender,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(),
+            Rank = new Rank { Round = 2, NodeIndex = 1 }
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Empty(sent);
     }
 
     [Fact]
@@ -70,7 +103,9 @@ public sealed class PaxosAcceptorTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        using var client = new CapturingMessagingClient([]);
+
+        var sent = new List<(Endpoint Remote, RapidClusterRequest Request)>();
+        using var client = new CapturingMessagingClient(sent);
 
         var acceptor = new PaxosAcceptor(
             myAddr,
@@ -78,7 +113,7 @@ public sealed class PaxosAcceptorTests
             client,
             broadcaster,
             CreateMetrics(),
-            NullLogger<Paxos>.Instance);
+            NullLogger<PaxosProposer>.Instance);
 
         var coordinator = Utils.HostFromParts("127.0.0.1", 2000);
         var proposal = new MembershipProposal { ConfigurationId = configId.ToProtobuf() };
@@ -92,7 +127,7 @@ public sealed class PaxosAcceptorTests
             Rank = new Rank { Round = 2, NodeIndex = 1 }
         }, TestContext.Current.CancellationToken);
 
-        // Lower accept should be rejected.
+        // Lower accept should be rejected (and send NACK).
         acceptor.HandlePhase2aMessage(new Phase2aMessage
         {
             Sender = coordinator,
@@ -102,6 +137,12 @@ public sealed class PaxosAcceptorTests
         }, TestContext.Current.CancellationToken);
 
         Assert.Empty(broadcasted);
+
+        // Phase1a sent a Phase1b, then Phase2a rejection sent a NACK.
+        Assert.Equal(2, sent.Count);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1BMessage, sent[0].Request.ContentCase);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.PaxosNackMessage, sent[1].Request.ContentCase);
+        Assert.Equal(2, sent[1].Request.PaxosNackMessage.Promised.Round);
 
         // Accept at promised rank should be accepted and broadcast.
         acceptor.HandlePhase2aMessage(new Phase2aMessage
@@ -126,6 +167,42 @@ public sealed class PaxosAcceptorTests
         }, TestContext.Current.CancellationToken);
 
         Assert.Single(broadcasted);
+    }
+
+    [Fact]
+    public void HandlePhase2a_DoesNotNackOnConfigMismatch()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new List<RapidClusterRequest>();
+        var broadcaster = new CapturingBroadcaster(broadcasted);
+
+        var sent = new List<(Endpoint Remote, RapidClusterRequest Request)>();
+        using var client = new CapturingMessagingClient(sent);
+
+        var acceptor = new PaxosAcceptor(
+            myAddr,
+            configId,
+            client,
+            broadcaster,
+            CreateMetrics(),
+            NullLogger<PaxosProposer>.Instance);
+
+        var coordinator = Utils.HostFromParts("127.0.0.1", 2000);
+        var proposal = new MembershipProposal { ConfigurationId = configId.ToProtobuf() };
+        proposal.Members.Add(Utils.HostFromParts("10.0.0.1", 5001, Utils.GetNextNodeId()));
+
+        acceptor.HandlePhase2aMessage(new Phase2aMessage
+        {
+            Sender = coordinator,
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(),
+            Rnd = new Rank { Round = 1, NodeIndex = 1 },
+            Proposal = proposal
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Empty(sent);
+        Assert.Empty(broadcasted);
     }
 
     private sealed class NoopBroadcaster : IBroadcaster

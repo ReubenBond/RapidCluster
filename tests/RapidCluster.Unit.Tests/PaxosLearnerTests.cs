@@ -14,7 +14,7 @@ public sealed class PaxosLearnerTests
     public async Task Decides_WhenMajorityReached()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 5, CreateMetrics(), NullLogger<Paxos>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 5, CreateMetrics(), NullLogger<PaxosProposer>.Instance);
 
         var proposal = CreateProposal(configId);
         var rnd = new Rank { Round = 2, NodeIndex = 10 };
@@ -36,7 +36,7 @@ public sealed class PaxosLearnerTests
     public async Task IgnoresDuplicateVotes_FromSameSender()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<Paxos>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<PaxosProposer>.Instance);
 
         var proposal = CreateProposal(configId);
         var rnd = new Rank { Round = 2, NodeIndex = 10 };
@@ -59,7 +59,7 @@ public sealed class PaxosLearnerTests
     public void IgnoresVotes_WithWrongConfigurationId()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<Paxos>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<PaxosProposer>.Instance);
 
         var proposal = CreateProposal(configId);
         var rnd = new Rank { Round = 2, NodeIndex = 10 };
@@ -75,7 +75,7 @@ public sealed class PaxosLearnerTests
     public async Task Cancel_CompletesAsCancelled()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<Paxos>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<PaxosProposer>.Instance);
 
         learner.Cancel();
 
@@ -87,7 +87,7 @@ public sealed class PaxosLearnerTests
     public async Task DecidesOnlyOnce_EvenIfAnotherRoundReachesMajority()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<Paxos>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger<PaxosProposer>.Instance);
 
         var proposalA = CreateProposal(configId);
         var proposalB = CreateProposal(configId);

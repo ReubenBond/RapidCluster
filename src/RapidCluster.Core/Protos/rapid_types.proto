@@ -24,19 +24,20 @@ message ConfigurationId
 // All-in-one message type.
 message RapidClusterRequest
 {
-   oneof content {
-        PreJoinMessage preJoinMessage = 1;
-        JoinMessage joinMessage = 2;
-        BatchedAlertMessage batchedAlertMessage = 3;
-        ProbeMessage probeMessage = 4;
-        FastRoundPhase2bMessage fastRoundPhase2bMessage = 5;
-        Phase1aMessage phase1aMessage = 6;
-        Phase1bMessage phase1bMessage = 7;
-        Phase2aMessage phase2aMessage = 8;
-        Phase2bMessage phase2bMessage = 9;
-        LeaveMessage leaveMessage = 10;
-        MembershipViewRequest membershipViewRequest = 11;
-   }
+    oneof content {
+         PreJoinMessage preJoinMessage = 1;
+         JoinMessage joinMessage = 2;
+         BatchedAlertMessage batchedAlertMessage = 3;
+         ProbeMessage probeMessage = 4;
+         FastRoundPhase2bMessage fastRoundPhase2bMessage = 5;
+         Phase1aMessage phase1aMessage = 6;
+         Phase1bMessage phase1bMessage = 7;
+         Phase2aMessage phase2aMessage = 8;
+         Phase2bMessage phase2bMessage = 9;
+         LeaveMessage leaveMessage = 10;
+         MembershipViewRequest membershipViewRequest = 11;
+         PaxosNackMessage paxosNackMessage = 12;
+    }
 }
 
 message RapidClusterResponse
@@ -183,6 +184,14 @@ message Phase2bMessage
     ConfigurationId configurationId = 2;
     Rank rnd = 3;
     MembershipProposal proposal = 4;
+}
+
+message PaxosNackMessage
+{
+    Endpoint sender = 1;
+    ConfigurationId configurationId = 2;
+    Rank received = 3;
+    Rank promised = 4;
 }
 
 

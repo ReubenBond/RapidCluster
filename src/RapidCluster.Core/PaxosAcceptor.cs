@@ -36,7 +36,7 @@ internal sealed class PaxosAcceptor
         IMessagingClient client,
         IBroadcaster broadcaster,
         RapidClusterMetrics metrics,
-        ILogger<Paxos> logger)
+        ILogger<PaxosProposer> logger)
     {
         _myAddr = myAddr;
         _configurationId = configurationId;
@@ -110,6 +110,16 @@ internal sealed class PaxosAcceptor
         else
         {
             _log.Phase1aRankTooLow(phase1aMessage.Rank, _promisedRank);
+
+            var nack = new PaxosNackMessage
+            {
+                Sender = _myAddr,
+                ConfigurationId = _configurationId.ToProtobuf(),
+                Received = phase1aMessage.Rank,
+                Promised = _promisedRank
+            };
+
+            _client.SendOneWayMessage(phase1aMessage.Sender, nack.ToRapidClusterRequest(), cancellationToken);
         }
     }
 
@@ -151,6 +161,16 @@ internal sealed class PaxosAcceptor
         else
         {
             _log.Phase2aRankTooLow(phase2aMessage.Rnd, _promisedRank);
+
+            var nack = new PaxosNackMessage
+            {
+                Sender = _myAddr,
+                ConfigurationId = _configurationId.ToProtobuf(),
+                Received = phase2aMessage.Rnd,
+                Promised = _promisedRank
+            };
+
+            _client.SendOneWayMessage(phase2aMessage.Sender, nack.ToRapidClusterRequest(), cancellationToken);
         }
     }
 }

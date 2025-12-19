@@ -22,7 +22,7 @@ internal sealed class PaxosProposer
     private readonly ConfigurationId _configurationId;
     private readonly Endpoint _myAddr;
     private readonly int _membershipSize;
-    private readonly Task<ConsensusResult> _decided;
+    private readonly Func<bool> _isDecided;
 
     private readonly List<Phase1bMessage> _phase1bMessages = [];
 
@@ -36,16 +36,18 @@ internal sealed class PaxosProposer
         IBroadcaster broadcaster,
         IMembershipViewAccessor membershipViewAccessor,
         RapidClusterMetrics metrics,
-        Task<ConsensusResult> decided,
+        Func<bool> isDecided,
         ILogger<PaxosProposer> logger)
     {
+        ArgumentNullException.ThrowIfNull(isDecided);
+
         _myAddr = myAddr;
         _configurationId = configurationId;
         _membershipSize = membershipSize;
         _broadcaster = broadcaster;
         _membershipViewAccessor = membershipViewAccessor;
         _metrics = metrics;
-        _decided = decided;
+        _isDecided = isDecided;
         _log = new PaxosLogger(logger);
 
         _currentRound = new Rank { Round = 0, NodeIndex = 0 };
@@ -62,7 +64,7 @@ internal sealed class PaxosProposer
             return;
         }
 
-        if (_decided.IsCompleted)
+        if (_isDecided())
         {
             return;
         }

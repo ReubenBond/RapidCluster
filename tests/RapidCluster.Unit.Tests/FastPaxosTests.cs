@@ -35,7 +35,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Should have decided after exactly 4 votes (not waiting for 5th)
@@ -64,7 +64,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposalA
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Send 2 votes for proposal B (total 4 votes, but split)
@@ -76,7 +76,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.2", 2000 + i),
                 Proposal = proposalB
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Should detect vote split when threshold reached but no single proposal has enough
@@ -104,7 +104,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Should NOT have decided yet
@@ -141,7 +141,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         Assert.False(fastPaxos.Result.IsCompleted, $"Should not decide with {expectedThreshold - 1} votes (threshold is {expectedThreshold})");
@@ -153,7 +153,7 @@ public class FastPaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1000 + expectedThreshold - 1),
             Proposal = proposal
         };
-        fastPaxos.HandleFastRoundProposal(finalMsg);
+        fastPaxos.HandleFastRoundProposalResponse(finalMsg);
 
         Assert.True(fastPaxos.Result.IsCompleted, $"Should decide with {expectedThreshold} votes");
         var result = await fastPaxos.Result;
@@ -182,7 +182,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Should NOT have decided because votes were ignored
@@ -207,7 +207,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         Assert.True(fastPaxos.Result.IsCompleted);
@@ -238,7 +238,7 @@ public class FastPaxosTests
                 Sender = sender,
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Should NOT have decided because duplicates are ignored
@@ -275,7 +275,7 @@ public class FastPaxosTests
                 Sender = sender,
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         Assert.True(fastPaxos.Result.IsCompleted);
@@ -303,7 +303,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = null // Null proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Should NOT have decided because null proposals are ignored
@@ -333,7 +333,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposalA
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         Assert.True(fastPaxos.Result.IsCompleted);
@@ -349,7 +349,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.2", 2000 + i),
                 Proposal = proposalB
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         // Decision should still be proposal A
@@ -377,7 +377,7 @@ public class FastPaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1000),
             Proposal = proposal
         };
-        fastPaxos.HandleFastRoundProposal(msg);
+        fastPaxos.HandleFastRoundProposalResponse(msg);
 
         Assert.False(fastPaxos.Result.IsCompleted);
 
@@ -407,7 +407,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         Assert.True(fastPaxos.Result.IsCompleted);
@@ -470,7 +470,7 @@ public class FastPaxosTests
                     Sender = Utils.HostFromParts($"127.0.0.{p + 1}", 1000 + i),
                     Proposal = proposals[p]
                 };
-                fastPaxos.HandleFastRoundProposal(msg);
+                fastPaxos.HandleFastRoundProposalResponse(msg);
             }
         }
 
@@ -501,7 +501,7 @@ public class FastPaxosTests
             Sender = myAddr,
             Proposal = proposal
         };
-        fastPaxos.HandleFastRoundProposal(msg);
+        fastPaxos.HandleFastRoundProposalResponse(msg);
 
         Assert.True(fastPaxos.Result.IsCompleted);
         var result = await fastPaxos.Result;
@@ -530,7 +530,7 @@ public class FastPaxosTests
                 Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
                 Proposal = proposal
             };
-            fastPaxos.HandleFastRoundProposal(msg);
+            fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
         var result = await fastPaxos.Result;

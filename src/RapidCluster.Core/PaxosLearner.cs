@@ -19,7 +19,8 @@ internal sealed class PaxosLearner
     private readonly int _membershipSize;
 
     private readonly Dictionary<Rank, Dictionary<Endpoint, Phase2bMessage>> _acceptResponses = [];
-    private readonly TaskCompletionSource<ConsensusResult> _decidedTcs = new();
+    private ConsensusResult? _decided;
+    private Action<ConsensusResult>? _decidedCallback;
 
     public PaxosLearner(
         ConfigurationId configurationId,
@@ -33,10 +34,32 @@ internal sealed class PaxosLearner
         _log = new PaxosLogger(logger);
     }
 
-    /// <summary>
-    /// Task that completes when classic Paxos consensus is learned.
-    /// </summary>
-    public Task<ConsensusResult> Decided => _decidedTcs.Task;
+    public bool IsDecided => _decided != null;
+
+    public ConsensusResult? Decided => _decided;
+
+    public void RegisterDecidedCallback(Action<ConsensusResult> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        _decidedCallback += callback;
+        if (_decided != null)
+        {
+            callback(_decided);
+        }
+    }
+
+    private bool TryDecide(ConsensusResult result)
+    {
+        if (_decided != null)
+        {
+            return false;
+        }
+
+        _decided = result;
+        _decidedCallback?.Invoke(result);
+        return true;
+    }
 
     /// <summary>
     /// Handles an acceptor vote (Phase2b).
@@ -69,7 +92,7 @@ internal sealed class PaxosLearner
         if (acceptResponses.Count >= majorityThreshold)
         {
             var proposal = phase2bMessage.Proposal;
-            if (proposal != null && _decidedTcs.TrySetResult(new ConsensusResult.Decided(proposal)))
+            if (proposal != null && TryDecide(new ConsensusResult.Decided(proposal)))
             {
                 _log.DecidedValue(proposal);
             }
@@ -78,6 +101,6 @@ internal sealed class PaxosLearner
 
     public void Cancel()
     {
-        _decidedTcs.TrySetResult(ConsensusResult.Cancelled.Instance);
+        TryDecide(ConsensusResult.Cancelled.Instance);
     }
 }

@@ -25,7 +25,8 @@ internal sealed class FastPaxosProposer
     private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
     private readonly HashSet<Endpoint> _votesReceived = [];
 
-    private readonly TaskCompletionSource<ConsensusResult> _resultTcs = new();
+    private ConsensusResult? _result;
+    private Action<ConsensusResult>? _resultCallback;
     private CancellationTokenRegistration _cancellationRegistration;
 
     public FastPaxosProposer(
@@ -46,7 +47,32 @@ internal sealed class FastPaxosProposer
         _log.FastPaxosInitialized(myAddr, configurationId, membershipSize);
     }
 
-    public Task<ConsensusResult> Result => _resultTcs.Task;
+    public bool IsCompleted => _result != null;
+
+    public ConsensusResult? Result => _result;
+
+    public void RegisterResultCallback(Action<ConsensusResult> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+
+        _resultCallback += callback;
+        if (_result != null)
+        {
+            callback(_result);
+        }
+    }
+
+    private bool TryComplete(ConsensusResult result)
+    {
+        if (_result != null)
+        {
+            return false;
+        }
+
+        _result = result;
+        _resultCallback?.Invoke(result);
+        return true;
+    }
 
     public void RegisterTimeoutToken(CancellationToken timeoutToken)
     {
@@ -54,7 +80,7 @@ internal sealed class FastPaxosProposer
         {
             _cancellationRegistration = timeoutToken.Register(() =>
             {
-                _resultTcs.TrySetResult(ConsensusResult.Cancelled.Instance);
+                TryComplete(ConsensusResult.Cancelled.Instance);
             });
         }
     }
@@ -82,10 +108,10 @@ internal sealed class FastPaxosProposer
             var newFailureCount = Interlocked.Increment(ref failureCount);
             var maxPossibleVotes = _membershipSize - newFailureCount;
 
-            if (maxPossibleVotes < fastPaxosThreshold && !_resultTcs.Task.IsCompleted)
+            if (maxPossibleVotes < fastPaxosThreshold && _result == null)
             {
                 _log.EarlyFallbackNeeded(newFailureCount, f, fastPaxosThreshold);
-                _resultTcs.TrySetResult(ConsensusResult.DeliveryFailure.Instance);
+                TryComplete(ConsensusResult.DeliveryFailure.Instance);
             }
         }, cancellationToken);
     }
@@ -107,7 +133,7 @@ internal sealed class FastPaxosProposer
             return;
         }
 
-        if (_resultTcs.Task.IsCompleted)
+        if (_result != null)
         {
             _log.FastRoundAlreadyDecided(_configurationId);
             return;
@@ -136,7 +162,7 @@ internal sealed class FastPaxosProposer
         {
             _log.DecidedViewChange(proposal);
 
-            if (_resultTcs.TrySetResult(new ConsensusResult.Decided(proposal)))
+            if (TryComplete(new ConsensusResult.Decided(proposal)))
             {
                 _log.FastRoundSucceeded(_configurationId);
             }
@@ -146,13 +172,13 @@ internal sealed class FastPaxosProposer
         if (_votesReceived.Count >= threshold)
         {
             _log.FastRoundMayNotSucceed();
-            _resultTcs.TrySetResult(ConsensusResult.VoteSplit.Instance);
+            TryComplete(ConsensusResult.VoteSplit.Instance);
         }
     }
 
     public void Cancel()
     {
         _cancellationRegistration.Dispose();
-        _resultTcs.TrySetResult(ConsensusResult.Cancelled.Instance);
+        TryComplete(ConsensusResult.Cancelled.Instance);
     }
 }

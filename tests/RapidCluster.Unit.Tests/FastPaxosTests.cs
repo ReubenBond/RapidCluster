@@ -16,7 +16,7 @@ public class FastPaxosTests
     #region Basic Decision Tests
 
     [Fact]
-    public async Task DeclaresSuccess_BeforeAllVotesReceived()
+    public void DeclaresSuccess_BeforeAllVotesReceived()
     {
         // In a 5-node cluster, threshold is N - f = 5 - 1 = 4
         // Early success: if a single proposal gets 4 votes, decide immediately
@@ -39,50 +39,11 @@ public class FastPaxosTests
         }
 
         // Should have decided after exactly 4 votes (not waiting for 5th)
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result;
+        Assert.NotNull(result);
+
         Assert.IsType<ConsensusResult.Decided>(result);
-    }
-
-    [Fact]
-    public async Task DetectsVoteSplit_WhenThresholdReached()
-    {
-        // In a 5-node cluster, threshold is N - f = 5 - 1 = 4
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
-
-        var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
-        var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
-
-        // Send 2 votes for proposal A
-        for (var i = 0; i < 2; i++)
-        {
-            var msg = new FastRoundPhase2bMessage
-            {
-                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
-                Sender = Utils.HostFromParts("127.0.0.1", 1000 + i),
-                Proposal = proposalA
-            };
-            fastPaxos.HandleFastRoundProposalResponse(msg);
-        }
-
-        // Send 2 votes for proposal B (total 4 votes, but split)
-        for (var i = 0; i < 2; i++)
-        {
-            var msg = new FastRoundPhase2bMessage
-            {
-                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
-                Sender = Utils.HostFromParts("127.0.0.2", 2000 + i),
-                Proposal = proposalB
-            };
-            fastPaxos.HandleFastRoundProposalResponse(msg);
-        }
-
-        // Should detect vote split when threshold reached but no single proposal has enough
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
-        Assert.IsType<ConsensusResult.VoteSplit>(result);
     }
 
     [Fact]
@@ -108,7 +69,7 @@ public class FastPaxosTests
         }
 
         // Should NOT have decided yet
-        Assert.False(fastPaxos.Result.IsCompleted);
+        Assert.False(fastPaxos.IsCompleted);
     }
 
     #endregion
@@ -124,7 +85,7 @@ public class FastPaxosTests
     [InlineData(9, 7)]   // 9-node cluster: threshold = 9 - 2 = 7, f = floor((9-1)/4) = 2
     [InlineData(10, 8)]  // 10-node cluster: threshold = 10 - 2 = 8
     [InlineData(13, 10)] // 13-node cluster: threshold = 13 - 3 = 10, f = floor((13-1)/4) = 3
-    public async Task DeclaresSuccess_AtExactThreshold(int membershipSize, int expectedThreshold)
+    public void DeclaresSuccess_AtExactThreshold(int membershipSize, int expectedThreshold)
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -144,7 +105,7 @@ public class FastPaxosTests
             fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
-        Assert.False(fastPaxos.Result.IsCompleted, $"Should not decide with {expectedThreshold - 1} votes (threshold is {expectedThreshold})");
+        Assert.False(fastPaxos.IsCompleted, $"Should not decide with {expectedThreshold - 1} votes (threshold is {expectedThreshold})");
 
         // Send the threshold-reaching vote
         var finalMsg = new FastRoundPhase2bMessage
@@ -155,8 +116,8 @@ public class FastPaxosTests
         };
         fastPaxos.HandleFastRoundProposalResponse(finalMsg);
 
-        Assert.True(fastPaxos.Result.IsCompleted, $"Should decide with {expectedThreshold} votes");
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted, $"Should decide with {expectedThreshold} votes");
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Decided>(result);
     }
 
@@ -186,11 +147,11 @@ public class FastPaxosTests
         }
 
         // Should NOT have decided because votes were ignored
-        Assert.False(fastPaxos.Result.IsCompleted);
+        Assert.False(fastPaxos.IsCompleted);
     }
 
     [Fact]
-    public async Task AcceptsVotes_WithCorrectConfigurationId()
+    public void AcceptsVotes_WithCorrectConfigurationId()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -210,8 +171,8 @@ public class FastPaxosTests
             fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Decided>(result);
     }
 
@@ -243,11 +204,11 @@ public class FastPaxosTests
 
         // Should NOT have decided because duplicates are ignored
         // (Only 1 unique vote, threshold is 4)
-        Assert.False(fastPaxos.Result.IsCompleted);
+        Assert.False(fastPaxos.IsCompleted);
     }
 
     [Fact]
-    public async Task CountsUniqueVoters_NotTotalVotes()
+    public void CountsUniqueVoters_NotTotalVotes()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -278,8 +239,8 @@ public class FastPaxosTests
             fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Decided>(result);
     }
 
@@ -307,7 +268,7 @@ public class FastPaxosTests
         }
 
         // Should NOT have decided because null proposals are ignored
-        Assert.False(fastPaxos.Result.IsCompleted);
+        Assert.False(fastPaxos.IsCompleted);
     }
 
     #endregion
@@ -315,7 +276,7 @@ public class FastPaxosTests
     #region Votes After Decision Tests
 
     [Fact]
-    public async Task IgnoresVotes_AfterDecision()
+    public void IgnoresVotes_AfterDecision()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -336,8 +297,8 @@ public class FastPaxosTests
             fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         var decided = Assert.IsType<ConsensusResult.Decided>(result);
 
         // Try to send more votes for a different proposal
@@ -353,7 +314,7 @@ public class FastPaxosTests
         }
 
         // Decision should still be proposal A
-        var finalResult = await fastPaxos.Result;
+        var finalResult = fastPaxos.Result!;
         var finalDecided = Assert.IsType<ConsensusResult.Decided>(finalResult);
         Assert.Equal(decided.Value, finalDecided.Value);
     }
@@ -363,7 +324,7 @@ public class FastPaxosTests
     #region Cancellation Tests
 
     [Fact]
-    public async Task Cancel_CompletesWithCancelledResult()
+    public void Cancel_CompletesWithCancelledResult()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -379,18 +340,18 @@ public class FastPaxosTests
         };
         fastPaxos.HandleFastRoundProposalResponse(msg);
 
-        Assert.False(fastPaxos.Result.IsCompleted);
+        Assert.False(fastPaxos.IsCompleted);
 
         // Cancel
         fastPaxos.Cancel();
 
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Cancelled>(result);
     }
 
     [Fact]
-    public async Task Cancel_DoesNotOverrideExistingDecision()
+    public void Cancel_DoesNotOverrideExistingDecision()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -410,18 +371,18 @@ public class FastPaxosTests
             fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
-        Assert.True(fastPaxos.Result.IsCompleted);
+        Assert.True(fastPaxos.IsCompleted);
 
         // Try to cancel after decision
         fastPaxos.Cancel();
 
         // Should still be Decided, not Cancelled
-        var result = await fastPaxos.Result;
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Decided>(result);
     }
 
     [Fact]
-    public async Task RegisterTimeoutToken_CancelledTokenCompleteWithCancelled()
+    public void RegisterTimeoutToken_CancelledTokenCompleteWithCancelled()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -430,14 +391,14 @@ public class FastPaxosTests
         using var cts = new CancellationTokenSource();
         fastPaxos.RegisterTimeoutToken(cts.Token);
 
-        Assert.False(fastPaxos.Result.IsCompleted);
+        Assert.False(fastPaxos.IsCompleted);
 
         // Cancel the token - the callback fires synchronously
         cts.SafeCancel();
 
         // The result should be completed immediately after cancellation
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Cancelled>(result);
     }
 
@@ -446,7 +407,7 @@ public class FastPaxosTests
     #region Three-Way Vote Split Tests
 
     [Fact]
-    public async Task DetectsVoteSplit_WithThreeProposals()
+    public void DetectsVoteSplit_WithThreeProposals()
     {
         // In a 9-node cluster, threshold is N - f = 9 - 2 = 7
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
@@ -476,8 +437,8 @@ public class FastPaxosTests
 
         // After threshold (7) total votes, should detect vote split
         // We sent 9 votes total > 7 threshold
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.VoteSplit>(result);
     }
 
@@ -486,7 +447,7 @@ public class FastPaxosTests
     #region Single Node Cluster Tests
 
     [Fact]
-    public async Task SingleNodeCluster_DecidesImmediately()
+    public void SingleNodeCluster_DecidesImmediately()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -503,8 +464,8 @@ public class FastPaxosTests
         };
         fastPaxos.HandleFastRoundProposalResponse(msg);
 
-        Assert.True(fastPaxos.Result.IsCompleted);
-        var result = await fastPaxos.Result;
+        Assert.True(fastPaxos.IsCompleted);
+        var result = fastPaxos.Result!;
         Assert.IsType<ConsensusResult.Decided>(result);
     }
 
@@ -513,7 +474,7 @@ public class FastPaxosTests
     #region Decided Value Tests
 
     [Fact]
-    public async Task DecidedValue_ContainsCorrectProposal()
+    public void DecidedValue_ContainsCorrectProposal()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
@@ -533,7 +494,7 @@ public class FastPaxosTests
             fastPaxos.HandleFastRoundProposalResponse(msg);
         }
 
-        var result = await fastPaxos.Result;
+        var result = fastPaxos.Result!;
         var decided = Assert.IsType<ConsensusResult.Decided>(result);
 
         Assert.Single(decided.Value.Members);

@@ -162,8 +162,8 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Create consensus coordinator factory
         var consensusCoordinatorLogger = _loggerFactory.CreateLogger<ConsensusCoordinator>();
-        var fastPaxosLogger = _loggerFactory.CreateLogger<FastPaxos>();
-        var paxosLogger = _loggerFactory.CreateLogger<Paxos>();
+        var fastPaxosLogger = _loggerFactory.CreateLogger<FastPaxosProposer>();
+        var paxosLogger = _loggerFactory.CreateLogger<PaxosProposer>();
         _consensusCoordinatorFactory = new ConsensusCoordinatorFactory(
             MessagingClient,
             _viewAccessor,

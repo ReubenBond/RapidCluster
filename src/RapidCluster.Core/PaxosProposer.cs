@@ -37,7 +37,7 @@ internal sealed class PaxosProposer
         IMembershipViewAccessor membershipViewAccessor,
         RapidClusterMetrics metrics,
         Task<ConsensusResult> decided,
-        ILogger<Paxos> logger)
+        ILogger<PaxosProposer> logger)
     {
         _myAddr = myAddr;
         _configurationId = configurationId;
@@ -68,6 +68,9 @@ internal sealed class PaxosProposer
         }
 
         _currentRound = new Rank { Round = round, NodeIndex = ComputeNodeIndex() };
+        _candidateValue = null;
+        _phase1bMessages.Clear();
+
         _log.PrepareCalled(_myAddr, _currentRound);
 
         var prepare = new Phase1aMessage
@@ -81,6 +84,28 @@ internal sealed class PaxosProposer
         _log.BroadcastingPhase1a();
 
         _broadcaster.Broadcast(request, cancellationToken);
+    }
+
+    public void HandlePaxosNackMessage(PaxosNackMessage nack, CancellationToken cancellationToken = default)
+    {
+        var messageConfigId = nack.ConfigurationId.ToConfigurationId();
+        if (messageConfigId != _configurationId)
+        {
+            return;
+        }
+
+        // We only react to NACKs for our current round. Older rounds are effectively stale.
+        if (!nack.Received.Equals(_currentRound))
+        {
+            return;
+        }
+
+        if (RankComparer.Instance.Compare(nack.Promised, _currentRound) <= 0)
+        {
+            return;
+        }
+
+        StartPhase1a(round: nack.Promised.Round + 1, cancellationToken);
     }
 
     private int ComputeNodeIndex()

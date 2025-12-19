@@ -34,7 +34,7 @@ internal sealed class FastPaxosProposer
         int membershipSize,
         IBroadcaster broadcaster,
         RapidClusterMetrics metrics,
-        ILogger<FastPaxos> logger)
+        ILogger<FastPaxosProposer> logger)
     {
         _myAddr = myAddr;
         _configurationId = configurationId;

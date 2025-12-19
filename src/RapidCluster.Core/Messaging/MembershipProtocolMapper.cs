@@ -57,7 +57,7 @@ internal static class MembershipProtocolMapper
             response.Endpoints,
             response.MetadataKeys,
             response.MetadataValues);
-            
+
         var builder = new MembershipViewBuilder(observersPerSubject, memberInfos, response.MaxNodeId);
         return builder.BuildWithConfigurationId(ConfigurationId.FromProtobuf(response.ConfigurationId));
     }

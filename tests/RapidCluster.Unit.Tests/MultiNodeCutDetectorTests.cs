@@ -965,7 +965,6 @@ public class MultiNodeCutDetectorTests
             return msg;
         }).ToList();
 
-
         var proposalEvents = 0;
         var nodesProposed = new HashSet<Endpoint>();
 

@@ -322,33 +322,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
-    /// Builds a list of MemberInfo from a protobuf response containing endpoints and metadata.
-    /// Used to parse JoinResponse and MembershipViewResponse messages.
-    /// </summary>
-    /// <param name="endpoints">The endpoint list from the response.</param>
-    /// <param name="metadataKeys">The metadata keys (endpoints) from the response.</param>
-    /// <param name="metadataValues">The metadata values from the response.</param>
-    /// <returns>A list of MemberInfo combining endpoints with their metadata.</returns>
-    private static List<MemberInfo> BuildMemberInfosFromResponse(
-        RepeatedField<Endpoint> endpoints,
-        RepeatedField<Endpoint> metadataKeys,
-        RepeatedField<Metadata> metadataValues)
-    {
-        // Build metadata lookup from parallel key/value lists
-        var metadataMap = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
-        var count = Math.Min(metadataKeys.Count, metadataValues.Count);
-        for (var i = 0; i < count; i++)
-        {
-            metadataMap[metadataKeys[i]] = metadataValues[i];
-        }
-
-        // Create MemberInfo for each endpoint, using empty metadata if not found
-        return endpoints
-            .Select(e => new MemberInfo(e, metadataMap.GetValueOrDefault(e, new Metadata())))
-            .ToList();
-    }
-
-    /// <summary>
     /// Unified join/rejoin implementation. Iterates through candidate seeds with configurable retry logic,
     /// performs the join protocol, and applies the resulting membership view.
     /// 
@@ -513,7 +486,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         }
     }
 
-
     /// <summary>
     /// Joins an existing cluster through the configured seed nodes.
     /// Cycles through seeds in round-robin fashion until join succeeds or max retries exhausted.
@@ -556,8 +528,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
                 throw new JoinException(failureReason ?? $"Failed to join cluster after {_options.MaxJoinRetries + 1} attempts");
         }
     }
-
-
 
     /// <summary>
     /// Attempts a single join operation through the specified seed. Generates a new NodeId and handles UUID collisions internally.
@@ -706,7 +676,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         return JoinAttemptResult.RetryNeeded($"Bootstrap in progress, {_bootstrapController.KnownNodesCount} nodes known");
     }
 
-
     /// <summary>
     /// Handles the case where we received HOSTNAME_ALREADY_IN_RING with no observers.
     /// This happens after bootstrap when the cluster was formed and we're already in it.
@@ -777,10 +746,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
         // We weren't in the view - retry (maybe cluster state changed)
         return JoinAttemptResult.RetryNeeded("Learned membership view does not contain this node");
     }
-
-
-
-
 
     /// <summary>
     /// Centralized method for updating the membership view. All view changes flow through here.
@@ -1129,7 +1094,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
                 return response;
             }
-
 
             // Normal join handling for established cluster
             var statusCode = _membershipView.IsSafeToJoin(joiningEndpoint);
@@ -1631,32 +1595,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
     }
 
     /// <summary>
-    /// Gets the list of endpoints currently in the membership view.
-    /// </summary>
-    /// <returns>list of endpoints in the membership view</returns>
-    public List<Endpoint> GetMembershipView() => [.. _membershipView.Members];
-
-    /// <summary>
-    /// Gets the list of endpoints currently in the membership view.
-    /// </summary>
-    /// <returns>list of endpoints in the membership view</returns>
-    public int GetMembershipSize() => _membershipView.Size;
-
-    /// <summary>
-    /// Gets the metadata for all members in the membership view.
-    /// </summary>
-    /// <returns>Dictionary mapping endpoints to their metadata.</returns>
-    public Dictionary<Endpoint, Metadata> GetMetadata()
-    {
-        var result = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
-        foreach (var member in _membershipView.MemberInfos)
-        {
-            result[member.Endpoint] = member.Metadata;
-        }
-        return result;
-    }
-
-    /// <summary>
     /// Queues a AlertMessage to be broadcasted after potentially being batched.
     /// </summary>
     /// <param name="msg">the AlertMessage to be broadcasted</param>
@@ -1844,9 +1782,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, ILearnedVie
 
         return candidateSeeds;
     }
-
-
-
 
     /// <summary>
     /// Applies a learned membership view from a remote node.

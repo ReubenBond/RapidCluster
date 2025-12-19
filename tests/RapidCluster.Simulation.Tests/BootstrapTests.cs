@@ -217,7 +217,7 @@ public sealed class BootstrapTests : IAsyncLifetime
 
         // Should complete reasonably quickly (this is simulation time, not real time)
         // Just verify it doesn't hang
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), 
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30),
             $"Bootstrap took too long: {stopwatch.Elapsed}");
     }
 }

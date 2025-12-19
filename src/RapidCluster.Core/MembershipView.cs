@@ -366,9 +366,9 @@ public sealed class MembershipView
     {
         // Rings are sorted by the hash of the endpoint with the ring index as seed.
         // We replicate this logic to find where a new node would fit.
-        
+
         var nodeHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, node);
-        
+
         // Binary search
         int low = 0;
         int high = ring.Length - 1;
@@ -378,9 +378,9 @@ public sealed class MembershipView
             int mid = low + ((high - low) >> 1);
             var midMember = ring[mid];
             var midHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, midMember.Endpoint);
-            
+
             int comparison = midHash.CompareTo(nodeHash);
-            
+
             if (comparison == 0)
             {
                 return mid;
@@ -394,7 +394,7 @@ public sealed class MembershipView
                 high = mid - 1;
             }
         }
-        
+
         return low;
     }
 
@@ -407,8 +407,8 @@ public sealed class MembershipView
     /// <param name="log">Logger for recording view changes.</param>
     /// <returns>The new membership view.</returns>
     internal MembershipView ApplyProposal(
-        MembershipProposal proposal, 
-        IReadOnlyDictionary<Endpoint, Metadata> joinerMetadata, 
+        MembershipProposal proposal,
+        IReadOnlyDictionary<Endpoint, Metadata> joinerMetadata,
         int maxRingCount,
         RapidCluster.Logging.MembershipServiceLogger log)
     {
@@ -420,7 +420,7 @@ public sealed class MembershipView
             m => m,
             m => m,
             EndpointAddressComparer.Instance);
-        
+
         var proposalMetadataLookup = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
         for (var i = 0; i < proposal.Members.Count; i++)
         {
@@ -472,13 +472,13 @@ public sealed class MembershipView
     public MembershipDiff Diff(MembershipView other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        
+
         var oldMembers = new HashSet<Endpoint>(Members, EndpointAddressComparer.Instance);
         var newMembers = new HashSet<Endpoint>(other.Members, EndpointAddressComparer.Instance);
 
         var addedNodes = new List<Endpoint>();
         var removedNodes = new List<Endpoint>();
-        
+
         // Nodes that joined (in new but not in old)
         foreach (var node in newMembers)
         {

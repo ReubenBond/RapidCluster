@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Options;
 using RapidCluster;
-using RapidCluster.EndToEnd.Node;
 using RapidCluster.Discovery;
+using RapidCluster.EndToEnd.Node;
 using RapidCluster.Grpc;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -158,7 +158,7 @@ internal sealed class DeferredRapidClusterOptionsConfigurator : IConfigureOption
         // Get the first available HTTPS server address for gRPC communication
         // With TLS, both HTTP/1.1 (health) and HTTP/2 (gRPC) work on the same HTTPS endpoint
         var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
-        
+
         // Prefer HTTPS addresses for gRPC (required for Http1AndHttp2 with ALPN)
         var address = addresses.FirstOrDefault(a => a.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             ?? addresses.FirstOrDefault();

@@ -24,10 +24,10 @@ internal sealed class BootstrapController
     // Bootstrap state tracking
     // Nodes attempting to join this node during bootstrap
     private readonly HashSet<Endpoint> _knownNodes = new(EndpointAddressComparer.Instance);
-    
+
     // Whether this node is still in the bootstrap phase (before cluster is formed)
     private bool _isBootstrapping;
-    
+
     // Task completion source for signaling when bootstrap should complete
     private TaskCompletionSource<bool>? _bootstrapCompletionSource;
 
@@ -84,7 +84,7 @@ internal sealed class BootstrapController
         lock (_lock)
         {
             _log.BootstrapCoordinatorTriggered(_myAddr, _knownNodes.Count);
-            
+
             if (_bootstrapCompletionSource == null)
             {
                 return;
@@ -93,14 +93,14 @@ internal sealed class BootstrapController
         }
 
         using var registration = cancellationToken.Register(
-            () => 
+            () =>
             {
                 lock (_lock)
                 {
                     _bootstrapCompletionSource?.TrySetCanceled(cancellationToken);
                 }
             });
-            
+
         await task.ConfigureAwait(true);
     }
 
@@ -124,7 +124,7 @@ internal sealed class BootstrapController
             {
                 // We have enough nodes and we're the smallest - trigger bootstrap!
                 _log.BootstrapCoordinatorTriggered(_myAddr, _knownNodes.Count);
-                
+
                 var members = TriggerBootstrapInternal();
 
                 // After bootstrap, the joiner is already in the ring (was included in bootstrap).
@@ -136,7 +136,7 @@ internal sealed class BootstrapController
                     ConfigurationId = currentConfigId.ToProtobuf(), // Caller will need to update this if members are returned
                     StatusCode = JoinStatusCode.HostnameAlreadyInRing
                 };
-                
+
                 _log.HandlePreJoinResult(joiningEndpoint, JoinStatusCode.HostnameAlreadyInRing, 0);
                 return (response.ToRapidClusterResponse(), members);
             }
@@ -173,7 +173,7 @@ internal sealed class BootstrapController
         for (var i = 0; i < sortedNodes.Count; i++)
         {
             var node = sortedNodes[i];
-            
+
             // Create endpoint with node ID
             var endpointWithId = new Endpoint
             {
@@ -181,7 +181,7 @@ internal sealed class BootstrapController
                 Port = node.Port,
                 NodeId = i + 1
             };
-            
+
             // Use own metadata for self, empty metadata for other nodes (metadata arrives with JoinMessage)
             var metadata = EndpointAddressComparer.Instance.Equals(node, _myAddr) ? _nodeMetadata : new Metadata();
             memberInfos.Add(new MemberInfo(endpointWithId, metadata));
@@ -297,7 +297,7 @@ internal sealed class BootstrapController
             }
         }
     }
-    
+
     /// <summary>
     /// Checks if this node should be the bootstrap coordinator.
     /// Internal helper called under lock.

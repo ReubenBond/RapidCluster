@@ -158,23 +158,58 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            _log.ConsensusCancelled();
-            _fastMetrics.RecordLatency(_metrics, MetricNames.Results.Aborted, consensusStopwatch);
-            _onDecidedTcs.TrySetCanceled(cancellationToken);
+            CompleteCancelled(
+                _fastMetrics,
+                consensusStopwatch,
+                recordRoundCompleted: false,
+                recordLatency: true,
+                cancellationToken);
         }
     }
 
-    private void CompleteDecision(
+    private void CompleteDecided(ProtocolMetrics protocolMetrics, Stopwatch consensusStopwatch, MembershipProposal decidedValue)
+    {
+        _log.ConsensusDecided(_configurationId, decidedValue);
+        protocolMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Success);
+        protocolMetrics.RecordLatency(_metrics, MetricNames.Results.Success, consensusStopwatch);
+        _onDecidedTcs.TrySetResult(decidedValue);
+    }
+
+    private void CompleteCancelled(
+        ProtocolMetrics protocolMetrics,
+        bool recordRoundCompleted,
+        CancellationToken cancellationToken)
+    {
+        _log.ConsensusCancelled();
+
+        if (recordRoundCompleted)
+        {
+            protocolMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Aborted);
+        }
+
+        _onDecidedTcs.TrySetCanceled(cancellationToken);
+    }
+
+    private void CompleteCancelled(
         ProtocolMetrics protocolMetrics,
         Stopwatch consensusStopwatch,
-        string result,
-        MembershipProposal decidedValue,
-        Action logDecision)
+        bool recordRoundCompleted,
+        bool recordLatency,
+        CancellationToken cancellationToken)
     {
-        logDecision();
-        protocolMetrics.RecordRoundCompleted(_metrics, result);
-        protocolMetrics.RecordLatency(_metrics, result, consensusStopwatch);
-        _onDecidedTcs.TrySetResult(decidedValue);
+        _log.ConsensusCancelled();
+
+        if (recordRoundCompleted)
+        {
+            protocolMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Aborted);
+        }
+
+        if (recordLatency)
+        {
+            protocolMetrics.RecordLatency(_metrics, MetricNames.Results.Aborted, consensusStopwatch);
+        }
+
+        _onDecidedTcs.TrySetCanceled(cancellationToken);
     }
 
     private async Task<ConsensusResult> RunFastRoundAsync(
@@ -203,12 +238,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         switch (fastRoundResult)
         {
             case ConsensusResult.Decided decided:
-                CompleteDecision(
-                    _fastMetrics,
-                    consensusStopwatch,
-                    MetricNames.Results.Success,
-                    decided.Value,
-                    () => _log.FastRoundDecided(_configurationId, decided.Value));
+                CompleteDecided(_fastMetrics, consensusStopwatch, decided.Value);
                 return true;
 
             case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
@@ -220,9 +250,10 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             case ConsensusResult.Cancelled:
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    _log.ConsensusCancelled();
-                    _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Aborted);
-                    _onDecidedTcs.TrySetCanceled(cancellationToken);
+                    CompleteCancelled(
+                        _fastMetrics,
+                        recordRoundCompleted: true,
+                        cancellationToken);
                     return true;
                 }
 
@@ -244,9 +275,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     private async Task RunClassicRoundsAsync(Stopwatch consensusStopwatch, CancellationToken cancellationToken)
     {
-        var maxRounds = _options.MaxConsensusRounds;
-
-        for (var roundNumber = 2; roundNumber <= maxRounds && !cancellationToken.IsCancellationRequested; roundNumber++)
+        for (var roundNumber = 2; !cancellationToken.IsCancellationRequested; roundNumber++)
         {
             if (TryCompleteClassicDecision(roundNumber - 1, consensusStopwatch))
             {
@@ -275,19 +304,12 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             _classicMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
         }
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            _log.ConsensusCancelled();
-            _classicMetrics.RecordLatency(_metrics, MetricNames.Results.Aborted, consensusStopwatch);
-            _onDecidedTcs.TrySetCanceled(cancellationToken);
-        }
-        else
-        {
-            _log.ConsensusExhausted(maxRounds);
-            _classicMetrics.RecordLatency(_metrics, MetricNames.Results.Failed, consensusStopwatch);
-            _onDecidedTcs.TrySetException(new InvalidOperationException(
-                $"Consensus failed: exhausted all {maxRounds} rounds without reaching decision for configId={_configurationId}"));
-        }
+        CompleteCancelled(
+            _classicMetrics,
+            consensusStopwatch,
+            recordRoundCompleted: false,
+            recordLatency: true,
+            cancellationToken);
     }
 
     private bool TryCompleteClassicDecision(int roundNumber, Stopwatch consensusStopwatch)
@@ -297,12 +319,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             return false;
         }
 
-        CompleteDecision(
-            _classicMetrics,
-            consensusStopwatch,
-            MetricNames.Results.Success,
-            decided.Value,
-            () => _log.ClassicRoundDecided(roundNumber, _configurationId, decided.Value));
+        CompleteDecided(_classicMetrics, consensusStopwatch, decided.Value);
         return true;
     }
 
@@ -313,9 +330,10 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             return false;
         }
 
-        _log.ConsensusCancelled();
-        _classicMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Aborted);
-        _onDecidedTcs.TrySetCanceled(cancellationToken);
+        CompleteCancelled(
+            _classicMetrics,
+            recordRoundCompleted: true,
+            cancellationToken);
         return true;
     }
 

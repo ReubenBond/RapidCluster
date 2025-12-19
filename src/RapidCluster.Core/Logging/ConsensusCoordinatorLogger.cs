@@ -23,9 +23,9 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting fast round (round 1)")]
     public partial void StartingFastRound();
 
-    [LoggerMessage(EventName = nameof(FastRoundDecided), Level = LogLevel.Debug, Message = "Fast round decided (configId={ConfigId}): {Decision}")]
-    private partial void FastRoundDecidedCore(ConfigurationId configId, LoggableMembershipProposal decision);
-    public void FastRoundDecided(ConfigurationId configId, MembershipProposal? decision) => FastRoundDecidedCore(configId, new(decision));
+    [LoggerMessage(EventName = nameof(ConsensusDecided), Level = LogLevel.Debug, Message = "Consensus decided (configId={ConfigId}): {Decision}")]
+    private partial void ConsensusDecidedCore(ConfigurationId configId, LoggableMembershipProposal decision);
+    public void ConsensusDecided(ConfigurationId configId, MembershipProposal? decision) => ConsensusDecidedCore(configId, new(decision));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fast round timed out or cancelled (configId={ConfigId}) after {Timeout}, falling back to classic Paxos")]
     public partial void FastRoundTimeout(ConfigurationId configId, TimeSpan timeout);
@@ -39,15 +39,8 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting classic round {Round} with delay {Delay}")]
     public partial void StartingClassicRound(int round, TimeSpan delay);
 
-    [LoggerMessage(EventName = nameof(ClassicRoundDecided), Level = LogLevel.Debug, Message = "Classic round {Round} decided (configId={ConfigId}): {Decision}")]
-    private partial void ClassicRoundDecidedCore(int round, ConfigurationId configId, LoggableMembershipProposal decision);
-    public void ClassicRoundDecided(int round, ConfigurationId configId, MembershipProposal? decision) => ClassicRoundDecidedCore(round, configId, new(decision));
-
     [LoggerMessage(Level = LogLevel.Debug, Message = "Consensus loop cancelled")]
     public partial void ConsensusCancelled();
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Consensus failed: exhausted all {MaxRounds} rounds without reaching decision")]
-    public partial void ConsensusExhausted(int maxRounds);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "HandleMessages: received {MessageType}")]
     public partial void HandleMessages(RapidClusterRequest.ContentOneofCase messageType);

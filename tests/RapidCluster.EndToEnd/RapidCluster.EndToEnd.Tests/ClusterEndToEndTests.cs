@@ -1,4 +1,3 @@
-using MartinCostello.Logging.XUnit;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable IDE0005 // Using directive is unnecessary - needed for implicit usings resolution

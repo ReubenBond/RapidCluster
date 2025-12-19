@@ -1,5 +1,4 @@
 using Clockwork;
-using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests.InfrastructureTests;
 

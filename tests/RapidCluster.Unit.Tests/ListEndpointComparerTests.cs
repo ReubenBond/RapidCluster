@@ -1,6 +1,5 @@
 using CsCheck;
 using Google.Protobuf;
-using RapidCluster;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Unit.Tests;

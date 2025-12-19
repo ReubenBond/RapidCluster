@@ -24,9 +24,9 @@ internal sealed class ProtobufEndpointComparer : IComparer<Endpoint>
 /// <summary>
 /// Compares Endpoint instances by address (hostname and port) only.
 /// Ignores NodeId, which is used for Paxos rank computation but not for node identity.
-/// Used with HashSet and Dictionary to ensure proper equality checking by network address.
+/// Used with HashSet, Dictionary, and SortedDictionary to ensure proper equality checking by network address.
 /// </summary>
-internal sealed class EndpointAddressComparer : IEqualityComparer<Endpoint>
+internal sealed class EndpointAddressComparer : IEqualityComparer<Endpoint>, IComparer<Endpoint>
 {
     public static readonly EndpointAddressComparer Instance = new();
 
@@ -42,6 +42,20 @@ internal sealed class EndpointAddressComparer : IEqualityComparer<Endpoint>
     public int GetHashCode(Endpoint obj)
     {
         return HashCode.Combine(obj.Hostname, obj.Port);
+    }
+
+    public int Compare(Endpoint? x, Endpoint? y)
+    {
+        if (ReferenceEquals(x, y)) return 0;
+        if (x is null) return -1;
+        if (y is null) return 1;
+
+        // Compare by hostname first (byte-by-byte comparison)
+        var hostnameCompare = x.Hostname.Span.SequenceCompareTo(y.Hostname.Span);
+        if (hostnameCompare != 0) return hostnameCompare;
+
+        // Then by port
+        return x.Port.CompareTo(y.Port);
     }
 }
 

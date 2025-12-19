@@ -31,7 +31,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
 
         var clusterId = seedNode.CurrentView.ConfigurationId.ClusterId;
 
-        Assert.NotEqual(ClusterId.Empty, clusterId);
+        Assert.NotEqual(ClusterId.None, clusterId);
     }
 
     [Fact]
@@ -45,8 +45,8 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var clusterId2 = seed2.CurrentView.ConfigurationId.ClusterId;
 
         // Both should be non-empty
-        Assert.NotEqual(ClusterId.Empty, clusterId1);
-        Assert.NotEqual(ClusterId.Empty, clusterId2);
+        Assert.NotEqual(ClusterId.None, clusterId1);
+        Assert.NotEqual(ClusterId.None, clusterId2);
 
         // They should be different because they have different seed addresses
         Assert.NotEqual(clusterId1, clusterId2);
@@ -65,7 +65,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var joinerClusterId = joiner.CurrentView.ConfigurationId.ClusterId;
 
         Assert.Equal(seedClusterId, joinerClusterId);
-        Assert.NotEqual(ClusterId.Empty, joinerClusterId);
+        Assert.NotEqual(ClusterId.None, joinerClusterId);
     }
 
     [Fact]
@@ -227,6 +227,6 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         // This simulates what would happen if a node restarts
         // Note: We can't actually create two nodes with the same address in the same harness,
         // so we verify the hash is deterministic by checking the ClusterId is non-zero
-        Assert.NotEqual(ClusterId.Empty, clusterId);
+        Assert.NotEqual(ClusterId.None, clusterId);
     }
 }

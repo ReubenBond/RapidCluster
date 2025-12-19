@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
-using RapidCluster;
 using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 using RapidCluster.Pb;

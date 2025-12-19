@@ -1,4 +1,3 @@
-using RapidCluster;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Unit.Tests;

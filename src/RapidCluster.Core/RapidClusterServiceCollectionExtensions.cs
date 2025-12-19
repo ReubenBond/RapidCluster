@@ -140,9 +140,6 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddSingleton<MembershipViewAccessor>();
         services.AddSingleton<IMembershipViewAccessor>(sp => sp.GetRequiredService<MembershipViewAccessor>());
 
-        // Register MetadataManager as singleton (shared between MembershipService and RapidClusterImpl)
-        services.AddSingleton<MetadataManager>();
-
         // Register MembershipService directly (InitializeAsync is called by RapidClusterLifecycleService)
         services.AddSingleton<MembershipService>();
 

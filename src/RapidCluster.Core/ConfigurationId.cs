@@ -1,36 +1,6 @@
 using System.Diagnostics;
-using RapidCluster.Pb;
 
 namespace RapidCluster;
-
-/// <summary>
-/// Uniquely identifies a Rapid cluster instance. 
-/// Computed exactly once during cluster bootstrapping and stays constant for the life of the cluster.
-/// </summary>
-/// <remarks>
-/// Initializes a new ClusterId with the specified value.
-/// </remarks>
-[DebuggerDisplay("{ToString(),nq}")]
-public readonly struct ClusterId(long value) : IEquatable<ClusterId>
-{
-    /// <summary>
-    /// The empty cluster ID (0).
-    /// </summary>
-    public static readonly ClusterId Empty = new(0);
-
-    /// <summary>
-    /// Gets the underlying 64-bit value.
-    /// </summary>
-    public long Value { get; } = value;
-
-    public bool Equals(ClusterId other) => Value == other.Value;
-    public override bool Equals(object? obj) => obj is ClusterId other && Equals(other);
-    public override int GetHashCode() => Value.GetHashCode();
-    public override string ToString() => $"ClusterId({Value:X16})";
-
-    public static bool operator ==(ClusterId left, ClusterId right) => left.Equals(right);
-    public static bool operator !=(ClusterId left, ClusterId right) => !left.Equals(right);
-}
 
 /// <summary>
 /// Represents a configuration identifier that combines a stable <see cref="ClusterId"/> 
@@ -43,9 +13,9 @@ public readonly struct ClusterId(long value) : IEquatable<ClusterId>
 public readonly struct ConfigurationId(ClusterId clusterId, long version) : IEquatable<ConfigurationId>, IComparable<ConfigurationId>
 {
     /// <summary>
-    /// The default/empty configuration ID with ClusterId.Empty and version 0.
+    /// The default/empty configuration ID with ClusterId.None and version 0.
     /// </summary>
-    public static readonly ConfigurationId Empty = new(ClusterId.Empty, 0);
+    public static readonly ConfigurationId Empty = new(ClusterId.None, 0);
 
     /// <summary>
     /// Gets the unique cluster identifier.

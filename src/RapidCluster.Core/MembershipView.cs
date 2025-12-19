@@ -359,28 +359,145 @@ public sealed class MembershipView
         return -1;
     }
 
+    /// <summary>
+    /// Finds the insertion point for a node in a sorted ring to maintain sort order.
+    /// </summary>
     private static int FindInsertionPoint(ImmutableArray<MemberInfo> ring, Endpoint node, int ringIndex)
     {
-        // Compute hash for the new node
+        // Rings are sorted by the hash of the endpoint with the ring index as seed.
+        // We replicate this logic to find where a new node would fit.
+        
         var nodeHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, node);
+        
+        // Binary search
+        int low = 0;
+        int high = ring.Length - 1;
 
-        // Binary search for insertion point based on hash
-        var left = 0;
-        var right = ring.Length;
-        while (left < right)
+        while (low <= high)
         {
-            var mid = (left + right) / 2;
-            var midHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, ring[mid].Endpoint);
-            if (midHash < nodeHash)
+            int mid = low + ((high - low) >> 1);
+            var midMember = ring[mid];
+            var midHash = MembershipViewBuilder.ComputeEndpointHash(ringIndex, midMember.Endpoint);
+            
+            int comparison = midHash.CompareTo(nodeHash);
+            
+            if (comparison == 0)
             {
-                left = mid + 1;
+                return mid;
+            }
+            if (comparison < 0)
+            {
+                low = mid + 1;
             }
             else
             {
-                right = mid;
+                high = mid - 1;
             }
         }
-        return left;
+        
+        return low;
+    }
+
+    /// <summary>
+    /// Applies a membership proposal to this view, creating a new view.
+    /// </summary>
+    /// <param name="proposal">The proposal containing the new membership state.</param>
+    /// <param name="joinerMetadata">Metadata for nodes that might be joining and aren't in the current view.</param>
+    /// <param name="maxRingCount">The maximum number of rings to use.</param>
+    /// <param name="log">Logger for recording view changes.</param>
+    /// <returns>The new membership view.</returns>
+    internal MembershipView ApplyProposal(
+        MembershipProposal proposal, 
+        IReadOnlyDictionary<Endpoint, Metadata> joinerMetadata, 
+        int maxRingCount,
+        RapidCluster.Logging.MembershipServiceLogger log)
+    {
+        // Create a builder from the current view to make modifications
+        var builder = ToBuilder(maxRingCount);
+
+        // Build a lookup from the proposal for fast access to endpoints (which contain NodeId)
+        var proposalMemberLookup = proposal.Members.ToDictionary(
+            m => m,
+            m => m,
+            EndpointAddressComparer.Instance);
+        
+        var proposalMetadataLookup = new Dictionary<Endpoint, Metadata>(EndpointAddressComparer.Instance);
+        for (var i = 0; i < proposal.Members.Count; i++)
+        {
+            if (i < proposal.MemberMetadata.Count)
+            {
+                proposalMetadataLookup[proposal.Members[i]] = proposal.MemberMetadata[i];
+            }
+        }
+
+        // Update the builder's max node ID from the proposal
+        builder.SetMaxNodeId(proposal.MaxNodeId);
+
+        // Determine which nodes are being added and which are being removed
+        var currentMembers = new HashSet<Endpoint>(Members, EndpointAddressComparer.Instance);
+        var proposedMembers = new HashSet<Endpoint>(proposal.Members, EndpointAddressComparer.Instance);
+
+        // Nodes to remove: in current but not in proposed
+        foreach (var node in currentMembers.Except(proposedMembers, EndpointAddressComparer.Instance))
+        {
+            log.RemovingNode(node);
+            builder.RingDelete(node);
+        }
+
+        // Nodes to add: in proposed but not in current
+        foreach (var node in proposedMembers.Except(currentMembers, EndpointAddressComparer.Instance))
+        {
+            if (!proposalMemberLookup.TryGetValue(node, out var endpointWithNodeId))
+            {
+                // This should never happen - the proposal should always have the endpoint
+                log.DecidedNodeWithoutUuid(node);
+                continue;
+            }
+
+            var metadata = proposalMetadataLookup.GetValueOrDefault(node) ?? joinerMetadata.GetValueOrDefault(node, new Metadata());
+
+            log.AddingNode(endpointWithNodeId);
+            // Create MemberInfo with endpoint and metadata - this stores metadata directly in the view
+            var memberInfo = new MemberInfo(endpointWithNodeId, metadata);
+            builder.RingAdd(memberInfo);
+        }
+
+        // Build the new immutable view with incremented version
+        return builder.Build(ConfigurationId);
+    }
+
+    /// <summary>
+    /// Computes the difference between this view and another view.
+    /// </summary>
+    public MembershipDiff Diff(MembershipView other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        
+        var oldMembers = new HashSet<Endpoint>(Members, EndpointAddressComparer.Instance);
+        var newMembers = new HashSet<Endpoint>(other.Members, EndpointAddressComparer.Instance);
+
+        var addedNodes = new List<Endpoint>();
+        var removedNodes = new List<Endpoint>();
+        
+        // Nodes that joined (in new but not in old)
+        foreach (var node in newMembers)
+        {
+            if (!oldMembers.Contains(node))
+            {
+                addedNodes.Add(node);
+            }
+        }
+
+        // Nodes that left (in old but not in new)
+        foreach (var node in oldMembers)
+        {
+            if (!newMembers.Contains(node))
+            {
+                removedNodes.Add(node);
+            }
+        }
+
+        return new MembershipDiff(addedNodes, removedNodes.Count, removedNodes);
     }
 }
 

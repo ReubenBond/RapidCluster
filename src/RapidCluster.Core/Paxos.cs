@@ -27,7 +27,7 @@ internal sealed class Paxos
     private readonly IBroadcaster _broadcaster;
     private readonly IMessagingClient _client;
     private readonly IMembershipViewAccessor _membershipViewAccessor;
-    private readonly long _configurationId;
+    private readonly ConfigurationId _configurationId;
     private readonly Endpoint _myAddr;
     private readonly int _membershipSize;
 
@@ -52,7 +52,7 @@ internal sealed class Paxos
 
     public Paxos(
         Endpoint myAddr,
-        long configurationId,
+        ConfigurationId configurationId,
         int membershipSize,
         IMessagingClient client,
         IBroadcaster broadcaster,
@@ -129,7 +129,7 @@ internal sealed class Paxos
 
         var prepare = new Phase1aMessage
         {
-            ConfigurationId = _configurationId,
+            ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
             Rank = _crnd
         };
@@ -159,11 +159,12 @@ internal sealed class Paxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void HandlePhase1aMessage(Phase1aMessage phase1aMessage, CancellationToken cancellationToken = default)
     {
-        _log.HandlePhase1aReceived(phase1aMessage.Sender, phase1aMessage.Rank, phase1aMessage.ConfigurationId);
+        var messageConfigId = phase1aMessage.ConfigurationId.ToConfigurationId();
+        _log.HandlePhase1aReceived(phase1aMessage.Sender, phase1aMessage.Rank, messageConfigId);
 
-        if (phase1aMessage.ConfigurationId != _configurationId)
+        if (messageConfigId != _configurationId)
         {
-            _log.Phase1aConfigMismatch(_configurationId, phase1aMessage.ConfigurationId);
+            _log.Phase1aConfigMismatch(_configurationId, messageConfigId);
             return;
         }
 
@@ -173,7 +174,7 @@ internal sealed class Paxos
 
             var phase1b = new Phase1bMessage
             {
-                ConfigurationId = _configurationId,
+                ConfigurationId = _configurationId.ToProtobuf(),
                 Sender = _myAddr,
                 Rnd = _rnd,
                 Vrnd = _vrnd,
@@ -200,11 +201,12 @@ internal sealed class Paxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void HandlePhase1bMessage(Phase1bMessage phase1bMessage, CancellationToken cancellationToken = default)
     {
-        _log.HandlePhase1bReceived(phase1bMessage.Sender, phase1bMessage.Rnd, phase1bMessage.Vrnd, phase1bMessage.ConfigurationId);
+        var messageConfigId = phase1bMessage.ConfigurationId.ToConfigurationId();
+        _log.HandlePhase1bReceived(phase1bMessage.Sender, phase1bMessage.Rnd, phase1bMessage.Vrnd, messageConfigId);
 
-        if (phase1bMessage.ConfigurationId != _configurationId)
+        if (messageConfigId != _configurationId)
         {
-            _log.Phase1bConfigMismatch(_configurationId, phase1bMessage.ConfigurationId);
+            _log.Phase1bConfigMismatch(_configurationId, messageConfigId);
             return;
         }
 
@@ -239,7 +241,7 @@ internal sealed class Paxos
 
                 var phase2a = new Phase2aMessage
                 {
-                    ConfigurationId = _configurationId,
+                    ConfigurationId = _configurationId.ToProtobuf(),
                     Sender = _myAddr,
                     Rnd = _crnd,
                     Proposal = _cval
@@ -259,11 +261,12 @@ internal sealed class Paxos
     /// <param name="cancellationToken">Cancellation token</param>
     public void HandlePhase2aMessage(Phase2aMessage phase2aMessage, CancellationToken cancellationToken = default)
     {
-        _log.HandlePhase2aReceived(phase2aMessage.Sender, phase2aMessage.Rnd, phase2aMessage.Proposal, phase2aMessage.ConfigurationId);
+        var messageConfigId = phase2aMessage.ConfigurationId.ToConfigurationId();
+        _log.HandlePhase2aReceived(phase2aMessage.Sender, phase2aMessage.Rnd, phase2aMessage.Proposal, messageConfigId);
 
-        if (phase2aMessage.ConfigurationId != _configurationId)
+        if (messageConfigId != _configurationId)
         {
-            _log.Phase2aConfigMismatch(_configurationId, phase2aMessage.ConfigurationId);
+            _log.Phase2aConfigMismatch(_configurationId, messageConfigId);
             return;
         }
 
@@ -276,7 +279,7 @@ internal sealed class Paxos
 
             var phase2b = new Phase2bMessage
             {
-                ConfigurationId = _configurationId,
+                ConfigurationId = _configurationId.ToProtobuf(),
                 Sender = _myAddr,
                 Rnd = _rnd,
                 Proposal = _vval
@@ -304,11 +307,12 @@ internal sealed class Paxos
     /// <param name="phase2bMessage">acceptor's vote</param>
     public void HandlePhase2bMessage(Phase2bMessage phase2bMessage)
     {
-        _log.HandlePhase2bReceived(phase2bMessage.Sender, phase2bMessage.Rnd, phase2bMessage.Proposal, phase2bMessage.ConfigurationId);
+        var messageConfigId = phase2bMessage.ConfigurationId.ToConfigurationId();
+        _log.HandlePhase2bReceived(phase2bMessage.Sender, phase2bMessage.Rnd, phase2bMessage.Proposal, messageConfigId);
 
-        if (phase2bMessage.ConfigurationId != _configurationId)
+        if (messageConfigId != _configurationId)
         {
-            _log.Phase2bConfigMismatch(_configurationId, phase2bMessage.ConfigurationId);
+            _log.Phase2bConfigMismatch(_configurationId, messageConfigId);
             return;
         }
 

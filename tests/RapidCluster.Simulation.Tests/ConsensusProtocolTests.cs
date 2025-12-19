@@ -173,7 +173,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
     public void ConfigurationIdChangesWithEachMembershipChange()
     {
         var seedNode = _harness.CreateSeedNode();
-        var configIds = new HashSet<long> { seedNode.CurrentView.ConfigurationId };
+        var configIds = new HashSet<ConfigurationId> { seedNode.CurrentView.ConfigurationId };
 
         // Join 3 nodes, tracking config ID changes
         for (var i = 1; i <= 3; i++)

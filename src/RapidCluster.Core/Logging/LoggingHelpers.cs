@@ -51,13 +51,23 @@ internal readonly struct LoggableMembershipProposal(MembershipProposal? proposal
 }
 
 /// <summary>
+/// Wrapper for logging a ConfigurationId.
+/// </summary>
+internal readonly struct LoggableConfigurationId(ConfigurationId configId)
+{
+    private readonly ConfigurationId _configId = configId;
+    public override readonly string ToString() => _configId.ToString();
+}
+
+/// <summary>
 /// Wrapper for logging a MembershipView's configuration ID.
 /// </summary>
-internal readonly struct LoggableConfigurationId(MembershipView view)
+internal readonly struct LoggableMembershipViewConfigurationId(MembershipView view)
 {
     private readonly MembershipView _view = view;
     public override readonly string ToString() => _view.ConfigurationId.ToString();
 }
+
 
 /// <summary>
 /// Wrapper for logging a MembershipView's size.
@@ -75,4 +85,13 @@ internal readonly struct LoggableRingNumbers(IEnumerable<int> ringNumbers)
 {
     private readonly IEnumerable<int> _ringNumbers = ringNumbers;
     public override readonly string ToString() => string.Join(",", _ringNumbers);
+}
+
+/// <summary>
+/// Wrapper for logging a ClusterId.
+/// </summary>
+internal readonly struct LoggableClusterId(ClusterId clusterId)
+{
+    private readonly ClusterId _clusterId = clusterId;
+    public override readonly string ToString() => _clusterId.ToString();
 }

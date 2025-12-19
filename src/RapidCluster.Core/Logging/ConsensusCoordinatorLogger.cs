@@ -13,8 +13,8 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     public ILogger Logger => _logger;
 
     [LoggerMessage(EventName = nameof(Initialized), Level = LogLevel.Debug, Message = "ConsensusCoordinator initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
-    private partial void InitializedCore(LoggableEndpoint myAddr, long configId, int membershipSize);
-    public void Initialized(Endpoint myAddr, long configId, int membershipSize) => InitializedCore(new(myAddr), configId, membershipSize);
+    private partial void InitializedCore(LoggableEndpoint myAddr, ConfigurationId configId, int membershipSize);
+    public void Initialized(Endpoint myAddr, ConfigurationId configId, int membershipSize) => InitializedCore(new(myAddr), configId, membershipSize);
 
     [LoggerMessage(EventName = nameof(Propose), Level = LogLevel.Debug, Message = "Propose: starting consensus loop with proposal={Proposal}")]
     private partial void ProposeCore(LoggableMembershipProposal proposal);
@@ -24,11 +24,11 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     public partial void StartingFastRound();
 
     [LoggerMessage(EventName = nameof(FastRoundDecided), Level = LogLevel.Debug, Message = "Fast round decided (configId={ConfigId}): {Decision}")]
-    private partial void FastRoundDecidedCore(long configId, LoggableMembershipProposal decision);
-    public void FastRoundDecided(long configId, MembershipProposal? decision) => FastRoundDecidedCore(configId, new(decision));
+    private partial void FastRoundDecidedCore(ConfigurationId configId, LoggableMembershipProposal decision);
+    public void FastRoundDecided(ConfigurationId configId, MembershipProposal? decision) => FastRoundDecidedCore(configId, new(decision));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fast round timed out or cancelled (configId={ConfigId}) after {Timeout}, falling back to classic Paxos")]
-    public partial void FastRoundTimeout(long configId, TimeSpan timeout);
+    public partial void FastRoundTimeout(ConfigurationId configId, TimeSpan timeout);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fast round failed early, falling back to classic Paxos")]
     public partial void FastRoundFailedEarly();
@@ -40,8 +40,8 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
     public partial void StartingClassicRound(int round, TimeSpan delay);
 
     [LoggerMessage(EventName = nameof(ClassicRoundDecided), Level = LogLevel.Debug, Message = "Classic round {Round} decided (configId={ConfigId}): {Decision}")]
-    private partial void ClassicRoundDecidedCore(int round, long configId, LoggableMembershipProposal decision);
-    public void ClassicRoundDecided(int round, long configId, MembershipProposal? decision) => ClassicRoundDecidedCore(round, configId, new(decision));
+    private partial void ClassicRoundDecidedCore(int round, ConfigurationId configId, LoggableMembershipProposal decision);
+    public void ClassicRoundDecided(int round, ConfigurationId configId, MembershipProposal? decision) => ClassicRoundDecidedCore(round, configId, new(decision));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Consensus loop cancelled")]
     public partial void ConsensusCancelled();

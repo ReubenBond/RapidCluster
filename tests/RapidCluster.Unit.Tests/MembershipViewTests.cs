@@ -461,7 +461,7 @@ public class MembershipViewTests
             var n = Utils.HostFromParts("127.0.0.1", i, Utils.GetNextNodeId());
             builder.RingAdd(n);
             var view = builder.Build(previousConfigId);
-            set.Add(view.ConfigurationId);
+            set.Add(view.ConfigurationId.Version);
             previousConfigId = view.ConfigurationId;
             builder = view.ToBuilder();
         }
@@ -490,7 +490,7 @@ public class MembershipViewTests
             var n = Utils.HostFromParts("127.0.0.1", i, Utils.GetNextNodeId());
             builder1.RingAdd(n);
             var view1 = builder1.Build(previousConfigId1);
-            list1.Add(view1.ConfigurationId);
+            list1.Add(view1.ConfigurationId.Version);
             previousConfigId1 = view1.ConfigurationId;
             builder1 = view1.ToBuilder();
         }
@@ -500,7 +500,7 @@ public class MembershipViewTests
             var n = Utils.HostFromParts("127.0.0.1", i, Utils.GetNextNodeId());
             builder2.RingAdd(n);
             var view2 = builder2.Build(previousConfigId2);
-            list2.Add(view2.ConfigurationId);
+            list2.Add(view2.ConfigurationId.Version);
             previousConfigId2 = view2.ConfigurationId;
             builder2 = view2.ToBuilder();
         }
@@ -542,7 +542,7 @@ public class MembershipViewTests
 
         // The original view should still show the old state
         Assert.Single(view.Members);
-        Assert.NotEqual(view.ConfigurationId, view2.ConfigurationId);
+        Assert.NotEqual(view.ConfigurationId.Version, view2.ConfigurationId.Version);
         Assert.Equal(view.ConfigurationId.Version + 1, view2.ConfigurationId.Version);
 
         // The new view should have the updated state

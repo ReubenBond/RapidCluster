@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using RapidCluster;
 using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 using RapidCluster.Pb;
@@ -159,7 +160,7 @@ public sealed class PingPongFailureDetectorTests
             if (idx == 1)
             {
                 // Second probe succeeds
-                return new ProbeResponse { ConfigurationId = 1 }.ToRapidClusterResponse();
+                return new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse();
             }
             throw new Exception("Probe failed");
         };
@@ -259,10 +260,10 @@ public sealed class PingPongFailureDetectorTests
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
         using var client = new TestMessagingClient();
         var staleViewDetected = false;
-        long detectedRemoteConfigId = 0;
-        long detectedLocalConfigId = 0;
+        ConfigurationId detectedRemoteConfigId = ConfigurationId.Empty;
+        ConfigurationId detectedLocalConfigId = ConfigurationId.Empty;
 
-        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = 10 }.ToRapidClusterResponse();
+        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse();
 
         using var detector = new PingPongFailureDetector(
             subject,
@@ -276,7 +277,7 @@ public sealed class PingPongFailureDetectorTests
                 detectedRemoteConfigId = remoteConfig;
                 detectedLocalConfigId = localConfig;
             },
-            getLocalConfigurationId: () => 5,
+            viewAccessor: new TestMembershipViewAccessor(Utils.CreateMembershipView(numNodes: 5, configVersion: 5)),
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);
 
@@ -286,8 +287,8 @@ public sealed class PingPongFailureDetectorTests
         await Task.Delay(50, TestContext.Current.CancellationToken);
 
         Assert.True(staleViewDetected);
-        Assert.Equal(10, detectedRemoteConfigId);
-        Assert.Equal(5, detectedLocalConfigId);
+        Assert.Equal(10, detectedRemoteConfigId.Version);
+        Assert.Equal(5, detectedLocalConfigId.Version);
     }
 
     [Fact]
@@ -300,7 +301,7 @@ public sealed class PingPongFailureDetectorTests
         using var client = new TestMessagingClient();
         var staleViewDetected = false;
 
-        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = 5 }.ToRapidClusterResponse();
+        client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 5).ToProtobuf() }.ToRapidClusterResponse();
 
         using var detector = new PingPongFailureDetector(
             subject,
@@ -309,7 +310,7 @@ public sealed class PingPongFailureDetectorTests
             sharedResources,
             () => { },
             onStaleViewDetected: (_, _, _) => staleViewDetected = true,
-            getLocalConfigurationId: () => 10,
+            viewAccessor: new TestMembershipViewAccessor(Utils.CreateMembershipView(numNodes: 5, configVersion: 10)),
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);
 
@@ -367,6 +368,7 @@ public sealed class PingPongFailureDetectorTests
     {
         var timeProvider = new FakeTimeProvider();
         var sharedResources = new SharedResources(timeProvider: timeProvider);
+
         using var client = new TestMessagingClient();
         var localEndpoint = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
@@ -397,6 +399,12 @@ public sealed class PingPongFailureDetectorTests
     /// <summary>
     /// Test messaging client that allows customizing responses.
     /// </summary>
+
+    private sealed class TestMembershipViewAccessor(MembershipView view) : IMembershipViewAccessor
+    {
+        public MembershipView CurrentView => view;
+        public BroadcastChannelReader<MembershipView> Updates => throw new NotImplementedException();
+    }
     private sealed class TestMessagingClient : IMessagingClient, IDisposable
     {
         public Func<RapidClusterRequest, RapidClusterResponse>? ResponseGenerator { get; set; }
@@ -412,7 +420,7 @@ public sealed class PingPongFailureDetectorTests
                 return Task.FromResult(ResponseGenerator(request));
             }
 
-            return Task.FromResult(new ProbeResponse { ConfigurationId = 1 }.ToRapidClusterResponse());
+            return Task.FromResult(new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse());
         }
 
         public ValueTask DisposeAsync()

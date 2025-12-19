@@ -132,7 +132,7 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     /// and the consensus protocol batches them naturally. For large-scale cluster testing, use
     /// LargeClusterFormation_Parallel or VeryLargeClusterFormation_Parallel instead.
     /// </summary>
-    [Theory(Skip = "Batched parallel joins have timing issues - use fully parallel (batchSize=0) instead")]
+    [Theory]
     [InlineData(50, 10)]  // 50 nodes in batches of 10
     [InlineData(80, 20)]  // 80 nodes in batches of 20
     [InlineData(100, 25)] // 100 nodes in batches of 25
@@ -595,7 +595,7 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     public void ConfigurationChangesTrackedThroughGrowthAndShrinkage()
     {
         var seedNode = _harness.CreateSeedNode();
-        var configIds = new HashSet<long> { seedNode.CurrentView.ConfigurationId };
+        var configIds = new HashSet<ConfigurationId> { seedNode.CurrentView.ConfigurationId };
 
         // Grow the cluster
         for (var i = 1; i <= 5; i++)

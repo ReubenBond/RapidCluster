@@ -214,7 +214,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         await _membershipService.InitializeAsync(cancellationToken).ConfigureAwait(true);
         _isInitialized = true;
 
-        _log.NodeInitialized(RapidClusterUtils.Loggable(Address), CurrentView.Size, CurrentView.ConfigurationId);
+        _log.NodeInitialized(RapidClusterUtils.Loggable(Address), CurrentView.Size, CurrentView.ConfigurationId.Version);
     }
 
     /// <summary>

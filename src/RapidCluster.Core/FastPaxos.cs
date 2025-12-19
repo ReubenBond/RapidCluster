@@ -24,7 +24,7 @@ internal sealed class FastPaxos
     private readonly FastPaxosLogger _log;
     private readonly RapidClusterMetrics _metrics;
     private readonly Endpoint _myAddr;
-    private readonly long _configurationId;
+    private readonly ConfigurationId _configurationId;
     private readonly long _membershipSize;
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
@@ -40,7 +40,7 @@ internal sealed class FastPaxos
 
     public FastPaxos(
             Endpoint myAddr,
-            long configurationId,
+            ConfigurationId configurationId,
             int membershipSize,
             IBroadcaster broadcaster,
             RapidClusterMetrics metrics,
@@ -48,12 +48,12 @@ internal sealed class FastPaxos
     {
         _myAddr = myAddr;
         _configurationId = configurationId;
-        _membershipSize = membershipSize;
+        _membershipSize = (long)membershipSize;
         _broadcaster = broadcaster;
         _metrics = metrics;
         _log = new FastPaxosLogger(logger);
 
-        _log.FastPaxosInitialized(myAddr, configurationId, membershipSize);
+        _log.FastPaxosInitialized(myAddr, configurationId, (long)membershipSize);
     }
 
     /// <summary>
@@ -84,7 +84,7 @@ internal sealed class FastPaxos
 
         var consensusMessage = new FastRoundPhase2bMessage
         {
-            ConfigurationId = _configurationId,
+            ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
             Proposal = proposal
         };
@@ -122,11 +122,12 @@ internal sealed class FastPaxos
     /// <param name="proposalMessage">the membership change proposal towards a configuration change.</param>
     public void HandleFastRoundProposal(FastRoundPhase2bMessage proposalMessage)
     {
-        _log.HandleFastRoundProposalReceived(proposalMessage.Sender, proposalMessage.Proposal, proposalMessage.ConfigurationId);
+        var messageConfigId = proposalMessage.ConfigurationId.ToConfigurationId();
+        _log.HandleFastRoundProposalReceived(proposalMessage.Sender, proposalMessage.Proposal, messageConfigId);
 
-        if (proposalMessage.ConfigurationId != _configurationId)
+        if (messageConfigId != _configurationId)
         {
-            _log.ConfigurationMismatch(_configurationId, proposalMessage.ConfigurationId);
+            _log.ConfigurationMismatch(_configurationId, messageConfigId);
             return;
         }
 

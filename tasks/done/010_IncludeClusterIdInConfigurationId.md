@@ -210,6 +210,75 @@ Decision needed: whether we require mixed-version compatibility.
 ## Open Questions
 
 - Wire-compatibility: do we require mixed-version compatibility?
-- What is the canonical “seed set” used to hash ClusterId when `ISeedProvider` output is dynamic?
+- What is the canonical "seed set" used to hash ClusterId when `ISeedProvider` output is dynamic?
 
 (Decisions captured: joiners learn ClusterId during join; mismatches are hard failures; ClusterId is not persisted.)
+
+## Implementation Notes (completed)
+
+### Phase 1: ConfigurationId struct with ClusterId + Version (COMPLETED)
+
+1. **Core Infrastructure** (`src/RapidCluster.Core/ConfigurationId.cs`):
+   - Created `ClusterId` struct (wraps `ulong`)
+   - Created `ConfigurationId` struct with `ClusterId` and `Version` properties
+   - Implements `IEquatable`, `IComparable`, comparison operators (`<`, `>`, `==`, etc.)
+   - Added `ToProtobuf()` method and `FromProtobuf()` static method
+   - Added extension method `ToConfigurationId()` for `Pb.ConfigurationId?`
+
+2. **Protobuf Updates** (`src/RapidCluster.Core/Protos/rapid_types.proto`):
+   - Changed all `int64 configurationId` fields to `message ConfigurationId { uint64 clusterId = 1; int64 version = 2; }`
+   - Updated all message types: `PreJoinMessage`, `JoinMessage`, `JoinResponse`, `AlertMessage`, `MembershipProposal`, `FastRoundPhase2bMessage`, `Phase1aMessage`, `Phase1bMessage`, `Phase2aMessage`, `Phase2bMessage`, `ProbeMessage`, `ProbeResponse`, `MembershipViewRequest`, `MembershipViewResponse`
+
+3. **Core Library Migration**:
+   - `MembershipService.cs` - Fully migrated
+   - `MembershipView.cs` - Uses `ConfigurationId` struct
+   - `Paxos.cs` - Uses `ConfigurationId` struct
+   - `FastPaxos.cs` - Uses `ConfigurationId` struct
+   - `ConsensusCoordinator.cs` - Uses `ConfigurationId` struct
+   - `PingPongFailureDetector.cs` - Uses `ConfigurationId` struct with `IMembershipViewAccessor`
+   - Logging infrastructure updated with `LoggableConfigurationId` wrapper
+
+4. **Test Project Updates**:
+   - Unit tests: Updated `PaxosTests.cs`, `MembershipViewTests.cs`, `ListEndpointComparerTests.cs`, `PingPongFailureDetectorTests.cs`
+   - Simulation tests: Updated `RapidSimulationNode.cs`, `ClusterBasicTests.cs`, `ConsensusProtocolTests.cs`, `LargeScaleClusterTests.cs`
+   - Added `Utils.CreateMembershipView(numNodes, configVersion)` overload for tests that need specific config versions
+
+5. **Samples Updated**:
+   - `samples/RapidCluster.Examples/Program.cs`
+   - `samples/RapidCluster.Aspire/RapidCluster.Aspire.Node/Program.cs`
+   - `tests/RapidCluster.EndToEnd/RapidCluster.EndToEnd.Node/Program.cs`
+
+### Test Results
+
+All tests pass:
+- Unit tests: 522 passed
+- Simulation tests: 444 passed (2 skipped as expected)
+
+### Remaining Work (Phase 2)
+
+The following items are still TODO:
+- ~~Implement deterministic `ClusterId` generation during bootstrap (hash of seed endpoints)~~ DONE
+- ~~Add validation logic to reject messages with mismatched `ClusterId`~~ DONE
+- ~~Add tests for cross-cluster rejection (simulation/integration tests)~~ DONE
+- ~~Update `MembershipViewBuilder.Build()` to preserve `ClusterId` from previous view~~ DONE
+
+**All Phase 2 work is complete.**
+
+### Phase 2: ClusterId Validation (COMPLETED)
+
+1. **Strict ClusterId Validation** - ClusterId mismatch now always results in rejection:
+   - `HandleConsensusMessages` (`MembershipService.cs:1075-1080`): Rejects messages when `messageConfigId.ClusterId != currentConfigId.ClusterId`
+   - `FilterAlertMessages` (`MembershipService.cs:1391-1410`): Instance method that filters out alert messages with mismatched ClusterIds, logging via `AlertFilteredByClusterId`
+   - **No exceptions for Empty ClusterId** - all mismatches are rejected
+
+2. **Logging Infrastructure**:
+   - `LoggingHelpers.cs`: Added `LoggableClusterId` struct for high-performance logging
+   - `MembershipServiceLogger.cs`: Added two log methods:
+     - `ClusterIdMismatch` (Error level) - consensus message rejected due to ClusterId mismatch
+     - `AlertFilteredByClusterId` (Debug level) - alert message filtered due to ClusterId mismatch
+
+3. **ConfigurationId Comparison Behavior**:
+   - `ConfigurationId.CompareTo()` throws `InvalidOperationException` when ClusterIds don't match (no exceptions for Empty)
+   - Updated doc comment to reflect strict behavior
+   - Unit tests updated: `CompareTo_With_Empty_ClusterId_On_Left_Throws` and `CompareTo_With_Empty_ClusterId_On_Right_Throws`
+

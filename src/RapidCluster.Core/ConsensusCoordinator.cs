@@ -27,7 +27,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private readonly RapidClusterMetrics _metrics;
     private readonly double _jitterRate;
     private readonly Endpoint _myAddr;
-    private readonly long _configurationId;
+    private readonly ConfigurationId _configurationId;
     private readonly int _membershipSize;
     private readonly IMessagingClient _client;
     private readonly IBroadcaster _broadcaster;
@@ -60,7 +60,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     public ConsensusCoordinator(
         Endpoint myAddr,
-        long configurationId,
+        ConfigurationId configurationId,
         int membershipSize,
         IMessagingClient client,
         IBroadcaster broadcaster,

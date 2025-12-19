@@ -41,7 +41,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void Constructor_CreatesValidInstance()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         Assert.NotNull(coordinator);
         Assert.False(coordinator.Decided.IsCompleted);
@@ -54,7 +54,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
         foreach (var size in new[] { 1, 2, 3, 5, 10, 100 })
         {
-            var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: size);
+            var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: size);
             Assert.NotNull(coordinator);
             Assert.False(coordinator.Decided.IsCompleted);
         }
@@ -68,7 +68,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void Propose_StartsConsensusLoop()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         // Should not throw
@@ -82,7 +82,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public async Task Propose_DisposeAsync_CancelsDecision()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 5, trackForCleanup: false);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, trackForCleanup: false);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         // Start consensus
@@ -107,13 +107,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void HandleMessages_FastRoundPhase2B_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         var request = new RapidClusterRequest
         {
             FastRoundPhase2BMessage = new FastRoundPhase2bMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
             }
@@ -127,13 +127,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void HandleMessages_Phase1A_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         var request = new RapidClusterRequest
         {
             Phase1AMessage = new Phase1aMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rank = new Rank { Round = 2, NodeIndex = 1 }
             }
@@ -147,13 +147,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void HandleMessages_Phase1B_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         var request = new RapidClusterRequest
         {
             Phase1BMessage = new Phase1bMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 },
                 Vrnd = new Rank { Round = 1, NodeIndex = 0 }
@@ -168,13 +168,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void HandleMessages_Phase2A_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         var request = new RapidClusterRequest
         {
             Phase2AMessage = new Phase2aMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 },
                 Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
@@ -189,13 +189,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void HandleMessages_Phase2B_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         var request = new RapidClusterRequest
         {
             Phase2BMessage = new Phase2bMessage
             {
-                ConfigurationId = 1,
+                ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 }
             }
@@ -209,7 +209,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void HandleMessages_UnexpectedCase_Throws()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
 
         // Empty request with no content set
         var request = new RapidClusterRequest();
@@ -225,7 +225,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void FastRound_VotesAreAccepted()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         coordinator.Propose(proposal, TestContext.Current.CancellationToken);
@@ -237,7 +237,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 FastRoundPhase2BMessage = new FastRoundPhase2bMessage
                 {
-                    ConfigurationId = 1,
+                    ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
                     Proposal = proposal
                 }
@@ -253,7 +253,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public void FastRound_VotesWithWrongConfigIdAreIgnored()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         coordinator.Propose(proposal, TestContext.Current.CancellationToken);
@@ -265,7 +265,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 FastRoundPhase2BMessage = new FastRoundPhase2bMessage
                 {
-                    ConfigurationId = 999, // Wrong config ID
+                    ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(), // Wrong config ID
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
                     Proposal = proposal
                 }
@@ -285,7 +285,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public async Task DisposeAsync_CancelsOngoingConsensus()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 5, trackForCleanup: false);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, trackForCleanup: false);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         coordinator.Propose(proposal, TestContext.Current.CancellationToken);
@@ -302,7 +302,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public async Task DisposeAsync_CanBeCalledMultipleTimes()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3, trackForCleanup: false);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, trackForCleanup: false);
 
         // Should not throw when called multiple times
         await coordinator.DisposeAsync();
@@ -314,7 +314,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public async Task DisposeAsync_BeforePropose_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 3, trackForCleanup: false);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, trackForCleanup: false);
 
         // Dispose without ever calling Propose
         await coordinator.DisposeAsync();
@@ -332,7 +332,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     public async Task HandleMessages_ThreadSafe_DoesNotThrow()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var coordinator = CreateCoordinator(myAddr, configurationId: 1, membershipSize: 10);
+        var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 10);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         coordinator.Propose(proposal, TestContext.Current.CancellationToken);
@@ -344,7 +344,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 FastRoundPhase2BMessage = new FastRoundPhase2bMessage
                 {
-                    ConfigurationId = 1,
+                    ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
                     Proposal = proposal
                 }
@@ -381,7 +381,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             NullLogger<FastPaxos>.Instance,
             NullLogger<Paxos>.Instance);
 
-        var coordinator = factory.Create(myAddr, configurationId: 42, membershipSize: 7, broadcaster);
+        var coordinator = factory.Create(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 42), membershipSize: 7, broadcaster);
         _coordinators.Add(coordinator);
 
         Assert.NotNull(coordinator);
@@ -394,7 +394,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
     private ConsensusCoordinator CreateCoordinator(
         Endpoint myAddr,
-        long configurationId,
+        ConfigurationId configurationId,
         int membershipSize,
         bool trackForCleanup = true)
     {
@@ -434,7 +434,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
     private static MembershipProposal CreateProposal(params Endpoint[] endpoints)
     {
-        var proposal = new MembershipProposal { ConfigurationId = 100 };
+        var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf() };
         foreach (var endpoint in endpoints)
         {
             endpoint.NodeId = Utils.GetNextNodeId();

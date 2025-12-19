@@ -404,8 +404,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var viewAccessor = new TestMembershipViewAccessor(membershipSize);
         var options = Options.Create(new RapidClusterProtocolOptions
         {
-            ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(100),
-            MaxConsensusRounds = 10
+            ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(100)
         });
         var sharedResources = new SharedResources(_timeProvider, random: new Random(42));
         var metrics = CreateMetrics();

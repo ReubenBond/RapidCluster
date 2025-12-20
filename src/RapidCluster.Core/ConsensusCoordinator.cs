@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RapidCluster.Logging;
@@ -12,6 +13,9 @@ namespace RapidCluster;
 /// Coordinates consensus for a single configuration change decision.
 /// Manages the progression from fast round (round 1) through multiple
 /// classic Paxos rounds (rounds 2, 3, ...) until a decision is reached.
+///
+/// This coordinator is event-driven: inbound messages, timeouts, and role callbacks
+/// are serialized through an internal event loop.
 /// </summary>
 internal sealed class ConsensusCoordinator : IAsyncDisposable
 {
@@ -43,6 +47,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             metrics.RecordConsensusLatency(ProtocolName, result, stopwatch);
         }
     }
+
     private readonly Endpoint _myAddr;
     private readonly ConfigurationId _configurationId;
     private readonly IMembershipViewAccessor _membershipViewAccessor;
@@ -63,7 +68,27 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     private readonly TaskCompletionSource<MembershipProposal> _onDecidedTcs = new();
 
+    private readonly Channel<ConsensusEvent> _events = Channel.CreateUnbounded<ConsensusEvent>(new UnboundedChannelOptions
+    {
+        SingleReader = true,
+        SingleWriter = false,
+        AllowSynchronousContinuations = true
+    });
+
+    private CancellationTokenSource? _fastTimeoutCts;
+    private CancellationTokenSource? _classicTimeoutCts;
+    private int _currentClassicRound;
+    private bool _isInClassic;
+
     public Task<MembershipProposal> Decided => _onDecidedTcs.Task;
+
+    private abstract record ConsensusEvent
+    {
+        public sealed record Inbound(RapidClusterRequest Request, CancellationToken CancellationToken) : ConsensusEvent;
+        public sealed record FastTimeout : ConsensusEvent;
+        public sealed record ClassicTimeout(int Round, TimeSpan Delay) : ConsensusEvent;
+        public sealed record Pulse : ConsensusEvent;
+    }
 
     public ConsensusCoordinator(
         Endpoint myAddr,
@@ -124,6 +149,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             paxosLogger);
 
         _log.Initialized(myAddr, configurationId, membershipSize);
+
+        _fastPaxosProposer.RegisterResultCallback(_ => TryPulse());
+        _paxosLearner.RegisterDecidedCallback(_ => TryPulse());
     }
 
     public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
@@ -136,10 +164,16 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _consensusLoopTask = RunConsensusLoopAsync(proposal, _disposeCts.Token);
     }
 
+    private void TryPulse()
+    {
+        // Avoid allocating/failing in common paths.
+        _events.Writer.TryWrite(new ConsensusEvent.Pulse());
+    }
+
     private async Task RunConsensusLoopAsync(MembershipProposal proposal, CancellationToken cancellationToken)
     {
         var consensusStopwatch = Stopwatch.StartNew();
-
+        var activeProtocolMetrics = _fastMetrics;
         try
         {
             _log.StartingFastRound();
@@ -147,24 +181,223 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             _fastMetrics.RecordRoundStarted(_metrics);
 
             var fastRoundTimeout = GetRandomDelay();
-            var fastRoundResult = await RunFastRoundAsync(proposal, fastRoundTimeout, cancellationToken).ConfigureAwait(true);
+            ScheduleFastTimeout(fastRoundTimeout, cancellationToken);
+            _fastPaxosProposer.Propose(proposal, cancellationToken);
 
-            if (TryHandleFastRoundTerminalResult(fastRoundResult, fastRoundTimeout, consensusStopwatch, cancellationToken))
+            while (await _events.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(true))
             {
-                return;
-            }
+                while (_events.Reader.TryRead(out var @event))
+                {
+                    HandleEvent(@event, cancellationToken);
 
-            await RunClassicRoundsAsync(consensusStopwatch, cancellationToken).ConfigureAwait(true);
+                    if (TryCompleteFromRoleState(consensusStopwatch, fastRoundTimeout, cancellationToken, ref activeProtocolMetrics))
+                    {
+                        return;
+                    }
+                }
+            }
         }
         catch (OperationCanceledException)
         {
             CompleteCancelled(
-                _fastMetrics,
+                activeProtocolMetrics,
                 consensusStopwatch,
                 recordRoundCompleted: false,
                 recordLatency: true,
                 cancellationToken);
         }
+        finally
+        {
+            CancelAndDisposeTimeoutCts(ref _fastTimeoutCts);
+            CancelAndDisposeTimeoutCts(ref _classicTimeoutCts);
+        }
+    }
+
+    private void HandleEvent(ConsensusEvent @event, CancellationToken cancellationToken)
+    {
+        switch (@event)
+        {
+            case ConsensusEvent.Pulse:
+                return;
+
+            case ConsensusEvent.FastTimeout:
+                _fastPaxosProposer.Cancel();
+                return;
+
+            case ConsensusEvent.ClassicTimeout(var timedOutRound, var delay):
+                if (!_isInClassic || timedOutRound != _currentClassicRound)
+                {
+                    return;
+                }
+
+                _log.ClassicRoundTimeout(timedOutRound, delay);
+                _classicMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
+
+                StartClassicRound(timedOutRound + 1, cancellationToken);
+                return;
+
+            case ConsensusEvent.Inbound(var request, var requestCancellationToken):
+                _log.HandleMessages(request.ContentCase);
+                switch (request.ContentCase)
+                {
+                    case RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage:
+                        _fastPaxosProposer.HandleFastRoundProposalResponse(request.FastRoundPhase2BMessage);
+                        break;
+
+                    case RapidClusterRequest.ContentOneofCase.Phase1AMessage:
+                        _paxosAcceptor.HandlePhase1aMessage(request.Phase1AMessage, requestCancellationToken);
+                        break;
+
+                    case RapidClusterRequest.ContentOneofCase.Phase1BMessage:
+                        _paxosProposer.HandlePhase1bMessage(request.Phase1BMessage, requestCancellationToken);
+                        break;
+
+                    case RapidClusterRequest.ContentOneofCase.Phase2AMessage:
+                        _paxosAcceptor.HandlePhase2aMessage(request.Phase2AMessage, requestCancellationToken);
+                        break;
+
+                    case RapidClusterRequest.ContentOneofCase.Phase2BMessage:
+                        _paxosLearner.HandlePhase2bMessage(request.Phase2BMessage);
+                        break;
+
+                    case RapidClusterRequest.ContentOneofCase.PaxosNackMessage:
+                        var requestedRound = _paxosProposer.HandlePaxosNackMessage(request.PaxosNackMessage);
+                        if (requestedRound is { } nackRound && (_isInClassic && nackRound > _currentClassicRound))
+                        {
+                            StartClassicRound(nackRound, cancellationToken);
+                        }
+                        break;
+
+                    default:
+                        throw new ArgumentException($"Unexpected message case: {request.ContentCase}");
+                }
+
+                return;
+
+            default:
+                throw new UnreachableException($"Unexpected event type: {@event.GetType().Name}");
+        }
+    }
+
+    private bool TryCompleteFromRoleState(
+        Stopwatch consensusStopwatch,
+        TimeSpan fastRoundTimeout,
+        CancellationToken cancellationToken,
+        ref ProtocolMetrics activeProtocolMetrics)
+    {
+        if (_paxosLearner.Decided is ConsensusResult.Decided classicDecided)
+        {
+            CompleteDecided(_classicMetrics, consensusStopwatch, classicDecided.Value);
+            return true;
+        }
+
+        if (_paxosLearner.Decided is ConsensusResult.Cancelled && cancellationToken.IsCancellationRequested)
+        {
+            CompleteCancelled(_classicMetrics, recordRoundCompleted: true, cancellationToken);
+            return true;
+        }
+
+        if (!_isInClassic && _fastPaxosProposer.Result is { } fastRoundResult)
+        {
+            switch (fastRoundResult)
+            {
+                case ConsensusResult.Decided decided:
+                    CompleteDecided(_fastMetrics, consensusStopwatch, decided.Value);
+                    return true;
+
+                case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
+                    _log.FastRoundFailedEarly();
+                    _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
+                    _metrics.RecordConsensusConflict();
+                    StartClassicRound(roundNumber: 2, cancellationToken);
+                    activeProtocolMetrics = _classicMetrics;
+                    return false;
+
+                case ConsensusResult.Cancelled:
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        CompleteCancelled(_fastMetrics, recordRoundCompleted: true, cancellationToken);
+                        return true;
+                    }
+
+                    _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
+                    _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
+                    _metrics.RecordConsensusConflict();
+                    StartClassicRound(roundNumber: 2, cancellationToken);
+                    activeProtocolMetrics = _classicMetrics;
+                    return false;
+
+                default:
+                    throw new UnreachableException($"Unexpected consensus result: {fastRoundResult}");
+            }
+        }
+
+        return false;
+    }
+
+    private void StartClassicRound(int roundNumber, CancellationToken cancellationToken)
+    {
+        CancelAndDisposeTimeoutCts(ref _fastTimeoutCts);
+
+        _isInClassic = true;
+        _currentClassicRound = roundNumber;
+
+        var delay = GetRetryDelay(roundNumber);
+        _log.StartingClassicRound(roundNumber, delay);
+        _classicMetrics.RecordRoundStarted(_metrics);
+
+        _paxosProposer.StartPhase1a(roundNumber, cancellationToken);
+        ScheduleClassicTimeout(roundNumber, delay, cancellationToken);
+    }
+
+     private void ScheduleFastTimeout(TimeSpan timeout, CancellationToken cancellationToken)
+     {
+         CancelAndDisposeTimeoutCts(ref _fastTimeoutCts);
+         _fastTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+         var timeoutToken = _fastTimeoutCts.Token;
+
+         _ = RunTimeoutAsync(timeout, () => new ConsensusEvent.FastTimeout(), timeoutToken);
+     }
+
+     private void ScheduleClassicTimeout(int roundNumber, TimeSpan delay, CancellationToken cancellationToken)
+     {
+         CancelAndDisposeTimeoutCts(ref _classicTimeoutCts);
+         _classicTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+         var timeoutToken = _classicTimeoutCts.Token;
+
+         _ = RunTimeoutAsync(delay, () => new ConsensusEvent.ClassicTimeout(roundNumber, delay), timeoutToken);
+     }
+
+     private async Task RunTimeoutAsync(TimeSpan delay, Func<ConsensusEvent> createEvent, CancellationToken cancellationToken)
+     {
+         try
+         {
+             await Task.Delay(delay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
+             _events.Writer.TryWrite(createEvent());
+         }
+         catch (OperationCanceledException)
+         {
+         }
+     }
+
+
+    private static void CancelAndDisposeTimeoutCts(ref CancellationTokenSource? cts)
+    {
+        if (cts == null)
+        {
+            return;
+        }
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        cts.Dispose();
+        cts = null;
     }
 
     private void CompleteDecided(ProtocolMetrics protocolMetrics, Stopwatch consensusStopwatch, MembershipProposal decidedValue)
@@ -173,6 +406,8 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         protocolMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Success);
         protocolMetrics.RecordLatency(_metrics, MetricNames.Results.Success, consensusStopwatch);
         _onDecidedTcs.TrySetResult(decidedValue);
+
+        _events.Writer.TryComplete();
     }
 
     private void CompleteCancelled(
@@ -188,6 +423,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         _onDecidedTcs.TrySetCanceled(cancellationToken);
+        _events.Writer.TryComplete();
     }
 
     private void CompleteCancelled(
@@ -210,162 +446,24 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         _onDecidedTcs.TrySetCanceled(cancellationToken);
-    }
-
-    private async Task<ConsensusResult> RunFastRoundAsync(
-        MembershipProposal proposal,
-        TimeSpan fastRoundTimeout,
-        CancellationToken cancellationToken)
-    {
-        using var fastRoundTimeoutCts = new CancellationTokenSource(fastRoundTimeout, _sharedResources.TimeProvider);
-        using var fastRoundCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, fastRoundTimeoutCts.Token);
-
-        var resultTcs = new TaskCompletionSource<ConsensusResult>();
-        _fastPaxosProposer.RegisterResultCallback(result => resultTcs.TrySetResult(result));
-
-        _fastPaxosProposer.RegisterTimeoutToken(fastRoundCts.Token);
-        _fastPaxosProposer.Propose(proposal, cancellationToken);
-
-        return await resultTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    private bool TryHandleFastRoundTerminalResult(
-        ConsensusResult fastRoundResult,
-        TimeSpan fastRoundTimeout,
-        Stopwatch consensusStopwatch,
-        CancellationToken cancellationToken)
-    {
-        switch (fastRoundResult)
-        {
-            case ConsensusResult.Decided decided:
-                CompleteDecided(_fastMetrics, consensusStopwatch, decided.Value);
-                return true;
-
-            case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
-                _log.FastRoundFailedEarly();
-                _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
-                _metrics.RecordConsensusConflict();
-                return false;
-
-            case ConsensusResult.Cancelled:
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    CompleteCancelled(
-                        _fastMetrics,
-                        recordRoundCompleted: true,
-                        cancellationToken);
-                    return true;
-                }
-
-                _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
-                _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
-                _metrics.RecordConsensusConflict();
-                return false;
-
-            case ConsensusResult.Timeout:
-                _log.FastRoundTimeout(_configurationId, fastRoundTimeout);
-                _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
-                _metrics.RecordConsensusConflict();
-                return false;
-
-            default:
-                throw new UnreachableException($"Unexpected consensus result: {fastRoundResult}");
-        }
-    }
-
-    private async Task RunClassicRoundsAsync(Stopwatch consensusStopwatch, CancellationToken cancellationToken)
-    {
-        for (var roundNumber = 2; !cancellationToken.IsCancellationRequested; roundNumber++)
-        {
-            if (TryCompleteClassicDecision(roundNumber - 1, consensusStopwatch))
-            {
-                return;
-            }
-
-            var delay = GetRetryDelay(roundNumber);
-            _log.StartingClassicRound(roundNumber, delay);
-            _classicMetrics.RecordRoundStarted(_metrics);
-
-            _paxosProposer.StartPhase1a(roundNumber, cancellationToken);
-
-            await Task.Delay(delay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
-
-            if (TryCompleteClassicDecision(roundNumber, consensusStopwatch))
-            {
-                return;
-            }
-
-            if (TryCompleteClassicCancellationIfRequested(cancellationToken))
-            {
-                return;
-            }
-
-            _log.ClassicRoundTimeout(roundNumber, delay);
-            _classicMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
-        }
-
-        CompleteCancelled(
-            _classicMetrics,
-            consensusStopwatch,
-            recordRoundCompleted: false,
-            recordLatency: true,
-            cancellationToken);
-    }
-
-    private bool TryCompleteClassicDecision(int roundNumber, Stopwatch consensusStopwatch)
-    {
-        if (_paxosLearner.Decided is not ConsensusResult.Decided decided)
-        {
-            return false;
-        }
-
-        CompleteDecided(_classicMetrics, consensusStopwatch, decided.Value);
-        return true;
-    }
-
-    private bool TryCompleteClassicCancellationIfRequested(CancellationToken cancellationToken)
-    {
-        if (_paxosLearner.Decided is not ConsensusResult.Cancelled || !cancellationToken.IsCancellationRequested)
-        {
-            return false;
-        }
-
-        CompleteCancelled(
-            _classicMetrics,
-            recordRoundCompleted: true,
-            cancellationToken);
-        return true;
+        _events.Writer.TryComplete();
     }
 
     public RapidClusterResponse HandleMessages(RapidClusterRequest request, CancellationToken cancellationToken = default)
     {
-        _log.HandleMessages(request.ContentCase);
+        if (request.ContentCase == RapidClusterRequest.ContentOneofCase.None)
+        {
+            throw new ArgumentException($"Unexpected message case: {request.ContentCase}");
+        }
 
         lock (_lock)
         {
-            switch (request.ContentCase)
+            if (_disposed != 0 || _consensusLoopTask == null || _onDecidedTcs.Task.IsCompleted)
             {
-                case RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage:
-                    _fastPaxosProposer.HandleFastRoundProposalResponse(request.FastRoundPhase2BMessage);
-                    break;
-                case RapidClusterRequest.ContentOneofCase.Phase1AMessage:
-                    _paxosAcceptor.HandlePhase1aMessage(request.Phase1AMessage, cancellationToken);
-                    break;
-                case RapidClusterRequest.ContentOneofCase.Phase1BMessage:
-                    _paxosProposer.HandlePhase1bMessage(request.Phase1BMessage, cancellationToken);
-                    break;
-                case RapidClusterRequest.ContentOneofCase.Phase2AMessage:
-                    _paxosAcceptor.HandlePhase2aMessage(request.Phase2AMessage, cancellationToken);
-                    break;
-                case RapidClusterRequest.ContentOneofCase.Phase2BMessage:
-                    _paxosLearner.HandlePhase2bMessage(request.Phase2BMessage);
-                    break;
-                case RapidClusterRequest.ContentOneofCase.PaxosNackMessage:
-                    _paxosProposer.HandlePaxosNackMessage(request.PaxosNackMessage, cancellationToken);
-                    break;
-                default:
-                    throw new ArgumentException($"Unexpected message case: {request.ContentCase}");
+                return new ConsensusResponse().ToRapidClusterResponse();
             }
+
+            _events.Writer.TryWrite(new ConsensusEvent.Inbound(request, cancellationToken));
         }
 
         return new ConsensusResponse().ToRapidClusterResponse();
@@ -416,6 +514,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _log.Dispose();
 
         _disposeCts.SafeCancel(_log.Logger);
+        _events.Writer.TryComplete();
 
         _fastPaxosProposer.Cancel();
         _paxosLearner.Cancel();
@@ -424,6 +523,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         {
             await task.ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
         }
+
+        CancelAndDisposeTimeoutCts(ref _fastTimeoutCts);
+        CancelAndDisposeTimeoutCts(ref _classicTimeoutCts);
 
         _onDecidedTcs.TrySetCanceled();
         _disposeCts.Dispose();

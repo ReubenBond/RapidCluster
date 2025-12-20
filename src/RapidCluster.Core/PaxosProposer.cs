@@ -88,26 +88,26 @@ internal sealed class PaxosProposer
         _broadcaster.Broadcast(request, cancellationToken);
     }
 
-    public void HandlePaxosNackMessage(PaxosNackMessage nack, CancellationToken cancellationToken = default)
+    public int? HandlePaxosNackMessage(PaxosNackMessage nack)
     {
         var messageConfigId = nack.ConfigurationId.ToConfigurationId();
         if (messageConfigId != _configurationId)
         {
-            return;
+            return null;
         }
 
         // We only react to NACKs for our current round. Older rounds are effectively stale.
         if (!nack.Received.Equals(_currentRound))
         {
-            return;
+            return null;
         }
 
         if (RankComparer.Instance.Compare(nack.Promised, _currentRound) <= 0)
         {
-            return;
+            return null;
         }
 
-        StartPhase1a(round: nack.Promised.Round + 1, cancellationToken);
+        return nack.Promised.Round + 1;
     }
 
     private int ComputeNodeIndex()

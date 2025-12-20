@@ -132,7 +132,7 @@ public class ExceptionTests
     [Fact]
     public void JoinExceptionCanBeThrownAndCaught()
     {
-        var thrown = false;
+        bool thrown;
         try
         {
             throw new JoinException("Test");
@@ -147,7 +147,7 @@ public class ExceptionTests
     [Fact]
     public void NodeAlreadyInRingExceptionCanBeThrownAndCaught()
     {
-        var thrown = false;
+        bool thrown;
         try
         {
             throw new NodeAlreadyInRingException("Test");
@@ -162,7 +162,7 @@ public class ExceptionTests
     [Fact]
     public void NodeNotInRingExceptionCanBeThrownAndCaught()
     {
-        var thrown = false;
+        bool thrown;
         try
         {
             throw new NodeNotInRingException("Test");

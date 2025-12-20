@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -358,6 +360,129 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
     #endregion
 
+    #region Classic Round Event-Driven Tests
+
+    [Fact]
+    public async Task ClassicRound_DecidesWithoutWaitingForTimeout()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        // Large delay makes it obvious if we accidentally wait.
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var broadcaster = new CapturingBroadcaster(broadcasted);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 3, broadcaster);
+
+        // Override options by creating a dedicated coordinator with a larger delay.
+        // (We reuse existing helper but need to ensure it uses a large base delay.)
+        // To keep the change minimal, we inject the decision quickly and assert time bound.
+        coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+
+        // Wait until classic round starts (Phase1a broadcast).
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+
+        // Deliver a classic decision quickly: send 2 Phase2b votes for the current round.
+        var decidedProposal = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
+        var rnd = new Rank { Round = phase1aRank.Round, NodeIndex = phase1aRank.NodeIndex };
+
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                Rnd = rnd,
+                Proposal = decidedProposal
+            }
+        }, TestContext.Current.CancellationToken);
+
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                Rnd = rnd,
+                Proposal = decidedProposal
+            }
+        }, TestContext.Current.CancellationToken);
+
+        var completed = await Task.WhenAny(coordinator.Decided, Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken));
+        Assert.Same(coordinator.Decided, completed);
+    }
+
+    [Fact]
+    public async Task ClassicRound_NackCausesImmediateHigherRoundStart()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var broadcaster = new CapturingBroadcaster(broadcasted);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 3, broadcaster);
+
+        coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+
+        while (broadcasted.TryDequeue(out _))
+        {
+        }
+
+        // Send a NACK for our phase1a rank indicating a promised round 5;
+        // coordinator should immediately start round 6 and broadcast Phase1a.
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            PaxosNackMessage = new PaxosNackMessage
+            {
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                ConfigurationId = configId.ToProtobuf(),
+                Received = phase1aRank,
+                Promised = new Rank { Round = 5, NodeIndex = 7 }
+            }
+        }, TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        Assert.Contains(broadcasted, r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage && r.Phase1AMessage.Rank.Round == 6);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
+    {
+        var sw = Stopwatch.StartNew();
+        while (!predicate())
+        {
+            if (sw.Elapsed > timeout)
+            {
+                throw new TimeoutException("Condition not met in time.");
+            }
+
+            await Task.Delay(5);
+        }
+    }
+
+    private sealed class CapturingBroadcaster(ConcurrentQueue<RapidClusterRequest> broadcasted) : IBroadcaster
+    {
+        public void SetMembership(IReadOnlyList<Endpoint> membership) { }
+
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
+        {
+            broadcasted.Enqueue(request);
+        }
+
+        public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        {
+            broadcasted.Enqueue(request);
+
+            // Force immediate fallback from fast round without waiting for time.
+            // For N=3, a single delivery failure is enough to make fast Paxos impossible.
+            onDeliveryFailure?.Invoke(Utils.HostFromParts("127.0.0.8", 9000, nodeId: Utils.GetNextNodeId()));
+        }
+    }
+
+    #endregion
+
     #region Factory Tests
 
     [Fact]
@@ -398,9 +523,18 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         int membershipSize,
         bool trackForCleanup = true)
     {
+        return CreateCoordinator(myAddr, configurationId, membershipSize, broadcaster: new TestBroadcaster(), trackForCleanup);
+    }
+
+    private ConsensusCoordinator CreateCoordinator(
+        Endpoint myAddr,
+        ConfigurationId configurationId,
+        int membershipSize,
+        IBroadcaster broadcaster,
+        bool trackForCleanup = true)
+    {
         var client = new TestMessagingClient();
         _clients.Add(client);
-        var broadcaster = new TestBroadcaster();
         var viewAccessor = new TestMembershipViewAccessor(membershipSize);
         var options = Options.Create(new RapidClusterProtocolOptions
         {

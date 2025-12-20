@@ -207,7 +207,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
 
         // Give time for view updates to be collected
         await Task.Delay(500, TestContext.Current.CancellationToken);
-        await cts.CancelAsync();
+        cts.SafeCancel();
 
         // All view updates should have the same ClusterId
         Assert.NotEmpty(viewUpdates);

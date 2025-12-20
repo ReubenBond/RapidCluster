@@ -143,7 +143,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             configurationId,
             membershipSize,
             broadcaster,
-            membershipViewAccessor,
             metrics,
             isDecided: () => _paxosLearner.IsDecided,
             paxosLogger);
@@ -346,7 +345,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _log.StartingClassicRound(roundNumber, delay);
         _classicMetrics.RecordRoundStarted(_metrics);
 
-        _paxosProposer.StartPhase1a(roundNumber, cancellationToken);
+        var nodeId = _membershipViewAccessor.CurrentView.GetNodeId(_myAddr);
+        var nodeIndex = unchecked((int)nodeId);
+        _paxosProposer.StartPhase1a(new Rank { Round = roundNumber, NodeIndex = nodeIndex }, cancellationToken);
         ScheduleClassicTimeout(roundNumber, delay, cancellationToken);
     }
 

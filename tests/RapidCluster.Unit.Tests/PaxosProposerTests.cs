@@ -19,7 +19,7 @@ public sealed class PaxosProposerTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
         var isDecided = () => false;
         var proposer = new PaxosProposer(
@@ -27,12 +27,11 @@ public sealed class PaxosProposerTests
             configId,
             membershipSize: 3,
             broadcaster,
-            membershipViewAccessor,
             CreateMetrics(),
             isDecided,
             NullLogger<PaxosProposer>.Instance);
 
-        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
         proposer.HandlePhase1bMessage(new Phase1bMessage
@@ -55,7 +54,7 @@ public sealed class PaxosProposerTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
         var isDecided = () => false;
         var proposer = new PaxosProposer(
@@ -63,12 +62,11 @@ public sealed class PaxosProposerTests
             configId,
             membershipSize: 3,
             broadcaster,
-            membershipViewAccessor,
             CreateMetrics(),
             isDecided,
             NullLogger<PaxosProposer>.Instance);
 
-        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
         proposer.HandlePhase1bMessage(new Phase1bMessage
@@ -91,7 +89,7 @@ public sealed class PaxosProposerTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
+        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
 
         var isDecided = () => false;
         var proposer = new PaxosProposer(
@@ -99,12 +97,11 @@ public sealed class PaxosProposerTests
             configId,
             membershipSize: 5,
             broadcaster,
-            membershipViewAccessor,
             CreateMetrics(),
             isDecided,
             NullLogger<PaxosProposer>.Instance);
 
-        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
         var proposal = CreateProposal(configId);
@@ -134,7 +131,7 @@ public sealed class PaxosProposerTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
+        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
 
         var isDecided = () => false;
         var proposer = new PaxosProposer(
@@ -142,12 +139,11 @@ public sealed class PaxosProposerTests
             configId,
             membershipSize: 5,
             broadcaster,
-            membershipViewAccessor,
             CreateMetrics(),
             isDecided,
             NullLogger<PaxosProposer>.Instance);
 
-        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
         var rnd = new Rank { Round = 2, NodeIndex = 123 };
@@ -190,7 +186,7 @@ public sealed class PaxosProposerTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
         var isDecided = () => false;
         var proposer = new PaxosProposer(
@@ -198,12 +194,11 @@ public sealed class PaxosProposerTests
             configId,
             membershipSize: 3,
             broadcaster,
-            membershipViewAccessor,
             CreateMetrics(),
             isDecided,
             NullLogger<PaxosProposer>.Instance);
 
-        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
         var requestedRound = proposer.HandlePaxosNackMessage(new PaxosNackMessage
@@ -215,7 +210,7 @@ public sealed class PaxosProposerTests
         });
 
         Assert.Equal(6, requestedRound);
-        proposer.StartPhase1a(round: requestedRound!.Value, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = requestedRound!.Value, NodeIndex = 123 }, TestContext.Current.CancellationToken);
 
         Assert.Single(broadcasted);
         Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1AMessage, broadcasted[0].ContentCase);
@@ -230,7 +225,7 @@ public sealed class PaxosProposerTests
 
         var broadcasted = new List<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        var membershipViewAccessor = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
 
         var isDecided = () => false;
         var proposer = new PaxosProposer(
@@ -238,12 +233,11 @@ public sealed class PaxosProposerTests
             configId,
             membershipSize: 3,
             broadcaster,
-            membershipViewAccessor,
             CreateMetrics(),
             isDecided,
             NullLogger<PaxosProposer>.Instance);
 
-        proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
+        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
         var requestedRound = proposer.HandlePaxosNackMessage(new PaxosNackMessage

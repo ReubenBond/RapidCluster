@@ -18,7 +18,6 @@ internal sealed class PaxosProposer
     private readonly PaxosLogger _log;
     private readonly RapidClusterMetrics _metrics;
     private readonly IBroadcaster _broadcaster;
-    private readonly IMembershipViewAccessor _membershipViewAccessor;
     private readonly ConfigurationId _configurationId;
     private readonly Endpoint _myAddr;
     private readonly int _membershipSize;
@@ -34,7 +33,6 @@ internal sealed class PaxosProposer
         ConfigurationId configurationId,
         int membershipSize,
         IBroadcaster broadcaster,
-        IMembershipViewAccessor membershipViewAccessor,
         RapidClusterMetrics metrics,
         Func<bool> isDecided,
         ILogger<PaxosProposer> logger)
@@ -45,7 +43,6 @@ internal sealed class PaxosProposer
         _configurationId = configurationId;
         _membershipSize = membershipSize;
         _broadcaster = broadcaster;
-        _membershipViewAccessor = membershipViewAccessor;
         _metrics = metrics;
         _isDecided = isDecided;
         _log = new PaxosLogger(logger);
@@ -56,11 +53,13 @@ internal sealed class PaxosProposer
     /// <summary>
     /// Starts a classic Paxos round by broadcasting a prepare request (Phase1a).
     /// </summary>
-    public void StartPhase1a(int round, CancellationToken cancellationToken = default)
+    public void StartPhase1a(Rank round, CancellationToken cancellationToken = default)
     {
-        if (_currentRound.Round > round)
+        ArgumentNullException.ThrowIfNull(round);
+
+        if (_currentRound.Round > round.Round)
         {
-            _log.StartPhase1aSkipped(_currentRound.Round, round);
+            _log.StartPhase1aSkipped(_currentRound.Round, round.Round);
             return;
         }
 
@@ -69,7 +68,7 @@ internal sealed class PaxosProposer
             return;
         }
 
-        _currentRound = new Rank { Round = round, NodeIndex = ComputeNodeIndex() };
+        _currentRound = round;
         _candidateValue = null;
         _phase1bMessages.Clear();
 
@@ -108,12 +107,6 @@ internal sealed class PaxosProposer
         }
 
         return nack.Promised.Round + 1;
-    }
-
-    private int ComputeNodeIndex()
-    {
-        var nodeId = _membershipViewAccessor.CurrentView.GetNodeId(_myAddr);
-        return unchecked((int)nodeId);
     }
 
     /// <summary>

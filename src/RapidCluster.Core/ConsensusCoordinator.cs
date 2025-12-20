@@ -299,7 +299,21 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     CompleteDecided(_fastMetrics, consensusStopwatch, decided.Value);
                     return true;
 
-                case ConsensusResult.VoteSplit or ConsensusResult.DeliveryFailure:
+                case ConsensusResult.VoteSplit:
+                    _log.FastRoundFailedEarly();
+                    _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
+                    _metrics.RecordConsensusConflict();
+                    StartClassicRound(roundNumber: 2, cancellationToken);
+                    activeProtocolMetrics = _classicMetrics;
+                    return false;
+
+                case ConsensusResult.DeliveryFailure(var failedRank):
+                    // Ignore stale delivery failures if we already progressed.
+                    if (_isInClassic || failedRank.Round != 1)
+                    {
+                        return false;
+                    }
+
                     _log.FastRoundFailedEarly();
                     _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
                     _metrics.RecordConsensusConflict();

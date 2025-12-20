@@ -102,8 +102,10 @@ internal sealed class FastPaxosProposer
         var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
         var fastPaxosThreshold = _membershipSize - f;
 
+        var fastRoundRank = new Rank { Round = 1, NodeIndex = 1 };
+
         int failureCount = 0;
-        _broadcaster.Broadcast(proposalMessage, failedEndpoint =>
+        _broadcaster.Broadcast(proposalMessage, fastRoundRank, (failedEndpoint, rank) =>
         {
             var newFailureCount = Interlocked.Increment(ref failureCount);
             var maxPossibleVotes = _membershipSize - newFailureCount;
@@ -111,7 +113,7 @@ internal sealed class FastPaxosProposer
             if (maxPossibleVotes < fastPaxosThreshold && _result == null)
             {
                 _log.EarlyFallbackNeeded(newFailureCount, f, fastPaxosThreshold);
-                TryComplete(ConsensusResult.DeliveryFailure.Instance);
+                TryComplete(new ConsensusResult.DeliveryFailure(rank));
             }
         }, cancellationToken);
     }

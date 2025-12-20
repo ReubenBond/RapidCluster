@@ -293,7 +293,7 @@ public sealed class PaxosProposerTests
             broadcasted.Add(request);
         }
 
-        public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
             broadcasted.Add(request);
         }

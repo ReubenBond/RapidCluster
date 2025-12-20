@@ -471,13 +471,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             broadcasted.Enqueue(request);
         }
 
-        public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
             broadcasted.Enqueue(request);
 
             // Force immediate fallback from fast round without waiting for time.
             // For N=3, a single delivery failure is enough to make fast Paxos impossible.
-            onDeliveryFailure?.Invoke(Utils.HostFromParts("127.0.0.8", 9000, nodeId: Utils.GetNextNodeId()));
+            onDeliveryFailure?.Invoke(Utils.HostFromParts("127.0.0.8", 9000, nodeId: Utils.GetNextNodeId()), rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
         }
     }
 
@@ -586,7 +586,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     private sealed class TestBroadcaster : IBroadcaster
     {
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) { }
-        public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
     }
 
@@ -595,7 +595,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     /// </summary>
     private sealed class TestMessagingClient : IMessagingClient
     {
-        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
+        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
         public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new RapidClusterResponse());
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

@@ -161,8 +161,6 @@ internal sealed class PaxosProposer
 
     /// <summary>
     /// Coordinator value selection rule based on received Phase1b messages.
-    ///
-    /// Corresponds to Figure 2 in the Fast Paxos paper.
     /// </summary>
     internal static MembershipProposal? ChooseValue(List<Phase1bMessage> phase1bMessages, int n)
     {
@@ -197,11 +195,11 @@ internal sealed class PaxosProposer
             foreach (var proposal in collectedProposals)
             {
                 ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(valueCounts, proposal, out _);
-                if (count + 1 > n / 4)
+                ++count;
+                if (count > n / 4)
                 {
                     return proposal;
                 }
-                count = count + 1;
             }
         }
 

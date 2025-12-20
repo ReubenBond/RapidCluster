@@ -17,11 +17,16 @@ public sealed class UnicastToAllBroadcaster(IMessagingClient client) : IBroadcas
         }
     }
 
-    public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+    public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
         foreach (var member in _membership)
         {
-            _client.SendOneWayMessage(member, request, onDeliveryFailure != null ? ep => onDeliveryFailure(ep) : null, cancellationToken);
+            _client.SendOneWayMessage(
+                member,
+                request,
+                rank,
+                onDeliveryFailure != null ? (ep, _) => onDeliveryFailure(ep, rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided.")) : null,
+                cancellationToken);
         }
     }
 }

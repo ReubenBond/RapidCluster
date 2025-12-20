@@ -107,15 +107,15 @@ internal sealed partial class GrpcClient(
         }
     }
 
-    public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+    public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
         var taskId = Interlocked.Increment(ref _taskIdCounter);
-        var task = SendOneWayMessageInternalAsync(remote, request, taskId, onDeliveryFailure, cancellationToken);
+        var task = SendOneWayMessageInternalAsync(remote, request, rank, taskId, onDeliveryFailure, cancellationToken);
         _pendingTasks.TryAdd(taskId, task);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "One-way messages ignore failures but may invoke callback")]
-    private async Task SendOneWayMessageInternalAsync(Endpoint remote, RapidClusterRequest request, int taskId, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+    private async Task SendOneWayMessageInternalAsync(Endpoint remote, RapidClusterRequest request, Rank? rank, int taskId, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_options.GrpcTimeout);
@@ -139,7 +139,7 @@ internal sealed partial class GrpcClient(
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, ex.StatusCode.ToString());
             _metrics.RecordGrpcCallDuration(SendRequestMethod, ex.StatusCode.ToString(), stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Network);
-            onDeliveryFailure?.Invoke(remote);
+            onDeliveryFailure?.Invoke(remote, rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -148,7 +148,7 @@ internal sealed partial class GrpcClient(
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "DeadlineExceeded");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "DeadlineExceeded", stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Timeout);
-            onDeliveryFailure?.Invoke(remote);
+            onDeliveryFailure?.Invoke(remote, rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
         }
         catch (OperationCanceledException)
         {
@@ -164,7 +164,7 @@ internal sealed partial class GrpcClient(
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "Unknown");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "Unknown", stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Unknown);
-            onDeliveryFailure?.Invoke(remote);
+            onDeliveryFailure?.Invoke(remote, rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
         }
         finally
         {

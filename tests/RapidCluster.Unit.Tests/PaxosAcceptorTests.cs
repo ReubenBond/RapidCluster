@@ -209,7 +209,7 @@ public sealed class PaxosAcceptorTests
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) { }
-        public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
     }
 
     private sealed class CapturingBroadcaster(List<RapidClusterRequest> broadcasted) : IBroadcaster
@@ -221,7 +221,7 @@ public sealed class PaxosAcceptorTests
             broadcasted.Add(request);
         }
 
-        public void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
             broadcasted.Add(request);
         }
@@ -229,7 +229,7 @@ public sealed class PaxosAcceptorTests
 
     private sealed class CapturingMessagingClient(List<(Endpoint Remote, RapidClusterRequest Request)> sent) : IMessagingClient, IDisposable
     {
-        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
             sent.Add((remote, request));
         }

@@ -408,7 +408,7 @@ public sealed class PingPongFailureDetectorTests
     {
         public Func<RapidClusterRequest, RapidClusterResponse>? ResponseGenerator { get; set; }
 
-        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
         }
 

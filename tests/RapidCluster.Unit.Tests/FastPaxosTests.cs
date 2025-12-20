@@ -521,7 +521,7 @@ public class FastPaxosTests
     private sealed class TestBroadcaster : Messaging.IBroadcaster
     {
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) { }
-        public void Broadcast(RapidClusterRequest request, Messaging.BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
+        public void Broadcast(RapidClusterRequest request, Rank? rank, Messaging.BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
     }
 

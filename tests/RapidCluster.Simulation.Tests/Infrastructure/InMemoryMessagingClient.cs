@@ -24,7 +24,7 @@ internal sealed class InMemoryMessagingClient(
     private readonly CancellationTokenSource _disposeCts = new();
     private bool _disposed;
 
-    public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+    public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
         var sendTask = SendMessageAsync(remote, request, cancellationToken);
         sendTask.Ignore();
@@ -34,13 +34,13 @@ internal sealed class InMemoryMessagingClient(
             sendTask.ContinueWith(
                 static (t, state) =>
                 {
-                    var (callback, endpoint) = ((DeliveryFailureCallback, Endpoint))state!;
+                    var (callback, endpoint, rank) = ((DeliveryFailureCallback, Endpoint, Rank))state!;
                     if (t.IsFaulted)
                     {
-                        callback(endpoint);
+                        callback(endpoint, rank);
                     }
                 },
-                (onDeliveryFailure, remote),
+                (onDeliveryFailure, remote, rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided.")),
                 harness.TeardownCancellationToken,
                 TaskContinuationOptions.NotOnRanToCompletion,
                 sourceNode.Context.TaskScheduler).Ignore();

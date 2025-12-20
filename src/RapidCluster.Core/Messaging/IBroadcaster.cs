@@ -6,7 +6,8 @@ namespace RapidCluster.Messaging;
 /// Delegate invoked when a broadcast message fails to be delivered to a recipient.
 /// </summary>
 /// <param name="failedEndpoint">The endpoint that failed to receive the message.</param>
-public delegate void BroadcastFailureCallback(Endpoint failedEndpoint);
+/// <param name="rank">The rank associated with the broadcast.</param>
+public delegate void BroadcastFailureCallback(Endpoint failedEndpoint, Rank rank);
 
 /// <summary>
 /// Interface for broadcasting messages to multiple nodes in the cluster.
@@ -31,7 +32,11 @@ public interface IBroadcaster
     /// The callback is invoked for each recipient where delivery fails.
     /// </summary>
     /// <param name="request">The request message to broadcast.</param>
+    /// <param name="rank">Rank associated with the broadcast. Required when <paramref name="onDeliveryFailure"/> is non-null.</param>
     /// <param name="onDeliveryFailure">Callback invoked when delivery to a recipient fails. May be called from any thread.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken);
+    void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken);
+
+    void Broadcast(RapidClusterRequest request, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) =>
+        Broadcast(request, rank: null, onDeliveryFailure, cancellationToken);
 }

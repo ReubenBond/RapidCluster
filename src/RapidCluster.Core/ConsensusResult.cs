@@ -38,12 +38,8 @@ internal abstract record ConsensusResult
     /// Fast round failed due to too many delivery failures.
     /// Classic Paxos rounds should be attempted.
     /// </summary>
-    public sealed record DeliveryFailure : ConsensusResult
-    {
-        /// <summary>Singleton instance.</summary>
-        public static DeliveryFailure Instance { get; } = new();
-        private DeliveryFailure() { }
-    }
+    /// <param name="Rank">The rank/round associated with the failed broadcast.</param>
+    public sealed record DeliveryFailure(Rank Rank) : ConsensusResult;
 
     /// <summary>
     /// Consensus round timed out without reaching a decision.

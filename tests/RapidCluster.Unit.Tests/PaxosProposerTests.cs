@@ -206,13 +206,16 @@ public sealed class PaxosProposerTests
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
-        proposer.HandlePaxosNackMessage(new PaxosNackMessage
+        var requestedRound = proposer.HandlePaxosNackMessage(new PaxosNackMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
             ConfigurationId = configId.ToProtobuf(),
             Received = new Rank { Round = 2, NodeIndex = 123 },
             Promised = new Rank { Round = 5, NodeIndex = 7 }
-        }, TestContext.Current.CancellationToken);
+        });
+
+        Assert.Equal(6, requestedRound);
+        proposer.StartPhase1a(round: requestedRound!.Value, TestContext.Current.CancellationToken);
 
         Assert.Single(broadcasted);
         Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1AMessage, broadcasted[0].ContentCase);
@@ -243,14 +246,15 @@ public sealed class PaxosProposerTests
         proposer.StartPhase1a(round: 2, TestContext.Current.CancellationToken);
         broadcasted.Clear();
 
-        proposer.HandlePaxosNackMessage(new PaxosNackMessage
+        var requestedRound = proposer.HandlePaxosNackMessage(new PaxosNackMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
             ConfigurationId = new ConfigurationId(new ClusterId(888), version: 999).ToProtobuf(),
             Received = new Rank { Round = 2, NodeIndex = 123 },
             Promised = new Rank { Round = 5, NodeIndex = 7 }
-        }, TestContext.Current.CancellationToken);
+        });
 
+        Assert.Null(requestedRound);
         Assert.Empty(broadcasted);
     }
 

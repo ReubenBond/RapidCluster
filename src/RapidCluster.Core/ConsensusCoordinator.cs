@@ -108,6 +108,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             membershipSize,
             broadcaster,
             metrics,
+            onResult: _ => TryPulse(),
             fastPaxosLogger);
 
         _paxosAcceptor = new PaxosAcceptor(
@@ -122,6 +123,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             configurationId,
             membershipSize,
             metrics,
+            onDecided: _ => TryPulse(),
             paxosLogger);
 
         _paxosProposer = new PaxosProposer(
@@ -135,8 +137,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _log.Initialized(myAddr, configurationId, membershipSize);
 
-        _fastPaxosProposer.RegisterResultCallback(_ => TryPulse());
-        _paxosLearner.RegisterDecidedCallback(_ => TryPulse());
     }
 
     public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
@@ -429,12 +429,10 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         lock (_lock)
         {
-            if (_disposed != 0 || _consensusLoopTask == null || _onDecidedTcs.Task.IsCompleted)
+            if (_disposed == 0 && _consensusLoopTask != null && !_onDecidedTcs.Task.IsCompleted)
             {
-                return new ConsensusResponse().ToRapidClusterResponse();
+                _events.Writer.TryWrite(new ConsensusEvent.Inbound(request, cancellationToken));
             }
-
-            _events.Writer.TryWrite(new ConsensusEvent.Inbound(request, cancellationToken));
         }
 
         return new ConsensusResponse().ToRapidClusterResponse();

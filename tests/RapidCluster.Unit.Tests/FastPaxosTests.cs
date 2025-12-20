@@ -22,7 +22,7 @@ public class FastPaxosTests
         // Early success: if a single proposal gets 4 votes, decide immediately
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -52,7 +52,7 @@ public class FastPaxosTests
         // In a 5-node cluster, threshold is N - f = 5 - 1 = 4
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -89,7 +89,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -130,7 +130,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -155,7 +155,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 42), membershipSize: 3, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 42), membershipSize: 3, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -185,7 +185,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var sender = Utils.HostFromParts("127.0.0.1", 1000);
@@ -212,7 +212,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -253,7 +253,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         // Send votes with null proposal
         for (var i = 0; i < 3; i++)
@@ -280,7 +280,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
@@ -328,7 +328,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         // Not enough votes to decide
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
@@ -355,7 +355,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -391,7 +391,7 @@ public class FastPaxosTests
         // In a 9-node cluster, threshold is N - f = 9 - 2 = 7
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 9, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 9, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
@@ -430,7 +430,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 1, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 1, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
@@ -457,7 +457,7 @@ public class FastPaxosTests
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
+        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3, broadcaster, CreateMetrics(), onResult: null, NullLogger<FastPaxosProposer>.Instance);
 
         var expectedEndpoint = Utils.HostFromParts("10.0.0.99", 9999);
         var proposal = CreateProposal(expectedEndpoint);

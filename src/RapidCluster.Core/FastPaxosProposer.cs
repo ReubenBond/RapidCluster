@@ -25,8 +25,9 @@ internal sealed class FastPaxosProposer
     private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
     private readonly HashSet<Endpoint> _votesReceived = [];
 
+    private readonly Action<ConsensusResult>? _onResult;
+
     private ConsensusResult? _result;
-    private Action<ConsensusResult>? _resultCallback;
 
     public FastPaxosProposer(
         Endpoint myAddr,
@@ -34,6 +35,7 @@ internal sealed class FastPaxosProposer
         int membershipSize,
         IBroadcaster broadcaster,
         RapidClusterMetrics metrics,
+        Action<ConsensusResult>? onResult,
         ILogger<FastPaxosProposer> logger)
     {
         _myAddr = myAddr;
@@ -41,6 +43,7 @@ internal sealed class FastPaxosProposer
         _membershipSize = membershipSize;
         _broadcaster = broadcaster;
         _metrics = metrics;
+        _onResult = onResult;
         _log = new FastPaxosLogger(logger);
 
         _log.FastPaxosInitialized(myAddr, configurationId, membershipSize);
@@ -50,17 +53,6 @@ internal sealed class FastPaxosProposer
 
     public ConsensusResult? Result => _result;
 
-    public void RegisterResultCallback(Action<ConsensusResult> callback)
-    {
-        ArgumentNullException.ThrowIfNull(callback);
-
-        _resultCallback += callback;
-        if (_result != null)
-        {
-            callback(_result);
-        }
-    }
-
     private bool TryComplete(ConsensusResult result)
     {
         if (_result != null)
@@ -69,7 +61,7 @@ internal sealed class FastPaxosProposer
         }
 
         _result = result;
-        _resultCallback?.Invoke(result);
+        _onResult?.Invoke(result);
         return true;
     }
 

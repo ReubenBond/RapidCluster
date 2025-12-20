@@ -19,35 +19,27 @@ internal sealed class PaxosLearner
     private readonly int _membershipSize;
 
     private readonly Dictionary<Rank, Dictionary<Endpoint, Phase2bMessage>> _acceptResponses = [];
+    private readonly Action<ConsensusResult>? _onDecided;
+
     private ConsensusResult? _decided;
-    private Action<ConsensusResult>? _decidedCallback;
 
     public PaxosLearner(
         ConfigurationId configurationId,
         int membershipSize,
         RapidClusterMetrics metrics,
+        Action<ConsensusResult>? onDecided,
         ILogger<PaxosProposer> logger)
     {
         _configurationId = configurationId;
         _membershipSize = membershipSize;
         _metrics = metrics;
+        _onDecided = onDecided;
         _log = new PaxosLogger(logger);
     }
 
     public bool IsDecided => _decided != null;
 
     public ConsensusResult? Decided => _decided;
-
-    public void RegisterDecidedCallback(Action<ConsensusResult> callback)
-    {
-        ArgumentNullException.ThrowIfNull(callback);
-
-        _decidedCallback += callback;
-        if (_decided != null)
-        {
-            callback(_decided);
-        }
-    }
 
     private bool TryDecide(ConsensusResult result)
     {
@@ -57,7 +49,7 @@ internal sealed class PaxosLearner
         }
 
         _decided = result;
-        _decidedCallback?.Invoke(result);
+        _onDecided?.Invoke(result);
         return true;
     }
 

@@ -381,27 +381,6 @@ public class FastPaxosTests
         Assert.IsType<ConsensusResult.Decided>(result);
     }
 
-    [Fact]
-    public void RegisterTimeoutToken_CancelledTokenCompleteWithCancelled()
-    {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
-        var broadcaster = new TestBroadcaster();
-        var fastPaxos = new FastPaxosProposer(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, broadcaster, CreateMetrics(), NullLogger<FastPaxosProposer>.Instance);
-
-        using var cts = new CancellationTokenSource();
-        fastPaxos.RegisterTimeoutToken(cts.Token);
-
-        Assert.False(fastPaxos.IsCompleted);
-
-        // Cancel the token - the callback fires synchronously
-        cts.SafeCancel();
-
-        // The result should be completed immediately after cancellation
-        Assert.True(fastPaxos.IsCompleted);
-        var result = fastPaxos.Result!;
-        Assert.IsType<ConsensusResult.Cancelled>(result);
-    }
-
     #endregion
 
     #region Three-Way Vote Split Tests

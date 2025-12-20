@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using System.Runtime.InteropServices;
 
 using RapidCluster.Logging;
 using RapidCluster.Messaging;
@@ -27,7 +27,6 @@ internal sealed class FastPaxosProposer
 
     private ConsensusResult? _result;
     private Action<ConsensusResult>? _resultCallback;
-    private CancellationTokenRegistration _cancellationRegistration;
 
     public FastPaxosProposer(
         Endpoint myAddr,
@@ -72,17 +71,6 @@ internal sealed class FastPaxosProposer
         _result = result;
         _resultCallback?.Invoke(result);
         return true;
-    }
-
-    public void RegisterTimeoutToken(CancellationToken timeoutToken)
-    {
-        if (timeoutToken.CanBeCanceled)
-        {
-            _cancellationRegistration = timeoutToken.Register(() =>
-            {
-                TryComplete(ConsensusResult.Cancelled.Instance);
-            });
-        }
     }
 
     public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
@@ -180,7 +168,6 @@ internal sealed class FastPaxosProposer
 
     public void Cancel()
     {
-        _cancellationRegistration.Dispose();
         TryComplete(ConsensusResult.Cancelled.Instance);
     }
 }

@@ -625,9 +625,9 @@ public class PaxosTests
         Assert.Single(result.Members);
         var endpoint = result.Members[0];
         Assert.True(
-            (endpoint.Hostname.Equals(node1.Hostname) && endpoint.Port == node1.Port) ||
-            (endpoint.Hostname.Equals(node2.Hostname) && endpoint.Port == node2.Port) ||
-            (endpoint.Hostname.Equals(node3.Hostname) && endpoint.Port == node3.Port));
+            endpoint.Hostname.Equals(node1.Hostname) && endpoint.Port == node1.Port ||
+            endpoint.Hostname.Equals(node2.Hostname) && endpoint.Port == node2.Port ||
+            endpoint.Hostname.Equals(node3.Hostname) && endpoint.Port == node3.Port);
     }
 
     [Fact]

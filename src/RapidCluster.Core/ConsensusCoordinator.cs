@@ -28,25 +28,10 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     private readonly record struct ProtocolMetrics(string ProtocolName)
     {
-        public void RecordProposal(RapidClusterMetrics metrics)
-        {
-            metrics.RecordConsensusProposal(ProtocolName);
-        }
-
-        public void RecordRoundStarted(RapidClusterMetrics metrics)
-        {
-            metrics.RecordConsensusRoundStarted(ProtocolName);
-        }
-
-        public void RecordRoundCompleted(RapidClusterMetrics metrics, string result)
-        {
-            metrics.RecordConsensusRoundCompleted(ProtocolName, result);
-        }
-
-        public void RecordLatency(RapidClusterMetrics metrics, string result, Stopwatch stopwatch)
-        {
-            metrics.RecordConsensusLatency(ProtocolName, result, stopwatch);
-        }
+        public void RecordProposal(RapidClusterMetrics metrics) => metrics.RecordConsensusProposal(ProtocolName);
+        public void RecordRoundStarted(RapidClusterMetrics metrics) => metrics.RecordConsensusRoundStarted(ProtocolName);
+        public void RecordRoundCompleted(RapidClusterMetrics metrics, string result) => metrics.RecordConsensusRoundCompleted(ProtocolName, result);
+        public void RecordLatency(RapidClusterMetrics metrics, string result, Stopwatch stopwatch) => metrics.RecordConsensusLatency(ProtocolName, result, stopwatch);
     }
 
     private readonly Endpoint _myAddr;
@@ -164,11 +149,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _consensusLoopTask = RunConsensusLoopAsync(proposal, _disposeCts.Token);
     }
 
-    private void TryPulse()
-    {
+    private void TryPulse() =>
         // Avoid allocating/failing in common paths.
         _events.Writer.TryWrite(new ConsensusEvent.Pulse());
-    }
 
     private async Task RunConsensusLoopAsync(MembershipProposal proposal, CancellationToken cancellationToken)
     {
@@ -181,7 +164,18 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             _fastMetrics.RecordRoundStarted(_metrics);
 
             var fastRoundTimeout = GetRandomDelay();
-            ScheduleFastTimeout(fastRoundTimeout);
+            _timeout.Schedule(
+                _sharedResources.TimeProvider,
+                fastRoundTimeout,
+                () =>
+                {
+                    if (_onDecidedTcs.Task.IsCompleted)
+                    {
+                        return;
+                    }
+
+                    _events.Writer.TryWrite(new ConsensusEvent.FastTimeout());
+                });
 
             _fastPaxosProposer.Propose(proposal, cancellationToken);
 
@@ -262,7 +256,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
                     case RapidClusterRequest.ContentOneofCase.PaxosNackMessage:
                         var requestedRound = _paxosProposer.HandlePaxosNackMessage(request.PaxosNackMessage);
-                        if (requestedRound is { } nackRound && (_isInClassic && nackRound > _currentClassicRound))
+                        if (requestedRound is { } nackRound && _isInClassic && nackRound > _currentClassicRound)
                         {
                             StartClassicRound(nackRound, cancellationToken);
                         }
@@ -349,27 +343,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         var nodeId = _membershipViewAccessor.CurrentView.GetNodeId(_myAddr);
         var nodeIndex = unchecked((int)nodeId);
         _paxosProposer.StartPhase1a(new Rank { Round = roundNumber, NodeIndex = nodeIndex }, cancellationToken);
-        ScheduleClassicTimeout(roundNumber, delay);
-    }
-
-    private void ScheduleFastTimeout(TimeSpan timeout)
-    {
-        _timeout.Schedule(
-            _sharedResources.TimeProvider,
-            timeout,
-            () =>
-            {
-                if (_onDecidedTcs.Task.IsCompleted)
-                {
-                    return;
-                }
-
-                _events.Writer.TryWrite(new ConsensusEvent.FastTimeout());
-            });
-    }
-
-    private void ScheduleClassicTimeout(int roundNumber, TimeSpan delay)
-    {
         _timeout.Schedule(
             _sharedResources.TimeProvider,
             delay,
@@ -485,7 +458,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         var baseDelayMs = _options.ConsensusFallbackTimeoutBaseDelay.TotalMilliseconds;
-        return (position / (double)view.Size) * baseDelayMs * 0.25;
+        return position / (double)view.Size * baseDelayMs * 0.25;
     }
 
     public async ValueTask DisposeAsync()

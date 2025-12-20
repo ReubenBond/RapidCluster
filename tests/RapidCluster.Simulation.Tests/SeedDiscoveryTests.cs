@@ -159,12 +159,12 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         _harness.WaitForConvergence(expectedSize: 2);
 
         // Create node with duplicate seeds
-        var duplicateSeeds = new List<Endpoint> 
-        { 
-            seedNode.Address, 
-            seedNode.Address, 
-            joiner1.Address, 
-            seedNode.Address 
+        var duplicateSeeds = new List<Endpoint>
+        {
+            seedNode.Address,
+            seedNode.Address,
+            joiner1.Address,
+            seedNode.Address
         };
         var joiner2 = _harness.CreateJoinerNodeWithSeedAddresses(duplicateSeeds, nodeId: 2);
 

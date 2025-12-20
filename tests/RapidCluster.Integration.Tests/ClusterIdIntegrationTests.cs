@@ -146,7 +146,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var afterJoinClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
         // Version should have increased
-        Assert.True(afterJoinVersion > initialVersion, 
+        Assert.True(afterJoinVersion > initialVersion,
             $"Version should increase: initial={initialVersion}, afterJoin={afterJoinVersion}");
 
         // ClusterId should remain stable

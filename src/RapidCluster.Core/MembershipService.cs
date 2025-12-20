@@ -810,7 +810,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             {
                 _log.EnqueueingSafeToJoin(joinMessage.Sender, _membershipView);
 
-
                 var tcs = new TaskCompletionSource<RapidClusterResponse>();
                 ref var channel = ref CollectionsMarshal.GetValueRefOrAddDefault(_joinersToRespondTo, joinMessage.Sender, out var _);
                 channel ??= Channel.CreateUnbounded<TaskCompletionSource<RapidClusterResponse>>();
@@ -1168,7 +1167,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             MaxNodeId = _membershipView.MaxNodeId
         };
 
-
         // Add all endpoints (which already contain node_id)
         var members = _membershipView.Members;
         response.Endpoints.AddRange(members);
@@ -1206,7 +1204,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _log.IgnoringStaleConsensusDecision(proposal.Members.Count);
                 return;
             }
-
 
             _announcedProposal = false;
 
@@ -1396,7 +1393,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             return msgConfig == currentConfigurationId;
         });
     }
-
 
     private AlertMessage ExtractJoinerMetadata(AlertMessage alertMessage)
     {

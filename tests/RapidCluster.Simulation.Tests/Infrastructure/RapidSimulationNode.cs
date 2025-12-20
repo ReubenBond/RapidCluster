@@ -162,17 +162,13 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Create consensus coordinator factory
         var consensusCoordinatorLogger = _loggerFactory.CreateLogger<ConsensusCoordinator>();
-        var fastPaxosLogger = _loggerFactory.CreateLogger<FastPaxosProposer>();
-        var paxosLogger = _loggerFactory.CreateLogger<PaxosProposer>();
         _consensusCoordinatorFactory = new ConsensusCoordinatorFactory(
             MessagingClient,
             _viewAccessor,
             Options.Create(_protocolOptions),
             _sharedResources,
             _metrics,
-            consensusCoordinatorLogger,
-            fastPaxosLogger,
-            paxosLogger);
+            consensusCoordinatorLogger);
 
         // Create cut detector factory
         var simpleCutDetectorLogger = _loggerFactory.CreateLogger<SimpleCutDetector>();

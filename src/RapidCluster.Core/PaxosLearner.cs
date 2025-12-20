@@ -19,7 +19,6 @@ internal sealed class PaxosLearner
     private readonly int _membershipSize;
 
     private readonly Dictionary<Rank, Dictionary<Endpoint, Phase2bMessage>> _acceptResponses = [];
-    private readonly Action<ConsensusResult>? _onDecided;
 
     private ConsensusResult? _decided;
 
@@ -27,13 +26,11 @@ internal sealed class PaxosLearner
         ConfigurationId configurationId,
         int membershipSize,
         RapidClusterMetrics metrics,
-        Action<ConsensusResult>? onDecided,
-        ILogger<PaxosProposer> logger)
+        ILogger logger)
     {
         _configurationId = configurationId;
         _membershipSize = membershipSize;
         _metrics = metrics;
-        _onDecided = onDecided;
         _log = new PaxosLogger(logger);
     }
 
@@ -49,7 +46,6 @@ internal sealed class PaxosLearner
         }
 
         _decided = result;
-        _onDecided?.Invoke(result);
         return true;
     }
 

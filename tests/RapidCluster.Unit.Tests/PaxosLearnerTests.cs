@@ -14,7 +14,7 @@ public sealed class PaxosLearnerTests
     public void Decides_WhenMajorityReached()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 5, CreateMetrics(), onDecided: null, NullLogger<PaxosProposer>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 5, CreateMetrics(), NullLogger.Instance);
 
         var proposal = CreateProposal(configId);
         var rnd = new Rank { Round = 2, NodeIndex = 10 };
@@ -36,7 +36,7 @@ public sealed class PaxosLearnerTests
     public void IgnoresDuplicateVotes_FromSameSender()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), onDecided: null, NullLogger<PaxosProposer>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger.Instance);
 
         var proposal = CreateProposal(configId);
         var rnd = new Rank { Round = 2, NodeIndex = 10 };
@@ -59,7 +59,7 @@ public sealed class PaxosLearnerTests
     public void IgnoresVotes_WithWrongConfigurationId()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), onDecided: null, NullLogger<PaxosProposer>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger.Instance);
 
         var proposal = CreateProposal(configId);
         var rnd = new Rank { Round = 2, NodeIndex = 10 };
@@ -75,7 +75,7 @@ public sealed class PaxosLearnerTests
     public void Cancel_CompletesAsCancelled()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), onDecided: null, NullLogger<PaxosProposer>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger.Instance);
 
         learner.Cancel();
 
@@ -87,7 +87,7 @@ public sealed class PaxosLearnerTests
     public void DecidesOnlyOnce_EvenIfAnotherRoundReachesMajority()
     {
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
-        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), onDecided: null, NullLogger<PaxosProposer>.Instance);
+        var learner = new PaxosLearner(configId, membershipSize: 3, CreateMetrics(), NullLogger.Instance);
 
         var proposalA = CreateProposal(configId);
         var proposalB = CreateProposal(configId);

@@ -27,7 +27,7 @@ public sealed class PaxosAcceptorTests
             client,
             broadcaster,
             CreateMetrics(),
-            NullLogger<PaxosProposer>.Instance);
+            NullLogger.Instance);
 
         var sender = Utils.HostFromParts("127.0.0.1", 2000);
 
@@ -81,7 +81,7 @@ public sealed class PaxosAcceptorTests
             client,
             broadcaster,
             CreateMetrics(),
-            NullLogger<PaxosProposer>.Instance);
+            NullLogger.Instance);
 
         var sender = Utils.HostFromParts("127.0.0.1", 2000);
 
@@ -113,7 +113,7 @@ public sealed class PaxosAcceptorTests
             client,
             broadcaster,
             CreateMetrics(),
-            NullLogger<PaxosProposer>.Instance);
+            NullLogger.Instance);
 
         var coordinator = Utils.HostFromParts("127.0.0.1", 2000);
         var proposal = new MembershipProposal { ConfigurationId = configId.ToProtobuf() };
@@ -187,7 +187,7 @@ public sealed class PaxosAcceptorTests
             client,
             broadcaster,
             CreateMetrics(),
-            NullLogger<PaxosProposer>.Instance);
+            NullLogger.Instance);
 
         var coordinator = Utils.HostFromParts("127.0.0.1", 2000);
         var proposal = new MembershipProposal { ConfigurationId = configId.ToProtobuf() };

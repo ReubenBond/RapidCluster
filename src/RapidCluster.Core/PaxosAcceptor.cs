@@ -36,7 +36,7 @@ internal sealed class PaxosAcceptor
         IMessagingClient client,
         IBroadcaster broadcaster,
         RapidClusterMetrics metrics,
-        ILogger<PaxosProposer> logger)
+        ILogger logger)
     {
         _myAddr = myAddr;
         _configurationId = configurationId;

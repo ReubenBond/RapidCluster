@@ -502,9 +502,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             options,
             sharedResources,
             metrics,
-            NullLogger<ConsensusCoordinator>.Instance,
-            NullLogger<FastPaxosProposer>.Instance,
-            NullLogger<PaxosProposer>.Instance);
+            NullLogger<ConsensusCoordinator>.Instance);
 
         var coordinator = factory.Create(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 42), membershipSize: 7, broadcaster);
         _coordinators.Add(coordinator);
@@ -553,9 +551,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             options,
             sharedResources,
             metrics,
-            NullLogger<ConsensusCoordinator>.Instance,
-            NullLogger<FastPaxosProposer>.Instance,
-            NullLogger<PaxosProposer>.Instance);
+            NullLogger<ConsensusCoordinator>.Instance);
 
         if (trackForCleanup)
         {

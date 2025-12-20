@@ -36,9 +36,7 @@ internal sealed class ConsensusCoordinatorFactory(
     IOptions<RapidClusterProtocolOptions> protocolOptions,
     SharedResources sharedResources,
     RapidClusterMetrics metrics,
-    ILogger<ConsensusCoordinator> coordinatorLogger,
-    ILogger<FastPaxosProposer> fastPaxosLogger,
-    ILogger<PaxosProposer> paxosLogger) : IConsensusCoordinatorFactory
+    ILogger<ConsensusCoordinator> coordinatorLogger) : IConsensusCoordinatorFactory
 {
     public ConsensusCoordinator Create(
         Endpoint myAddr,
@@ -56,8 +54,6 @@ internal sealed class ConsensusCoordinatorFactory(
             protocolOptions,
             sharedResources,
             metrics,
-            coordinatorLogger,
-            fastPaxosLogger,
-            paxosLogger);
+            coordinatorLogger);
     }
 }

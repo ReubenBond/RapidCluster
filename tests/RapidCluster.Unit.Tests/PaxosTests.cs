@@ -535,7 +535,7 @@ public class PaxosTests
             CreatePhase1bMessage(0, 0)   // empty proposal
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         Assert.Null(result);
     }
@@ -551,7 +551,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1, node1)
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         Assert.NotNull(result);
         Assert.Single(result.Members);
@@ -572,7 +572,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1, node1)   // higher vrnd - should be chosen
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         Assert.NotNull(result);
         Assert.Single(result.Members);
@@ -594,7 +594,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1, node2)   // 1 vote for node2
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         Assert.NotNull(result);
         Assert.Single(result.Members);
@@ -618,7 +618,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1, node3)
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 20);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 20);
 
         // Should return one of the values (first non-empty proposal from any message)
         Assert.NotNull(result);
@@ -643,7 +643,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1)           // higher vrnd, empty proposal
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         // Should fall back to the first non-empty proposal
         Assert.NotNull(result);
@@ -670,7 +670,7 @@ public class PaxosTests
         // Add 1 vote for node1
         messages.Add(CreatePhase1bMessage(1, 1, node1));
 
-        var result = PaxosProposer.ChooseValue(messages, n: 20);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 20);
 
         // No value exceeds N/4, should fall back to smallest proposal (deterministic)
         Assert.NotNull(result);
@@ -701,7 +701,7 @@ public class PaxosTests
             messages.Add(CreatePhase1bMessage(1, 1, node1));
         }
 
-        var result = PaxosProposer.ChooseValue(messages, n: 20);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 20);
 
         // node2 has 6 votes which exceeds N/4=5
         Assert.NotNull(result);
@@ -723,7 +723,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1, node1, node2)
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         Assert.NotNull(result);
         Assert.Equal(2, result.Members.Count);
@@ -738,7 +738,7 @@ public class PaxosTests
     {
         var messages = new List<Phase1bMessage>();
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         Assert.Null(result);
     }
@@ -757,7 +757,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 2, node1)    // vrnd (1,2) - higher
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 5);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
 
         // Should choose node1 because vrnd (1,2) > (1,1)
         Assert.NotNull(result);
@@ -791,7 +791,7 @@ public class PaxosTests
             messages = [.. messages.OrderBy(_ => random.Next())];
 #pragma warning restore CA5394
 
-            var result = PaxosProposer.ChooseValue(messages, n: 20);
+            var result = ConsensusCoordinator.ChooseValue(messages, n: 20);
             results.Add(result);
         }
 
@@ -826,7 +826,7 @@ public class PaxosTests
             CreatePhase1bMessage(1, 1, nodeA)  // Smallest last
         };
 
-        var result = PaxosProposer.ChooseValue(messages, n: 20);
+        var result = ConsensusCoordinator.ChooseValue(messages, n: 20);
 
         // Should select nodeA (smallest by lexicographic order), not nodeC (first in list)
         Assert.NotNull(result);

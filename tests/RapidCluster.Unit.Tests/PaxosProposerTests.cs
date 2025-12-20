@@ -1,255 +1,246 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using RapidCluster.Messaging;
 using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Unit.Tests;
 
-public sealed class PaxosProposerTests
+public sealed class ClassicProposerConsensusCoordinatorTests
 {
     private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
     private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
     [Fact]
-    public void HandlePhase1b_IgnoresWrongConfigurationId()
+    public async Task Phase1b_IgnoresWrongConfigurationId()
     {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
+        var membershipSize = 3;
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
-        var broadcasted = new List<RapidClusterRequest>();
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+        await using var client = new NoopMessagingClient();
+        var viewAccessor = new TestMembershipViewAccessor(membershipSize);
+        var options = Options.Create(new RapidClusterProtocolOptions());
+        var sharedResources = new SharedResources(new FakeTimeProvider(), random: new Random(42));
+        var metrics = CreateMetrics();
 
-        var isDecided = () => false;
-        var proposer = new PaxosProposer(
+        await using var coordinator = new ConsensusCoordinator(
             myAddr,
             configId,
-            membershipSize: 3,
+            membershipSize,
+            client,
             broadcaster,
-            CreateMetrics(),
-            isDecided,
-            NullLogger<PaxosProposer>.Instance);
+            viewAccessor,
+            options,
+            sharedResources,
+            metrics,
+            NullLogger<ConsensusCoordinator>.Instance);
 
-        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-        broadcasted.Clear();
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
 
-        proposer.HandlePhase1bMessage(new Phase1bMessage
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+
+        while (broadcasted.TryDequeue(out _)) { }
+
+        coordinator.HandleMessages(new RapidClusterRequest
         {
-            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
-            ConfigurationId = new ConfigurationId(new ClusterId(888), version: 999).ToProtobuf(),
-            Rnd = new Rank { Round = 2, NodeIndex = 123 },
-            Vrnd = new Rank { Round = 1, NodeIndex = 1 },
-            Proposal = CreateProposal(configId)
+            Phase1BMessage = new Phase1bMessage
+            {
+                Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: Utils.GetNextNodeId()),
+                ConfigurationId = new ConfigurationId(new ClusterId(888), version: 999).ToProtobuf(),
+                Rnd = phase1aRank,
+                Vrnd = new Rank { Round = 1, NodeIndex = 1 },
+                Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002))
+            }
         }, TestContext.Current.CancellationToken);
 
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.Empty(broadcasted);
     }
 
     [Fact]
-    public void HandlePhase1b_IgnoresRoundMismatch()
+    public async Task Phase1b_IgnoresRoundMismatch()
     {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
+        var membershipSize = 3;
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
-        var broadcasted = new List<RapidClusterRequest>();
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
+        await using var client = new NoopMessagingClient();
+        var viewAccessor = new TestMembershipViewAccessor(membershipSize);
+        var options = Options.Create(new RapidClusterProtocolOptions());
+        var sharedResources = new SharedResources(new FakeTimeProvider(), random: new Random(42));
+        var metrics = CreateMetrics();
 
-        var isDecided = () => false;
-        var proposer = new PaxosProposer(
+        await using var coordinator = new ConsensusCoordinator(
             myAddr,
             configId,
-            membershipSize: 3,
+            membershipSize,
+            client,
             broadcaster,
-            CreateMetrics(),
-            isDecided,
-            NullLogger<PaxosProposer>.Instance);
+            viewAccessor,
+            options,
+            sharedResources,
+            metrics,
+            NullLogger<ConsensusCoordinator>.Instance);
 
-        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-        broadcasted.Clear();
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
 
-        proposer.HandlePhase1bMessage(new Phase1bMessage
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+
+        while (broadcasted.TryDequeue(out _)) { }
+
+        coordinator.HandleMessages(new RapidClusterRequest
         {
-            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
-            ConfigurationId = configId.ToProtobuf(),
-            Rnd = new Rank { Round = 3, NodeIndex = 123 },
-            Vrnd = new Rank { Round = 1, NodeIndex = 1 },
-            Proposal = CreateProposal(configId)
+            Phase1BMessage = new Phase1bMessage
+            {
+                Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: Utils.GetNextNodeId()),
+                ConfigurationId = configId.ToProtobuf(),
+                Rnd = new Rank { Round = phase1aRank.Round + 1, NodeIndex = phase1aRank.NodeIndex },
+                Vrnd = new Rank { Round = 1, NodeIndex = 1 },
+                Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002))
+            }
         }, TestContext.Current.CancellationToken);
 
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.Empty(broadcasted);
     }
 
     [Fact]
-    public void HandlePhase1b_BroadcastsPhase2aOnce_WhenMajorityReached()
+    public async Task Phase1b_BroadcastsPhase2aOnce_WhenMajorityReached()
     {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
+        var membershipSize = 3;
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
-        var broadcasted = new List<RapidClusterRequest>();
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
+        await using var client = new NoopMessagingClient();
+        var viewAccessor = new TestMembershipViewAccessor(membershipSize);
+        var options = Options.Create(new RapidClusterProtocolOptions());
+        var sharedResources = new SharedResources(new FakeTimeProvider(), random: new Random(42));
+        var metrics = CreateMetrics();
 
-        var isDecided = () => false;
-        var proposer = new PaxosProposer(
+        await using var coordinator = new ConsensusCoordinator(
             myAddr,
             configId,
-            membershipSize: 5,
+            membershipSize,
+            client,
             broadcaster,
-            CreateMetrics(),
-            isDecided,
-            NullLogger<PaxosProposer>.Instance);
+            viewAccessor,
+            options,
+            sharedResources,
+            metrics,
+            NullLogger<ConsensusCoordinator>.Instance);
 
-        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-        broadcasted.Clear();
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
 
-        var proposal = CreateProposal(configId);
-        var rnd = new Rank { Round = 2, NodeIndex = 123 };
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+        while (broadcasted.TryDequeue(out _)) { }
 
-        // Majority for 5 nodes is 3.
-        proposer.HandlePhase1bMessage(CreatePhase1b(configId, senderPort: 2000, rnd, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal), TestContext.Current.CancellationToken);
-        proposer.HandlePhase1bMessage(CreatePhase1b(configId, senderPort: 2001, rnd, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal), TestContext.Current.CancellationToken);
-        proposer.HandlePhase1bMessage(CreatePhase1b(configId, senderPort: 2002, rnd, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal), TestContext.Current.CancellationToken);
+        var proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002));
 
-        Assert.Single(broadcasted);
-        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase2AMessage, broadcasted[0].ContentCase);
-        Assert.Equal(2, broadcasted[0].Phase2AMessage.Rnd.Round);
-        Assert.Equal(123, broadcasted[0].Phase2AMessage.Rnd.NodeIndex);
-        Assert.NotNull(broadcasted[0].Phase2AMessage.Proposal);
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase1BMessage = CreatePhase1b(configId, senderPort: 2000, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal)
+        }, TestContext.Current.CancellationToken);
+
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase1BMessage = CreatePhase1b(configId, senderPort: 2001, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal)
+        }, TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage), TimeSpan.FromSeconds(2));
+        var phase2aMessages = broadcasted.Where(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage).ToList();
+        Assert.Single(phase2aMessages);
 
         // Additional Phase1b messages should not cause rebroadcast.
-        proposer.HandlePhase1bMessage(CreatePhase1b(configId, senderPort: 2003, rnd, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal), TestContext.Current.CancellationToken);
-        Assert.Single(broadcasted);
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase1BMessage = CreatePhase1b(configId, senderPort: 2002, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal)
+        }, TestContext.Current.CancellationToken);
+
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        phase2aMessages = broadcasted.Where(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage).ToList();
+        Assert.Single(phase2aMessages);
     }
 
     [Fact]
-    public void HandlePhase1b_DoesNotBroadcast_WhenNoValueChosen()
+    public async Task Phase1b_DoesNotBroadcast_WhenNoValueChosen()
     {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
+        var membershipSize = 3;
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
-        var broadcasted = new List<RapidClusterRequest>();
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
         var broadcaster = new CapturingBroadcaster(broadcasted);
-        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 5));
+        await using var client = new NoopMessagingClient();
+        var viewAccessor = new TestMembershipViewAccessor(membershipSize);
+        var options = Options.Create(new RapidClusterProtocolOptions());
+        var sharedResources = new SharedResources(new FakeTimeProvider(), random: new Random(42));
+        var metrics = CreateMetrics();
 
-        var isDecided = () => false;
-        var proposer = new PaxosProposer(
+        await using var coordinator = new ConsensusCoordinator(
             myAddr,
             configId,
-            membershipSize: 5,
+            membershipSize,
+            client,
             broadcaster,
-            CreateMetrics(),
-            isDecided,
-            NullLogger<PaxosProposer>.Instance);
+            viewAccessor,
+            options,
+            sharedResources,
+            metrics,
+            NullLogger<ConsensusCoordinator>.Instance);
 
-        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-        broadcasted.Clear();
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
 
-        var rnd = new Rank { Round = 2, NodeIndex = 123 };
+        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+        while (broadcasted.TryDequeue(out _)) { }
 
-        proposer.HandlePhase1bMessage(new Phase1bMessage
+        coordinator.HandleMessages(new RapidClusterRequest
         {
-            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
-            ConfigurationId = configId.ToProtobuf(),
-            Rnd = rnd,
-            Vrnd = null,
-            Proposal = null
+            Phase1BMessage = new Phase1bMessage
+            {
+                Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: Utils.GetNextNodeId()),
+                ConfigurationId = configId.ToProtobuf(),
+                Rnd = phase1aRank
+            }
         }, TestContext.Current.CancellationToken);
 
-        proposer.HandlePhase1bMessage(new Phase1bMessage
+        coordinator.HandleMessages(new RapidClusterRequest
         {
-            Sender = Utils.HostFromParts("127.0.0.1", 2001, nodeId: 2),
-            ConfigurationId = configId.ToProtobuf(),
-            Rnd = rnd,
-            Vrnd = null,
-            Proposal = null
+            Phase1BMessage = new Phase1bMessage
+            {
+                Sender = Utils.HostFromParts("127.0.0.1", 2001, nodeId: Utils.GetNextNodeId()),
+                ConfigurationId = configId.ToProtobuf(),
+                Rnd = phase1aRank
+            }
         }, TestContext.Current.CancellationToken);
 
-        proposer.HandlePhase1bMessage(new Phase1bMessage
-        {
-            Sender = Utils.HostFromParts("127.0.0.1", 2002, nodeId: 3),
-            ConfigurationId = configId.ToProtobuf(),
-            Rnd = rnd,
-            Vrnd = null,
-            Proposal = null
-        }, TestContext.Current.CancellationToken);
-
-        Assert.Empty(broadcasted);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(broadcasted, r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage);
     }
 
-    [Fact]
-    public void HandlePaxosNackMessage_StartsHigherRound_WhenCurrentRoundRejected()
+    private static MembershipProposal CreateProposal(ConfigurationId configId, params Endpoint[] endpoints)
     {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
-        var configId = new ConfigurationId(new ClusterId(888), version: 1);
-
-        var broadcasted = new List<RapidClusterRequest>();
-        var broadcaster = new CapturingBroadcaster(broadcasted);
-        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
-
-        var isDecided = () => false;
-        var proposer = new PaxosProposer(
-            myAddr,
-            configId,
-            membershipSize: 3,
-            broadcaster,
-            CreateMetrics(),
-            isDecided,
-            NullLogger<PaxosProposer>.Instance);
-
-        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-        broadcasted.Clear();
-
-        var requestedRound = proposer.HandlePaxosNackMessage(new PaxosNackMessage
+        var proposal = new MembershipProposal { ConfigurationId = configId.ToProtobuf() };
+        foreach (var endpoint in endpoints)
         {
-            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
-            ConfigurationId = configId.ToProtobuf(),
-            Received = new Rank { Round = 2, NodeIndex = 123 },
-            Promised = new Rank { Round = 5, NodeIndex = 7 }
-        });
-
-        Assert.Equal(6, requestedRound);
-        proposer.StartPhase1a(new Rank { Round = requestedRound!.Value, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-
-        Assert.Single(broadcasted);
-        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1AMessage, broadcasted[0].ContentCase);
-        Assert.Equal(6, broadcasted[0].Phase1AMessage.Rank.Round);
-    }
-
-    [Fact]
-    public void HandlePaxosNackMessage_IgnoresConfigMismatch()
-    {
-        var myAddr = Utils.HostFromParts("127.0.0.1", 1000, nodeId: 123);
-        var configId = new ConfigurationId(new ClusterId(888), version: 1);
-
-        var broadcasted = new List<RapidClusterRequest>();
-        var broadcaster = new CapturingBroadcaster(broadcasted);
-        _ = new TestMembershipViewAccessor(CreateMembershipView(myAddr, size: 3));
-
-        var isDecided = () => false;
-        var proposer = new PaxosProposer(
-            myAddr,
-            configId,
-            membershipSize: 3,
-            broadcaster,
-            CreateMetrics(),
-            isDecided,
-            NullLogger<PaxosProposer>.Instance);
-
-        proposer.StartPhase1a(new Rank { Round = 2, NodeIndex = 123 }, TestContext.Current.CancellationToken);
-        broadcasted.Clear();
-
-        var requestedRound = proposer.HandlePaxosNackMessage(new PaxosNackMessage
-        {
-            Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: 1),
-            ConfigurationId = new ConfigurationId(new ClusterId(888), version: 999).ToProtobuf(),
-            Received = new Rank { Round = 2, NodeIndex = 123 },
-            Promised = new Rank { Round = 5, NodeIndex = 7 }
-        });
-
-        Assert.Null(requestedRound);
-        Assert.Empty(broadcasted);
+            endpoint.NodeId = Utils.GetNextNodeId();
+            proposal.Members.Add(endpoint);
+        }
+        return proposal;
     }
 
     private static Phase1bMessage CreatePhase1b(ConfigurationId configId, int senderPort, Rank rnd, Rank vrnd, MembershipProposal proposal)
@@ -264,44 +255,65 @@ public sealed class PaxosProposerTests
         };
     }
 
-    private static MembershipProposal CreateProposal(ConfigurationId configId)
+    private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
     {
-        var proposal = new MembershipProposal { ConfigurationId = configId.ToProtobuf() };
-        proposal.Members.Add(Utils.HostFromParts("10.0.0.1", 5001, Utils.GetNextNodeId()));
-        return proposal;
-    }
-
-    private static MembershipView CreateMembershipView(Endpoint myAddr, int size)
-    {
-        var builder = new MembershipViewBuilder(maxRingCount: 10);
-        builder.RingAdd(myAddr);
-
-        for (var i = 1; i < size; i++)
+        var sw = Stopwatch.StartNew();
+        while (!predicate())
         {
-            builder.RingAdd(Utils.HostFromParts("127.0.0.1", 1000 + i, Utils.GetNextNodeId()));
-        }
+            if (sw.Elapsed > timeout)
+            {
+                throw new TimeoutException("Condition not met in time.");
+            }
 
-        return builder.Build();
+            await Task.Delay(5);
+        }
     }
 
-    private sealed class CapturingBroadcaster(List<RapidClusterRequest> broadcasted) : IBroadcaster
+    private sealed class CapturingBroadcaster(ConcurrentQueue<RapidClusterRequest> broadcasted) : IBroadcaster
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
 
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
         {
-            broadcasted.Add(request);
+            broadcasted.Enqueue(request);
         }
 
         public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
-            broadcasted.Add(request);
+            broadcasted.Enqueue(request);
+
+            // For N=3, a single delivery failure is enough to make fast Paxos impossible.
+            onDeliveryFailure?.Invoke(
+                Utils.HostFromParts("127.0.0.8", 9000, nodeId: Utils.GetNextNodeId()),
+                rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
         }
     }
 
-    private sealed class TestMembershipViewAccessor(MembershipView view) : IMembershipViewAccessor
+    private sealed class NoopMessagingClient : IMessagingClient
     {
-        public MembershipView CurrentView => view;
+        public void SendOneWayMessage(
+            Endpoint remote,
+            RapidClusterRequest request,
+            Rank? rank,
+            DeliveryFailureCallback? onDeliveryFailure,
+            CancellationToken cancellationToken) { }
+
+        public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new RapidClusterResponse());
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TestMembershipViewAccessor : IMembershipViewAccessor
+    {
+        private readonly MembershipView _view;
+
+        public TestMembershipViewAccessor(int membershipSize)
+        {
+            _view = Utils.CreateMembershipView(membershipSize);
+        }
+
+        public MembershipView CurrentView => _view;
         public BroadcastChannelReader<MembershipView> Updates => throw new NotImplementedException();
     }
 

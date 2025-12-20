@@ -132,7 +132,7 @@ internal sealed class PaxosProposer
         _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.Phase1b);
         _phase1bMessages.Add(phase1bMessage);
 
-        var majorityThreshold = (_membershipSize / 2) + 1;
+        var majorityThreshold = _membershipSize / 2 + 1;
         var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
         _log.Phase1bCollected(_phase1bMessages.Count, majorityThreshold, f);
 

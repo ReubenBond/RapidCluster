@@ -85,7 +85,7 @@ internal sealed class PaxosLearner
 
         acceptResponses[phase2bMessage.Sender] = phase2bMessage;
 
-        var majorityThreshold = (_membershipSize / 2) + 1;
+        var majorityThreshold = _membershipSize / 2 + 1;
         var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
         _log.Phase2bCollected(acceptResponses.Count, messageRnd, majorityThreshold, f);
 

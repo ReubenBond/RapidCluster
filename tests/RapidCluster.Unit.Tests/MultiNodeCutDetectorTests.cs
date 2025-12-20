@@ -1425,7 +1425,7 @@ public class MultiNodeCutDetectorTests
                     lastResult = detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 1)) + 1],
+                            EdgeSrc = nodes[i % (nodes.Count - 1) + 1],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1472,7 +1472,7 @@ public class MultiNodeCutDetectorTests
                     detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
+                            EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject1,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1485,7 +1485,7 @@ public class MultiNodeCutDetectorTests
                     detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
+                            EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject2,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1543,7 +1543,7 @@ public class MultiNodeCutDetectorTests
                         detector.AggregateForProposal(
                             new AlertMessage
                             {
-                                EdgeSrc = nodes[(i % (nodes.Count - 3)) + 3],
+                                EdgeSrc = nodes[i % (nodes.Count - 3) + 3],
                                 EdgeDst = subject,
                                 EdgeStatus = EdgeStatus.Up,
                                 RingNumber = { i }
@@ -1752,7 +1752,7 @@ public class MultiNodeCutDetectorTests
                     detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
+                            EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject2,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1766,7 +1766,7 @@ public class MultiNodeCutDetectorTests
                     lastResult = detector.AggregateForProposal(
                         new AlertMessage
                         {
-                            EdgeSrc = nodes[(i % (nodes.Count - 2)) + 2],
+                            EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject1,
                             EdgeStatus = EdgeStatus.Up,
                             RingNumber = { i }
@@ -1812,7 +1812,7 @@ public class MultiNodeCutDetectorTests
                         var result = detector.AggregateForProposal(
                             new AlertMessage
                             {
-                                EdgeSrc = nodes[(i % (nodes.Count - 3)) + 3],
+                                EdgeSrc = nodes[i % (nodes.Count - 3) + 3],
                                 EdgeDst = subject,
                                 EdgeStatus = EdgeStatus.Up,
                                 RingNumber = { i }

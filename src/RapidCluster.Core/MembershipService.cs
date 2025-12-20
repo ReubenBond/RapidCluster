@@ -647,9 +647,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 var response = new JoinResponse
                 {
                     Sender = _myAddr,
-                StatusCode = JoinStatusCode.SafeToJoin,
-                ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
-                MaxNodeId = _membershipView.MaxNodeId
+                    StatusCode = JoinStatusCode.SafeToJoin,
+                    ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
+                    MaxNodeId = _membershipView.MaxNodeId
 
                 };
                 response.Endpoints.AddRange(config.Endpoints);
@@ -809,6 +809,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             if (currentConfiguration == incomingConfigId)
             {
                 _log.EnqueueingSafeToJoin(joinMessage.Sender, _membershipView);
+
 
                 var tcs = new TaskCompletionSource<RapidClusterResponse>();
                 ref var channel = ref CollectionsMarshal.GetValueRefOrAddDefault(_joinersToRespondTo, joinMessage.Sender, out var _);
@@ -1167,6 +1168,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             MaxNodeId = _membershipView.MaxNodeId
         };
 
+
         // Add all endpoints (which already contain node_id)
         var members = _membershipView.Members;
         response.Endpoints.AddRange(members);
@@ -1204,6 +1206,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _log.IgnoringStaleConsensusDecision(proposal.Members.Count);
                 return;
             }
+
 
             _announcedProposal = false;
 
@@ -1393,6 +1396,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             return msgConfig == currentConfigurationId;
         });
     }
+
 
     private AlertMessage ExtractJoinerMetadata(AlertMessage alertMessage)
     {
@@ -1742,25 +1746,25 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 return;
             }
 
-        var responseConfigId = viewResponse.ConfigurationId.ToConfigurationId();
+            var responseConfigId = viewResponse.ConfigurationId.ToConfigurationId();
 
-        // Only apply if the response is newer than our current view
-        if (responseConfigId <= _membershipView.ConfigurationId)
-        {
-            _log.SkippingStaleViewRefresh(responseConfigId, _membershipView.ConfigurationId);
-            return;
-        }
+            // Only apply if the response is newer than our current view
+            if (responseConfigId <= _membershipView.ConfigurationId)
+            {
+                _log.SkippingStaleViewRefresh(responseConfigId, _membershipView.ConfigurationId);
+                return;
+            }
 
-        // Apply the learned view
-        ApplyLearnedMembershipView(viewResponse);
+            // Apply the learned view
+            ApplyLearnedMembershipView(viewResponse);
 
-        // Update last refresh timestamp on success
-        Interlocked.Exchange(ref _lastStaleViewRefreshTicks, _sharedResources.TimeProvider.GetTimestamp());
+            // Update last refresh timestamp on success
+            Interlocked.Exchange(ref _lastStaleViewRefreshTicks, _sharedResources.TimeProvider.GetTimestamp());
 
-        _log.MembershipViewRefreshed(
-            remoteEndpoint,
-            responseConfigId,
-            viewResponse.Endpoints.Count);
+            _log.MembershipViewRefreshed(
+                remoteEndpoint,
+                responseConfigId,
+                viewResponse.Endpoints.Count);
 
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

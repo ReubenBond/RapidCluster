@@ -68,7 +68,6 @@ internal readonly struct LoggableMembershipViewConfigurationId(MembershipView vi
     public override readonly string ToString() => _view.ConfigurationId.ToString();
 }
 
-
 /// <summary>
 /// Wrapper for logging a MembershipView's size.
 /// </summary>

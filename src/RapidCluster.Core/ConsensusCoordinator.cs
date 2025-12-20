@@ -76,11 +76,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         AllowSynchronousContinuations = true
     });
 
-    private ITimer? _fastTimeoutTimer;
-    private int _fastTimeoutToken;
-
-    private ITimer? _classicTimeoutTimer;
-    private int _classicTimeoutToken;
+    private readonly OneShotTimer _timeout = new();
 
     private int _currentClassicRound;
     private bool _isInClassic;
@@ -213,8 +209,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
         finally
         {
-            CancelFastTimeout();
-            CancelClassicTimeout();
+            _timeout.Dispose();
         }
     }
 
@@ -342,7 +337,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     private void StartClassicRound(int roundNumber, CancellationToken cancellationToken)
     {
-        CancelFastTimeout();
+        _timeout.Dispose();
 
         _isInClassic = true;
         _currentClassicRound = roundNumber;
@@ -357,89 +352,37 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         ScheduleClassicTimeout(roundNumber, delay);
     }
 
-    private readonly record struct FastTimeoutState(ConsensusCoordinator Coordinator, int Token);
-
-    private readonly record struct ClassicTimeoutState(ConsensusCoordinator Coordinator, int Token, int Round, TimeSpan Delay);
-
     private void ScheduleFastTimeout(TimeSpan timeout)
     {
-        CancelFastTimeout();
-
-        var token = Interlocked.Increment(ref _fastTimeoutToken);
-        _fastTimeoutTimer = _sharedResources.TimeProvider.CreateTimer(
-            static state =>
+        _timeout.Schedule(
+            _sharedResources.TimeProvider,
+            timeout,
+            () =>
             {
-                var (coordinator, expectedToken) = (FastTimeoutState)state!;
-                coordinator.TryFireFastTimeout(expectedToken);
-            },
-            state: new FastTimeoutState(this, token),
-            dueTime: timeout,
-            period: Timeout.InfiniteTimeSpan);
-    }
+                if (_onDecidedTcs.Task.IsCompleted)
+                {
+                    return;
+                }
 
-    private void TryFireFastTimeout(int expectedToken)
-    {
-        if (expectedToken != Volatile.Read(ref _fastTimeoutToken))
-        {
-            return;
-        }
-
-        if (_onDecidedTcs.Task.IsCompleted)
-        {
-            return;
-        }
-
-        _events.Writer.TryWrite(new ConsensusEvent.FastTimeout());
+                _events.Writer.TryWrite(new ConsensusEvent.FastTimeout());
+            });
     }
 
     private void ScheduleClassicTimeout(int roundNumber, TimeSpan delay)
     {
-        CancelClassicTimeout();
-
-        var token = Interlocked.Increment(ref _classicTimeoutToken);
-        _classicTimeoutTimer = _sharedResources.TimeProvider.CreateTimer(
-            static state =>
+        _timeout.Schedule(
+            _sharedResources.TimeProvider,
+            delay,
+            () =>
             {
-                var (coordinator, expectedToken, round, timeoutDelay) = (ClassicTimeoutState)state!;
-                coordinator.TryFireClassicTimeout(expectedToken, round, timeoutDelay);
-            },
-            state: new ClassicTimeoutState(this, token, roundNumber, delay),
-            dueTime: delay,
-            period: Timeout.InfiniteTimeSpan);
+                if (_onDecidedTcs.Task.IsCompleted)
+                {
+                    return;
+                }
+
+                _events.Writer.TryWrite(new ConsensusEvent.ClassicTimeout(roundNumber, delay));
+            });
     }
-
-    private void TryFireClassicTimeout(int expectedToken, int roundNumber, TimeSpan delay)
-    {
-        if (expectedToken != Volatile.Read(ref _classicTimeoutToken))
-        {
-            return;
-        }
-
-        if (_onDecidedTcs.Task.IsCompleted)
-        {
-            return;
-        }
-
-        _events.Writer.TryWrite(new ConsensusEvent.ClassicTimeout(roundNumber, delay));
-    }
-
-    private void CancelFastTimeout()
-    {
-        CancelTimeout(ref _fastTimeoutTimer, ref _fastTimeoutToken);
-    }
-
-    private void CancelClassicTimeout()
-    {
-        CancelTimeout(ref _classicTimeoutTimer, ref _classicTimeoutToken);
-    }
-
-    private static void CancelTimeout(ref ITimer? timer, ref int token)
-    {
-        Interlocked.Increment(ref token);
-        timer?.Dispose();
-        timer = null;
-    }
-
 
     private void CompleteDecided(ProtocolMetrics protocolMetrics, Stopwatch consensusStopwatch, MembershipProposal decidedValue)
     {
@@ -565,8 +508,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             await task.ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
         }
 
-        CancelFastTimeout();
-        CancelClassicTimeout();
+        _timeout.Dispose();
 
         _onDecidedTcs.TrySetCanceled();
         _disposeCts.Dispose();

@@ -408,12 +408,12 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             }
         }, TestContext.Current.CancellationToken);
 
-        var completed = await Task.WhenAny(coordinator.Decided, Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken));
-        Assert.Same(coordinator.Decided, completed);
+        await WaitUntilAsync(() => coordinator.Decided.IsCompleted, TimeSpan.FromSeconds(2));
+        Assert.True(coordinator.Decided.IsCompleted);
     }
 
     [Fact]
-    public async Task ClassicRound_NackCausesImmediateHigherRoundStart()
+    public async Task ClassicRound_NacksRestartAfterBackoff_WhenQuorumImpossible()
     {
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), 1);
@@ -424,15 +424,18 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
         coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
 
-        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
+        await WaitUntilAsync(
+            () => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage),
+            TimeSpan.FromSeconds(2));
+
         var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
+        Assert.True(phase1aRank.Round >= 2);
 
         while (broadcasted.TryDequeue(out _))
         {
         }
 
-        // Send a NACK for our phase1a rank indicating a promised round 5;
-        // coordinator should immediately start round 6 and broadcast Phase1a.
+        // A single NACK should not restart classic Paxos immediately.
         coordinator.HandleMessages(new RapidClusterRequest
         {
             PaxosNackMessage = new PaxosNackMessage
@@ -444,11 +447,34 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             }
         }, TestContext.Current.CancellationToken);
 
-        await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
-        Assert.Contains(broadcasted, r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage && r.Phase1AMessage.Rank.Round == 6);
+        // No immediate Phase1a for round 6.
+        Assert.DoesNotContain(
+            broadcasted,
+            r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage && r.Phase1AMessage.Rank.Round == 6);
+
+        // Once quorum is impossible (N=3, 2 unique negative voters), a new round is scheduled
+        // and should restart after backoff.
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            PaxosNackMessage = new PaxosNackMessage
+            {
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                ConfigurationId = configId.ToProtobuf(),
+                Received = phase1aRank,
+                Promised = new Rank { Round = 5, NodeIndex = 9 }
+            }
+        }, TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(
+            () => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage),
+            TimeSpan.FromSeconds(5));
+
+        Assert.Contains(
+            broadcasted,
+            r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage && r.Phase1AMessage.Rank.Round == 6);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
+    private async Task WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
     {
         var sw = Stopwatch.StartNew();
         while (!predicate())
@@ -458,7 +484,9 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 throw new TimeoutException("Condition not met in time.");
             }
 
-            await Task.Delay(5);
+            // Drive timers deterministically via FakeTimeProvider.
+            _timeProvider.Advance(TimeSpan.FromMilliseconds(1));
+            await Task.Yield();
         }
     }
 
@@ -476,8 +504,13 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             broadcasted.Enqueue(request);
 
             // Force immediate fallback from fast round without waiting for time.
-            // For N=3, a single delivery failure is enough to make fast Paxos impossible.
-            onDeliveryFailure?.Invoke(Utils.HostFromParts("127.0.0.8", 9000, nodeId: Utils.GetNextNodeId()), rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
+            // Classic rounds also use delivery failure callbacks; only trigger failures for the fast round.
+            if (rank is { Round: 1 })
+            {
+                onDeliveryFailure?.Invoke(
+                    Utils.HostFromParts("127.0.0.8", 9000, nodeId: Utils.GetNextNodeId()),
+                    rank);
+            }
         }
     }
 

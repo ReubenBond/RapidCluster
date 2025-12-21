@@ -204,11 +204,11 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
         finally
         {
-        _timeout.Dispose();
-        _classicRestartTimer.Dispose();
-        _scheduledClassicRound = null;
-
+            _timeout.Dispose();
+            _classicRestartTimer.Dispose();
+            _scheduledClassicRound = null;
         }
+
     }
 
     private void StartFastRound(MembershipProposal proposal, CancellationToken cancellationToken)
@@ -298,14 +298,8 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         if (requestedRound is { } rr)
         {
-            if (_requestedClassicRoundByRound.TryGetValue(round, out var existing))
-            {
-                _requestedClassicRoundByRound[round] = Math.Max(existing, rr);
-            }
-            else
-            {
-                _requestedClassicRoundByRound[round] = rr;
-            }
+            ref var existing = ref CollectionsMarshal.GetValueRefOrAddDefault(_requestedClassicRoundByRound, round, out _);
+            existing = Math.Max(existing, rr);
         }
 
         // A classic round can succeed if we can still collect a majority.
@@ -325,12 +319,12 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         // Avoid tight retry loops (e.g., under isolation) by restarting with backoff.
-        ScheduleClassicRoundRestart(nextRound, cancellationToken);
+        ScheduleClassicRoundRestart(nextRound);
     }
 
     private int? _scheduledClassicRound;
 
-    private void ScheduleClassicRoundRestart(int requestedRound, CancellationToken cancellationToken)
+    private void ScheduleClassicRoundRestart(int requestedRound)
     {
         if (!_isInClassic)
         {
@@ -348,6 +342,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             return;
         }
 
+        var currentRound = _currentClassicRound;
         _scheduledClassicRound = requestedRound;
 
         // Reuse the same backoff function as classic timeouts.
@@ -355,16 +350,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _classicRestartTimer.Schedule(
             _sharedResources.TimeProvider,
             delay,
-            () =>
-            {
-                if (_onDecidedTcs.Task.IsCompleted)
-                {
-                    return;
-                }
-
-                // Use the existing event type so restarts are serialized through the loop.
-                _events.Writer.TryWrite(new ConsensusEvent.ClassicTimeout(_currentClassicRound, delay));
-            });
+            () => _events.Writer.TryWrite(new ConsensusEvent.ClassicTimeout(_currentClassicRound, delay)));
     }
 
     private void HandleEvent(
@@ -376,7 +362,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         switch (@event)
         {
             case ConsensusEvent.Inbound(var request, var requestCancellationToken):
-                HandleInbound(request, consensusStopwatch, ref activeProtocolMetrics, requestCancellationToken);
+                HandleInbound(request, consensusStopwatch, requestCancellationToken);
                 return;
 
             case ConsensusEvent.FastTimeout(var timeout):
@@ -424,7 +410,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private void HandleInbound(
         RapidClusterRequest request,
         Stopwatch consensusStopwatch,
-        ref ProtocolMetrics activeProtocolMetrics,
         CancellationToken cancellationToken)
     {
         _log.HandleMessages(request.ContentCase);
@@ -533,6 +518,8 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private void StartClassicRound(int roundNumber, CancellationToken cancellationToken)
     {
         _timeout.Dispose();
+        _classicRestartTimer.Dispose();
+        _scheduledClassicRound = null;
 
         _isInClassic = true;
 
@@ -871,7 +858,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _timeout.Dispose();
         _classicRestartTimer.Dispose();
- 
+
         _onDecidedTcs.TrySetCanceled();
 
         _disposeCts.Dispose();

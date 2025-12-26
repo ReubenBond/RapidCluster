@@ -237,6 +237,9 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         // Join a new node - should succeed with 3 active nodes
         var newNode = _harness.CreateJoinerNode(nodes[0], nodeId: 4);
 
+        // Drive propagation to the non-suspended nodes.
+        _harness.WaitForConvergence([nodes[0], nodes[1], nodes[2], newNode], expectedSize: 5);
+
         // Remaining active nodes should see the new member
         Assert.Equal(5, nodes[0].MembershipSize);
         Assert.Equal(5, nodes[1].MembershipSize);

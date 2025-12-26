@@ -320,11 +320,16 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         for (var i = 1; i <= 9; i++)
         {
             var joiner = _harness.CreateJoinerNode(seedNode, nodeId: i);
+
+            // Ensure the join view is applied cluster-wide before the next join.
+            // This uses the no-arg overload which computes the expected size from active nodes.
+            _harness.WaitForConvergence();
+
             Assert.True(joiner.IsInitialized);
             Assert.Equal(i + 1, joiner.MembershipSize);
         }
 
-        _harness.WaitForConvergence(expectedSize: 10);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(10, n.MembershipSize));
     }

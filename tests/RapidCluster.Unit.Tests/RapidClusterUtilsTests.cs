@@ -197,17 +197,20 @@ public class RapidClusterUtilsTests
         endpoint.NodeId = 12345L;
         proposal.Members.Add(endpoint);
 
-        var msg = new FastRoundPhase2bMessage
+        var msg = new Phase2bMessage
         {
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
+            Rnd = new Rank { Round = 1, NodeIndex = 0 },
             Proposal = proposal
         };
 
         var request = msg.ToRapidClusterRequest();
 
-        Assert.NotNull(request.FastRoundPhase2BMessage);
-        Assert.Equal(1, request.FastRoundPhase2BMessage.ConfigurationId.Version);
+        Assert.NotNull(request.Phase2BMessage);
+        Assert.Equal(1, request.Phase2BMessage.ConfigurationId.Version);
+        Assert.Equal(1, request.Phase2BMessage.Rnd.Round);
+        Assert.Equal(0, request.Phase2BMessage.Rnd.NodeIndex);
     }
 
     [Fact]

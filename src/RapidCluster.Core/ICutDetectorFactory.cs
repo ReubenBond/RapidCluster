@@ -37,16 +37,20 @@ internal sealed class CutDetectorFactory(
     {
         ArgumentNullException.ThrowIfNull(membershipView);
 
-        var observersPerSubject = membershipView.RingCount;
+        var (observersPerSubject, highWatermark, lowWatermark) = _options.GetEffectiveParameters(membershipView.Size);
 
-        // MultiNodeCutDetector requires ObserversPerSubject >= 3 and ObserversPerSubject > H >= L >= 1
-        // If these constraints cannot be satisfied, use SimpleCutDetector
-        if (observersPerSubject < 3 || observersPerSubject <= _options.HighWatermark)
+        // MultiNodeCutDetector requires K >= 3 and K > H >= L >= 1.
+        // If these constraints cannot be satisfied, use SimpleCutDetector.
+        if (observersPerSubject < RapidClusterProtocolOptions.MinObserversPerSubject ||
+            highWatermark < 1 ||
+            lowWatermark < 1 ||
+            highWatermark >= observersPerSubject ||
+            lowWatermark > highWatermark)
         {
             return new SimpleCutDetector(membershipView, simpleCutDetectorLogger);
         }
 
-        // For larger clusters with valid parameters, use the full multi-node cut detection
-        return new MultiNodeCutDetector(_options.HighWatermark, _options.LowWatermark, membershipView, multiNodeCutDetectorLogger);
+        // For clusters with valid parameters, use the full multi-node cut detection.
+        return new MultiNodeCutDetector(highWatermark, lowWatermark, membershipView, multiNodeCutDetectorLogger);
     }
 }

@@ -1,5 +1,7 @@
+using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.IO.Hashing;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using RapidCluster.Exceptions;
 using RapidCluster.Pb;
@@ -16,7 +18,7 @@ internal sealed class MembershipViewBuilder
 {
     private readonly int _maxRingCount;
     private readonly List<AddressComparator> _addressComparators;
-    private readonly List<SortedSet<MemberInfo>> _rings;
+    private readonly List<List<MemberInfo>> _rings;
     private readonly Dictionary<Endpoint, MemberInfo> _memberInfoByEndpoint = new(EndpointAddressComparer.Instance);
     private long _maxNodeId;
     private bool _isSealed;
@@ -33,7 +35,7 @@ internal sealed class MembershipViewBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
-        _rings = new List<SortedSet<MemberInfo>>(maxRingCount);
+        _rings = new List<List<MemberInfo>>(maxRingCount);
         _addressComparators = new List<AddressComparator>(maxRingCount);
         _maxNodeId = 0;
 
@@ -41,7 +43,7 @@ internal sealed class MembershipViewBuilder
         {
             var comparator = new AddressComparator(i);
             _addressComparators.Add(comparator);
-            _rings.Add(new SortedSet<MemberInfo>(comparator));
+            _rings.Add(new List<MemberInfo>());
         }
     }
 
@@ -68,21 +70,23 @@ internal sealed class MembershipViewBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
-        _rings = new List<SortedSet<MemberInfo>>(_maxRingCount);
+        _rings = new List<List<MemberInfo>>(_maxRingCount);
         _addressComparators = new List<AddressComparator>(_maxRingCount);
         _maxNodeId = view.MaxNodeId;
+
+        foreach (var memberInfo in view.MemberInfos)
+        {
+            _memberInfoByEndpoint[memberInfo.Endpoint] = memberInfo;
+        }
 
         for (var i = 0; i < _maxRingCount; i++)
         {
             var comparator = new AddressComparator(i);
             _addressComparators.Add(comparator);
-            var set = new SortedSet<MemberInfo>(comparator);
-            foreach (var memberInfo in view.MemberInfos)
-            {
-                set.Add(memberInfo);
-                _memberInfoByEndpoint[memberInfo.Endpoint] = memberInfo;
-            }
-            _rings.Add(set);
+
+            var ring = new List<MemberInfo>(view.MemberInfos);
+            ring.Sort(comparator);
+            _rings.Add(ring);
         }
     }
 
@@ -99,23 +103,25 @@ internal sealed class MembershipViewBuilder
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRingCount);
 
         _maxRingCount = maxRingCount;
-        _rings = new List<SortedSet<MemberInfo>>(maxRingCount);
+        _rings = new List<List<MemberInfo>>(maxRingCount);
         _addressComparators = new List<AddressComparator>(maxRingCount);
 
         // Compute maxNodeId from members if not provided
         _maxNodeId = maxNodeId ?? members.Select(m => m.Endpoint.NodeId).DefaultIfEmpty(0).Max();
 
+        foreach (var memberInfo in members)
+        {
+            _memberInfoByEndpoint[memberInfo.Endpoint] = memberInfo;
+        }
+
         for (var i = 0; i < maxRingCount; i++)
         {
             var comparator = new AddressComparator(i);
             _addressComparators.Add(comparator);
-            var set = new SortedSet<MemberInfo>(comparator);
-            foreach (var memberInfo in members)
-            {
-                set.Add(memberInfo);
-                _memberInfoByEndpoint[memberInfo.Endpoint] = memberInfo;
-            }
-            _rings.Add(set);
+
+            var ring = new List<MemberInfo>(members);
+            ring.Sort(comparator);
+            _rings.Add(ring);
         }
     }
 
@@ -228,10 +234,13 @@ internal sealed class MembershipViewBuilder
             throw new NodeAlreadyInRingException(memberInfo.Endpoint);
         }
 
-        for (var k = 0; k < _maxRingCount; k++)
+        for (var ringIndex = 0; ringIndex < _maxRingCount; ringIndex++)
         {
-            _rings[k].Add(memberInfo);
+            var ring = _rings[ringIndex];
+            var comparator = _addressComparators[ringIndex];
+            ring.Insert(FindInsertionPoint(ring, memberInfo, comparator), memberInfo);
         }
+
         _memberInfoByEndpoint[memberInfo.Endpoint] = memberInfo;
 
         // Update max node ID if this node's ID is higher
@@ -284,10 +293,29 @@ internal sealed class MembershipViewBuilder
             throw new NodeNotInRingException(node);
         }
 
-        for (var k = 0; k < _maxRingCount; k++)
+        for (var ringIndex = 0; ringIndex < _maxRingCount; ringIndex++)
         {
-            _rings[k].Remove(memberInfo);
-            _addressComparators[k].RemoveMemberInfo(memberInfo);
+            var ring = _rings[ringIndex];
+            var comparator = _addressComparators[ringIndex];
+
+            var index = ring.BinarySearch(memberInfo, comparator);
+            if (index >= 0)
+            {
+                ring.RemoveAt(index);
+            }
+            else
+            {
+                for (var i = 0; i < ring.Count; i++)
+                {
+                    if (EndpointAddressComparer.Instance.Equals(ring[i].Endpoint, memberInfo.Endpoint))
+                    {
+                        ring.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+
+            comparator.RemoveMemberInfo(memberInfo);
         }
         _memberInfoByEndpoint.Remove(node);
 
@@ -378,15 +406,110 @@ internal sealed class MembershipViewBuilder
         ThrowIfSealed();
         _isSealed = true;
 
-        // Create immutable ring copies
-        var ringCount = ComputeRingCount(_maxRingCount, _memberInfoByEndpoint.Count);
-        var ringsBuilder = ImmutableArray.CreateBuilder<ImmutableArray<MemberInfo>>(ringCount);
-        for (var i = 0; i < ringCount; i++)
+        var desiredRingCount = ComputeRingCount(_maxRingCount, _memberInfoByEndpoint.Count);
+
+        // Build the base order and select offsets for the monitoring rings.
+        // The monitoring relationship is defined by offsets on the base order:
+        // successor_r(baseOrder[i]) = baseOrder[(i + offset_r) mod N]
+        var (rings, offsets) = BuildUniqueMonitoringRings(desiredRingCount);
+        return new MembershipView(rings.Length, configurationId, rings, offsets, _maxNodeId);
+    }
+
+    /// <summary>
+    /// Builds K rings where each node has K unique successors (subjects) and K unique predecessors (observers).
+    /// 
+    /// Algorithm: Deterministic k-ring monitoring graph with offset-based construction
+    /// 1. Create a single base permutation O of all nodes by sorting on xxhash scores.
+    /// 2. Select K distinct offsets d_0, d_1, ..., d_{K-1} from {1, 2, ..., N-1}.
+    ///    - Prioritize offsets that are coprime to N (gives single-cycle rings with better expansion).
+    ///    - Use xxhash ranking to deterministically select among candidates.
+    /// 3. For each ring r with offset d_r:
+    ///    - successor_r(O[i]) = O[(i + d_r) mod N]
+    ///    - predecessor_r(O[i]) = O[(i - d_r + N) mod N]
+    /// 
+    /// This guarantees:
+    /// - Each node has exactly K unique successors (monitors K unique nodes)
+    /// - Each node has exactly K unique predecessors (is monitored by K unique nodes)
+    /// - The construction is deterministic (same on all nodes)
+    /// - No algorithmic deadlock (pure computation)
+    /// </summary>
+    private (ImmutableArray<ImmutableArray<MemberInfo>> rings, ImmutableArray<int> offsets) BuildUniqueMonitoringRings(int ringCount)
+    {
+        var n = _memberInfoByEndpoint.Count;
+
+        // Build base order O by sorting on xxhash scores (using ring 0's comparator)
+        var baseOrder = new List<MemberInfo>(_rings[0]);
+        baseOrder.Sort(_addressComparators[0]);
+        var baseOrderArray = ImmutableArray.Create(baseOrder.ToArray());
+
+        if (n <= 1 || ringCount <= 1)
         {
-            ringsBuilder.Add([.. _rings[i]]);
+            // Single ring with offset 1
+            return ([baseOrderArray], [1]);
         }
 
-        return new MembershipView(ringCount, configurationId, ringsBuilder.MoveToImmutable(), _maxNodeId);
+        // Select K distinct offsets, prioritizing coprimes for better expansion
+        var offsets = SelectOffsets(n, ringCount);
+
+        // We store the base order K times (all rings reference the same base order).
+        // The actual successor relationship is computed at query time using offsets.
+        var resultRings = ImmutableArray.CreateBuilder<ImmutableArray<MemberInfo>>(ringCount);
+        for (var r = 0; r < ringCount; r++)
+        {
+            resultRings.Add(baseOrderArray);
+        }
+
+        return (resultRings.MoveToImmutable(), ImmutableArray.Create(offsets));
+    }
+
+    /// <summary>
+    /// Selects K distinct offsets from {1, 2, ..., N-1}, prioritizing coprimes to N.
+    /// Uses xxhash ranking to deterministically break ties.
+    /// </summary>
+    private static int[] SelectOffsets(int n, int k)
+    {
+        // Build candidate offsets 1..N-1
+        var candidates = new List<(int offset, bool isCoprime, ulong rank)>(n - 1);
+
+        for (var d = 1; d < n; d++)
+        {
+            var isCoprime = Gcd(d, n) == 1;
+            // Use xxhash to rank offsets deterministically
+            Span<byte> rankInput = stackalloc byte[8];
+            BinaryPrimitives.WriteInt32LittleEndian(rankInput, d);
+            BinaryPrimitives.WriteInt32LittleEndian(rankInput[4..], n);
+            var rank = XxHash64.HashToUInt64(rankInput);
+            candidates.Add((d, isCoprime, rank));
+        }
+
+        // Sort: coprimes first, then by xxhash rank
+        candidates.Sort((a, b) =>
+        {
+            // Coprimes come first (false < true in bool comparison, so negate)
+            var coprimeCompare = b.isCoprime.CompareTo(a.isCoprime);
+            if (coprimeCompare != 0) return coprimeCompare;
+            return a.rank.CompareTo(b.rank);
+        });
+
+        // Take first K offsets
+        var result = new int[k];
+        for (var i = 0; i < k; i++)
+        {
+            result[i] = candidates[i].offset;
+        }
+
+        return result;
+    }
+
+    private static int Gcd(int a, int b)
+    {
+        while (b != 0)
+        {
+            var t = b;
+            b = a % b;
+            a = t;
+        }
+        return a;
     }
 
     /// <summary>
@@ -407,9 +530,62 @@ internal sealed class MembershipViewBuilder
     /// </summary>
     internal static long ComputeEndpointHash(int seed, Endpoint endpoint)
     {
-        var hostnameHash = (long)XxHash64.HashToUInt64(endpoint.Hostname.Span, seed);
-        var portHash = (long)XxHash64.HashToUInt64(BitConverter.GetBytes(endpoint.Port), seed);
-        return hostnameHash * 31 + portHash;
+        // Use a combined input and a mixed per-ring seed to generate independent permutations.
+        // This is particularly important for simulation-style addresses with identical hostnames
+        // and sequential ports.
+        var ringSeed = MixRingSeed(seed);
+
+        Span<byte> portBytes = stackalloc byte[sizeof(int)];
+        BinaryPrimitives.WriteInt32LittleEndian(portBytes, endpoint.Port);
+
+        Span<byte> input = stackalloc byte[endpoint.Hostname.Length + portBytes.Length];
+        endpoint.Hostname.Span.CopyTo(input);
+        portBytes.CopyTo(input[endpoint.Hostname.Length..]);
+
+        var hash = XxHash64.HashToUInt64(input, ringSeed);
+
+        // Further mix the ring seed into the final 64-bit value. This prevents different ring seeds
+        // from producing orderings that are identical up to a cyclic rotation.
+        var mixed = hash ^ BitOperations.RotateLeft((ulong)(uint)ringSeed, 17);
+        mixed *= 0x9E3779B97F4A7C15UL;
+
+        return (long)mixed;
+    }
+
+    private static int MixRingSeed(int ringIndex)
+    {
+        // Basic seed mixing to avoid consecutive integers producing correlated results.
+        // We keep this deterministic and stable across versions/platforms.
+        unchecked
+        {
+            var x = (uint)ringIndex;
+            x ^= x >> 16;
+            x *= 0x7FEB352Du;
+            x ^= x >> 15;
+            x *= 0x846CA68Bu;
+            x ^= x >> 16;
+            return (int)x;
+        }
+    }
+
+    private static int FindInsertionPoint(List<MemberInfo> ring, MemberInfo memberInfo, IComparer<MemberInfo> comparator)
+    {
+        var left = 0;
+        var right = ring.Count;
+        while (left < right)
+        {
+            var mid = (left + right) / 2;
+            if (comparator.Compare(ring[mid], memberInfo) < 0)
+            {
+                left = mid + 1;
+            }
+            else
+            {
+                right = mid;
+            }
+        }
+
+        return left;
     }
 
     private void ThrowIfSealed()
@@ -436,7 +612,15 @@ internal sealed class MembershipViewBuilder
 
             var hash1 = GetCachedHash(x.Endpoint);
             var hash2 = GetCachedHash(y.Endpoint);
-            return hash1.CompareTo(hash2);
+            var hashCompare = hash1.CompareTo(hash2);
+            if (hashCompare != 0)
+            {
+                return hashCompare;
+            }
+
+            // Ensure a total ordering for SortedSet.
+            // If two endpoints collide on a ring's hash, fall back to a deterministic compare.
+            return EndpointAddressComparer.Instance.Compare(x.Endpoint, y.Endpoint);
         }
 
         public void RemoveMemberInfo(MemberInfo memberInfo) => _hashCache.Remove(memberInfo.Endpoint, out _);

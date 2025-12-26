@@ -19,10 +19,19 @@ internal sealed class InMemoryMessagingClient(
     Endpoint localEndpoint,
     RapidClusterProtocolOptions options) : IMessagingClient
 {
-    private readonly TimeSpan _messageTimeout = options.GrpcTimeout;
+    private readonly RapidClusterProtocolOptions _options = options;
     private readonly InMemoryMessagingClientLogger _log = new(harness.LoggerFactory.CreateLogger<InMemoryMessagingClient>());
     private readonly CancellationTokenSource _disposeCts = new();
     private bool _disposed;
+
+    private TimeSpan GetTimeout(RapidClusterRequest request) => request.ContentCase switch
+    {
+        RapidClusterRequest.ContentOneofCase.ProbeMessage => _options.GrpcProbeTimeout,
+        RapidClusterRequest.ContentOneofCase.PreJoinMessage => _options.GrpcJoinTimeout,
+        RapidClusterRequest.ContentOneofCase.JoinMessage => _options.GrpcJoinTimeout,
+        RapidClusterRequest.ContentOneofCase.LeaveMessage => _options.LeaveMessageTimeout,
+        _ => _options.GrpcTimeout
+    };
 
     public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
@@ -60,13 +69,17 @@ internal sealed class InMemoryMessagingClient(
         var network = harness.Network;
         var networkStatus = network.CheckDelivery(localAddr, remoteAddr);
         var delay = network.GetMessageDelay();
+        var messageTimeout = GetTimeout(request);
         if (networkStatus is DeliveryStatus.Dropped)
         {
-            await Task.Delay(_messageTimeout, sourceContext.TimeProvider, sourceCts.Token).ConfigureAwait(true);
+            await Task.Delay(messageTimeout, sourceContext.TimeProvider, sourceCts.Token).ConfigureAwait(true);
             throw new SimulatedNetworkException($"Message from {localAddr} to {remoteAddr} was dropped by the network.");
         }
         else if (networkStatus is DeliveryStatus.Partitioned)
         {
+            // In real networking, a partition behaves like a timeout, not an immediate failure.
+            // Delaying here prevents tight retry loops from starving simulated time advancement.
+            await Task.Delay(messageTimeout, sourceContext.TimeProvider, sourceCts.Token).ConfigureAwait(true);
             throw new SimulatedNetworkException($"Message from {localAddr} to {remoteAddr} could not be delivered due to network partition.");
         }
 
@@ -82,7 +95,7 @@ internal sealed class InMemoryMessagingClient(
         // Ignore the task in case the source is terminated before it resolves.
         deliveryTask.Ignore();
 
-        var result = await deliveryTask.WaitAsync(_messageTimeout, sourceContext.TimeProvider, sourceCts.Token).ConfigureAwait(true);
+        var result = await deliveryTask.WaitAsync(messageTimeout, sourceContext.TimeProvider, sourceCts.Token).ConfigureAwait(true);
         return result;
 
         async Task<RapidClusterResponse> DeliverMessageAsync()

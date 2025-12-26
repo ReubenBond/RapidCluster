@@ -63,7 +63,8 @@ internal sealed class PaxosAcceptor
         }
 
         // The first round in the consensus instance is always the fast round.
-        var fastRoundRank = new Rank { Round = 1, NodeIndex = 1 };
+        // Use NodeIndex=0 as a reserved fast-round proposer id.
+        var fastRoundRank = new Rank { Round = 1, NodeIndex = 0 };
         _promisedRank = fastRoundRank;
         _acceptedRank = fastRoundRank;
         _acceptedValue = proposal;
@@ -78,49 +79,51 @@ internal sealed class PaxosAcceptor
     /// </summary>
     public void HandlePhase1aMessage(Phase1aMessage phase1aMessage, CancellationToken cancellationToken = default)
     {
+        var phase1b = HandlePhase1aMessageLocal(phase1aMessage);
+        if (phase1b == null)
+        {
+            return;
+        }
+
+        _client.SendOneWayMessage(phase1aMessage.Sender, phase1b.ToRapidClusterRequest(), cancellationToken);
+    }
+
+    public Phase1bMessage? HandlePhase1aMessageLocal(Phase1aMessage phase1aMessage)
+    {
         var messageConfigId = phase1aMessage.ConfigurationId.ToConfigurationId();
         _log.HandlePhase1aReceived(phase1aMessage.Sender, phase1aMessage.Rank, messageConfigId);
 
         if (messageConfigId != _configurationId)
         {
             _log.Phase1aConfigMismatch(_configurationId, messageConfigId);
-            return;
+            return null;
         }
 
         // Phase1a: promise if request rank is higher than any previous promise.
         if (phase1aMessage.Rank.CompareTo(_promisedRank) > 0)
         {
             _promisedRank = phase1aMessage.Rank;
-
-            var phase1b = new Phase1bMessage
-            {
-                ConfigurationId = _configurationId.ToProtobuf(),
-                Sender = _myAddr,
-                Rnd = _promisedRank,
-                Vrnd = _acceptedRank,
-                Proposal = _acceptedValue
-            };
-
-            _log.SendingPhase1b(phase1aMessage.Sender, _promisedRank, _acceptedRank, _acceptedValue);
-            _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.Phase1b);
-
-            var request = phase1b.ToRapidClusterRequest();
-            _client.SendOneWayMessage(phase1aMessage.Sender, request, cancellationToken);
         }
         else
         {
             _log.Phase1aRankTooLow(phase1aMessage.Rank, _promisedRank);
-
-            var nack = new PaxosNackMessage
-            {
-                Sender = _myAddr,
-                ConfigurationId = _configurationId.ToProtobuf(),
-                Received = phase1aMessage.Rank,
-                Promised = _promisedRank
-            };
-
-            _client.SendOneWayMessage(phase1aMessage.Sender, nack.ToRapidClusterRequest(), cancellationToken);
         }
+
+        // Always reply with our current promise/accepted state so the proposer
+        // can observe the highest promised rank and advance rounds.
+        var phase1b = new Phase1bMessage
+        {
+            ConfigurationId = _configurationId.ToProtobuf(),
+            Sender = _myAddr,
+            Rnd = _promisedRank,
+            Vrnd = _acceptedRank,
+            Proposal = _acceptedValue
+        };
+
+        _log.SendingPhase1b(phase1aMessage.Sender, _promisedRank, _acceptedRank, _acceptedValue);
+        _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.Phase1b);
+
+        return phase1b;
     }
 
     /// <summary>
@@ -128,49 +131,81 @@ internal sealed class PaxosAcceptor
     /// </summary>
     public void HandlePhase2aMessage(Phase2aMessage phase2aMessage, CancellationToken cancellationToken = default)
     {
+        var phase2b = HandlePhase2aMessageLocal(phase2aMessage);
+        if (phase2b == null)
+        {
+            return;
+        }
+
+        if (phase2b.Proposal == null)
+        {
+            _client.SendOneWayMessage(phase2aMessage.Sender, phase2b.ToRapidClusterRequest(), cancellationToken);
+            return;
+        }
+
+        _broadcaster.Broadcast(phase2b.ToRapidClusterRequest(), cancellationToken);
+    }
+
+    public Phase2bMessage? HandlePhase2aMessageLocal(Phase2aMessage phase2aMessage)
+    {
         var messageConfigId = phase2aMessage.ConfigurationId.ToConfigurationId();
         _log.HandlePhase2aReceived(phase2aMessage.Sender, phase2aMessage.Rnd, phase2aMessage.Proposal, messageConfigId);
 
         if (messageConfigId != _configurationId)
         {
             _log.Phase2aConfigMismatch(_configurationId, messageConfigId);
-            return;
+            return null;
         }
 
-        // Phase2a: accept if request rank is >= promise and we haven't already accepted in this rank.
-        if (phase2aMessage.Rnd.CompareTo(_promisedRank) >= 0 && !_acceptedRank.Equals(phase2aMessage.Rnd))
+        // Phase2a: accept if request rank is >= promise.
+        // Accepting is idempotent: re-sending Phase2a for the same rank should result in another Phase2b vote,
+        // not a NACK.
+        if (phase2aMessage.Rnd.CompareTo(_promisedRank) < 0)
         {
-            _promisedRank = phase2aMessage.Rnd;
-            _acceptedRank = phase2aMessage.Rnd;
-            _acceptedValue = phase2aMessage.Proposal;
+            _log.Phase2aRankTooLow(phase2aMessage.Rnd, _promisedRank);
 
-            var phase2b = new Phase2bMessage
+            // Reply with a Phase2b carrying our promised rank to signal a NACK.
+            // Do not include a proposal: this response is not an accepted vote.
+            var nack = new Phase2bMessage
             {
                 ConfigurationId = _configurationId.ToProtobuf(),
                 Sender = _myAddr,
                 Rnd = _promisedRank,
-                Proposal = _acceptedValue
+                Proposal = null
             };
 
-            _log.SendingPhase2b(phase2aMessage.Sender, _promisedRank, _acceptedValue);
+            _log.SendingPhase2b(phase2aMessage.Sender, _promisedRank, vval: null);
             _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.Phase2b);
 
-            var request = phase2b.ToRapidClusterRequest();
-            _broadcaster.Broadcast(request, cancellationToken);
+            return nack;
         }
-        else
+
+        if (phase2aMessage.Rnd.CompareTo(_promisedRank) > 0)
         {
-            _log.Phase2aRankTooLow(phase2aMessage.Rnd, _promisedRank);
-
-            var nack = new PaxosNackMessage
-            {
-                Sender = _myAddr,
-                ConfigurationId = _configurationId.ToProtobuf(),
-                Received = phase2aMessage.Rnd,
-                Promised = _promisedRank
-            };
-
-            _client.SendOneWayMessage(phase2aMessage.Sender, nack.ToRapidClusterRequest(), cancellationToken);
+            _promisedRank = phase2aMessage.Rnd;
         }
+
+        if (!_acceptedRank.Equals(phase2aMessage.Rnd))
+        {
+            _acceptedRank = phase2aMessage.Rnd;
+            _acceptedValue = phase2aMessage.Proposal;
+        }
+        else if (_acceptedValue == null && phase2aMessage.Proposal != null)
+        {
+            _acceptedValue = phase2aMessage.Proposal;
+        }
+
+        var phase2b = new Phase2bMessage
+        {
+            ConfigurationId = _configurationId.ToProtobuf(),
+            Sender = _myAddr,
+            Rnd = _acceptedRank,
+            Proposal = _acceptedValue
+        };
+
+        _log.SendingPhase2b(phase2aMessage.Sender, _acceptedRank, _acceptedValue);
+        _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.Phase2b);
+
+        return phase2b;
     }
 }

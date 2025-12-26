@@ -25,8 +25,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private readonly PaxosLogger _paxosLog;
 
     private readonly RapidClusterMetrics _metrics;
-    private readonly ProtocolMetrics _fastMetrics;
-    private readonly ProtocolMetrics _classicMetrics;
+    private readonly ProtocolMetrics _metricsScope;
     private readonly double _jitterRate;
 
     private readonly Endpoint _myAddr;
@@ -55,24 +54,24 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         AllowSynchronousContinuations = true
     });
 
-    private readonly OneShotTimer _timeout = new();
+    private readonly OneShotTimer _timer = new();
     private readonly OneShotTimer _classicRestartTimer = new();
 
-    // --- Fast round state (merged from FastPaxosProposer) ---
-    private readonly Dictionary<MembershipProposal, int> _fastVotesPerProposal = new(MembershipProposalComparer.Instance);
-    private readonly HashSet<Endpoint> _fastVotesReceived = new(EndpointAddressComparer.Instance);
-    private int _fastDeliveryFailureCount;
-    private int _fastDeliveryFailureSignaled;
-    private bool _isInClassic;
+    private Rank _currentRank = new() { Round = 1, NodeIndex = 0 };
+    private int _highestRoundSeen;
 
-    // --- Classic proposer state (merged from PaxosProposer) ---
-    private readonly List<Phase1bMessage> _phase1bMessages = [];
-    private Rank _currentClassicRank = new();
+    private int? _scheduledClassicRoundStart;
+    private TimeSpan? _scheduledClassicRoundDelay;
+
+    private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
+    private readonly HashSet<Endpoint> _votesReceived = new(EndpointAddressComparer.Instance);
+    private readonly HashSet<Endpoint> _deliveryFailureEndpoints = new(EndpointAddressComparer.Instance);
+    private int _fallbackSignaled;
+
+    private readonly List<Phase1bMessage> _phase1bResponses = [];
     private MembershipProposal? _candidateValue;
-    private int _currentClassicRound;
 
-    private readonly Dictionary<int, HashSet<Endpoint>> _classicNegativeVotersByRound = [];
-    private readonly Dictionary<int, int> _requestedClassicRoundByRound = [];
+    private readonly HashSet<Endpoint> _negativeVoters = new(EndpointAddressComparer.Instance);
 
     public Task<MembershipProposal> Decided => _onDecidedTcs.Task;
 
@@ -87,9 +86,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private abstract record ConsensusEvent
     {
         public sealed record Inbound(RapidClusterRequest Request, CancellationToken CancellationToken) : ConsensusEvent;
-        public sealed record FastTimeout(TimeSpan Timeout) : ConsensusEvent;
+        public sealed record Timeout(int Round, TimeSpan Delay) : ConsensusEvent;
+        public sealed record ClassicRestart(int ExpectedRound, TimeSpan Delay) : ConsensusEvent;
         public sealed record DeliveryFailure(Endpoint FailedEndpoint, Rank Rank) : ConsensusEvent;
-        public sealed record ClassicTimeout(int Round, TimeSpan Delay) : ConsensusEvent;
     }
 
     public ConsensusCoordinator(
@@ -112,8 +111,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _options = options.Value;
         _sharedResources = sharedResources;
         _metrics = metrics;
-        _fastMetrics = new ProtocolMetrics(MetricNames.Protocols.FastPaxos);
-        _classicMetrics = new ProtocolMetrics(MetricNames.Protocols.ClassicPaxos);
+        _metricsScope = new ProtocolMetrics(MetricNames.Protocols.Consensus);
 
         _log = new ConsensusCoordinatorLogger(logger);
         _fastLog = new FastPaxosLogger(logger);
@@ -151,18 +149,26 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private async Task RunConsensusLoopAsync(MembershipProposal proposal, CancellationToken cancellationToken)
     {
         var consensusStopwatch = Stopwatch.StartNew();
-        var activeProtocolMetrics = _fastMetrics;
 
         try
         {
-            _log.StartingFastRound();
-            _fastMetrics.RecordProposal(_metrics);
-            _fastMetrics.RecordRoundStarted(_metrics);
+            _currentRank = new Rank { Round = 1, NodeIndex = 0 };
+            _highestRoundSeen = 1;
+            _fallbackSignaled = 0;
+            _deliveryFailureEndpoints.Clear();
+            _votesPerProposal.Clear();
+            _votesReceived.Clear();
+            _scheduledClassicRoundStart = null;
+            _scheduledClassicRoundDelay = null;
 
-            var fastRoundTimeout = GetRandomDelay();
-            _timeout.Schedule(
+            _log.StartingFastRound();
+            _metricsScope.RecordProposal(_metrics);
+            _metricsScope.RecordRoundStarted(_metrics);
+
+            var timeout = GetRandomDelay();
+            _timer.Schedule(
                 _sharedResources.TimeProvider,
-                fastRoundTimeout,
+                timeout,
                 () =>
                 {
                     if (_onDecidedTcs.Task.IsCompleted)
@@ -170,7 +176,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                         return;
                     }
 
-                    _events.Writer.TryWrite(new ConsensusEvent.FastTimeout(fastRoundTimeout));
+                    _events.Writer.TryWrite(new ConsensusEvent.Timeout(1, timeout));
                 });
 
             StartFastRound(proposal, cancellationToken);
@@ -179,7 +185,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             {
                 while (_events.Reader.TryRead(out var @event))
                 {
-                    HandleEvent(@event, consensusStopwatch, ref activeProtocolMetrics, cancellationToken);
+                    HandleEvent(@event, consensusStopwatch, cancellationToken);
 
                     if (_onDecidedTcs.Task.IsCompleted)
                     {
@@ -196,7 +202,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         catch (OperationCanceledException)
         {
             CompleteCancelled(
-                activeProtocolMetrics,
+                _metricsScope,
                 consensusStopwatch,
                 recordRoundCompleted: false,
                 recordLatency: true,
@@ -204,11 +210,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
         finally
         {
-            _timeout.Dispose();
+            _timer.Dispose();
             _classicRestartTimer.Dispose();
-            _scheduledClassicRound = null;
         }
-
     }
 
     private void StartFastRound(MembershipProposal proposal, CancellationToken cancellationToken)
@@ -216,196 +220,210 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _fastLog.Propose(proposal);
         _metrics.RecordConsensusVoteSent(MetricNames.VoteTypes.FastVote);
 
-        var consensusMessage = new FastRoundPhase2bMessage
+        var consensusMessage = new Phase2bMessage
         {
             ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
-            Proposal = proposal
+            Proposal = proposal,
+            Rnd = _currentRank
         };
 
         var proposalMessage = consensusMessage.ToRapidClusterRequest();
 
-        var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
-        var fastPaxosThreshold = _membershipSize - f;
+        _broadcaster.Broadcast(
+            proposalMessage,
+            _currentRank,
+            (failedEndpoint, rank) => _events.Writer.TryWrite(new ConsensusEvent.DeliveryFailure(failedEndpoint, rank)),
+            cancellationToken);
 
-        var fastRoundRank = new Rank { Round = 1, NodeIndex = 1 };
-
-        _broadcaster.Broadcast(proposalMessage, fastRoundRank, (failedEndpoint, rank) =>
-        {
-            _ = failedEndpoint;
-            var newFailureCount = Interlocked.Increment(ref _fastDeliveryFailureCount);
-            var maxPossibleVotes = _membershipSize - newFailureCount;
-
-            if (maxPossibleVotes >= fastPaxosThreshold)
-            {
-                return;
-            }
-
-            if (Interlocked.Exchange(ref _fastDeliveryFailureSignaled, 1) != 0)
-            {
-                return;
-            }
-
-            _fastLog.EarlyFallbackNeeded(newFailureCount, f, fastPaxosThreshold);
-            _events.Writer.TryWrite(new ConsensusEvent.DeliveryFailure(failedEndpoint, rank));
-        }, cancellationToken);
+        // Ensure we process our own vote immediately, even if the broadcaster
+        // does not loop back to the local node.
+        _events.Writer.TryWrite(new ConsensusEvent.Inbound(proposalMessage, cancellationToken));
     }
 
     private void HandleDeliveryFailure(
         Endpoint failedEndpoint,
         Rank failedRank,
-        ref ProtocolMetrics activeProtocolMetrics,
         CancellationToken cancellationToken)
     {
         if (failedRank.Round == 1)
         {
-            if (_isInClassic)
+            if (_currentRank.Round != 1)
+            {
+                return;
+            }
+
+            if (!UpdateFastRoundOutcome(deliveryFailure: true, failedEndpoint: failedEndpoint))
             {
                 return;
             }
 
             _ = failedEndpoint;
             _log.FastRoundFailedEarly();
-            _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
+            _metricsScope.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
             _metrics.RecordConsensusConflict();
 
-            StartClassicRound(roundNumber: 2, cancellationToken);
-            activeProtocolMetrics = _classicMetrics;
+            StartClassicRound(cancellationToken);
             return;
         }
 
-        if (!_isInClassic || failedRank.Round != _currentClassicRank.Round)
+
+        if (_currentRank.Round < 2 || failedRank.Round != _currentRank.Round)
         {
             return;
         }
 
-        RegisterClassicNegativeVote(failedEndpoint, requestedRound: null, cancellationToken);
+        RegisterClassicNegativeVote(
+            failedEndpoint,
+            nackRound: failedRank.Round,
+            highestRoundSeen: null,
+            cancellationToken);
     }
 
-    private void RegisterClassicNegativeVote(Endpoint endpoint, int? requestedRound, CancellationToken cancellationToken)
+    private void RegisterClassicNegativeVote(
+        Endpoint endpoint,
+        int nackRound,
+        int? highestRoundSeen,
+        CancellationToken cancellationToken)
     {
-        var round = _currentClassicRank.Round;
-        if (!_classicNegativeVotersByRound.TryGetValue(round, out var set))
-        {
-            _classicNegativeVotersByRound[round] = set = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
-        }
-
-        var added = set.Add(endpoint);
-        if (!added && requestedRound is null)
+        if (nackRound != _currentRank.Round)
         {
             return;
         }
 
-        if (requestedRound is { } rr)
+        if (highestRoundSeen is { } roundSeen && roundSeen > _highestRoundSeen)
         {
-            ref var existing = ref CollectionsMarshal.GetValueRefOrAddDefault(_requestedClassicRoundByRound, round, out _);
-            existing = Math.Max(existing, rr);
+            _highestRoundSeen = roundSeen;
         }
 
-        // A classic round can succeed if we can still collect a majority.
-        // With n members, we need majorityThreshold votes. If we have k unique negative voters
-        // (nacks + delivery failures), the max possible positive votes is n - k.
+        _negativeVoters.Add(endpoint);
+
         var majorityThreshold = _membershipSize / 2 + 1;
-        var maxPossiblePositiveVotes = _membershipSize - set.Count;
+        var maxPossiblePositiveVotes = _membershipSize - _negativeVoters.Count;
         if (maxPossiblePositiveVotes >= majorityThreshold)
         {
             return;
         }
 
-        var nextRound = round + 1;
-        if (_requestedClassicRoundByRound.TryGetValue(round, out var maxRequested))
-        {
-            nextRound = Math.Max(nextRound, maxRequested);
-        }
-
-        // Avoid tight retry loops (e.g., under isolation) by restarting with backoff.
-        ScheduleClassicRoundRestart(nextRound);
+        ScheduleClassicRoundRestart(cancellationToken);
     }
 
-    private int? _scheduledClassicRound;
-
-    private void ScheduleClassicRoundRestart(int requestedRound)
+    private void ScheduleClassicRoundRestart(CancellationToken cancellationToken)
     {
-        if (!_isInClassic)
+        if (_currentRank.Round < 2 && _currentRank.Round != 1)
         {
+            throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
+        }
+
+        var nextRound = GetNextClassicRoundNumber();
+        var delay = _scheduledClassicRoundDelay ?? GetRetryDelay(nextRound);
+
+        if (_scheduledClassicRoundStart is { } scheduledRound)
+        {
+            if (scheduledRound >= nextRound)
+            {
+                return;
+            }
+
+            // A later round was requested; keep the earlier timer so we don't starve progress,
+            // but bump the target round.
+            _scheduledClassicRoundStart = nextRound;
+            _scheduledClassicRoundDelay = delay;
             return;
         }
 
-        if (requestedRound <= _currentClassicRound)
-        {
-            return;
-        }
+        _scheduledClassicRoundStart = nextRound;
+        _scheduledClassicRoundDelay = delay;
 
-        var scheduled = _scheduledClassicRound;
-        if (scheduled is { } existing && existing >= requestedRound)
-        {
-            return;
-        }
-
-        var currentRound = _currentClassicRound;
-        _scheduledClassicRound = requestedRound;
-
-        // Reuse the same backoff function as classic timeouts.
-        var delay = GetRetryDelay(requestedRound);
+        var expectedRound = _currentRank.Round;
         _classicRestartTimer.Schedule(
             _sharedResources.TimeProvider,
             delay,
-            () => _events.Writer.TryWrite(new ConsensusEvent.ClassicTimeout(_currentClassicRound, delay)));
+            () => _events.Writer.TryWrite(new ConsensusEvent.ClassicRestart(expectedRound, delay)));
+
+        int GetNextClassicRoundNumber()
+        {
+            if (_currentRank.Round == 1)
+            {
+                return 2;
+            }
+
+            _highestRoundSeen = Math.Max(_highestRoundSeen, _currentRank.Round);
+            return _highestRoundSeen + 1;
+        }
     }
 
     private void HandleEvent(
         ConsensusEvent @event,
         Stopwatch consensusStopwatch,
-        ref ProtocolMetrics activeProtocolMetrics,
         CancellationToken cancellationToken)
     {
         switch (@event)
         {
-            case ConsensusEvent.Inbound(var request, var requestCancellationToken):
-                HandleInbound(request, consensusStopwatch, requestCancellationToken);
+            case ConsensusEvent.Inbound(var request, _):
+                HandleInbound(request, consensusStopwatch, cancellationToken);
                 return;
 
-            case ConsensusEvent.FastTimeout(var timeout):
-                if (_isInClassic)
+            case ConsensusEvent.Timeout(var timedOutRound, var delay):
+                if (timedOutRound != _currentRank.Round)
                 {
                     return;
                 }
 
-                _log.FastRoundTimeout(_configurationId, timeout);
-                _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
-                _metrics.RecordConsensusConflict();
+                if (_currentRank.Round == 1)
+                {
+                    _log.FastRoundTimeout(_configurationId, delay);
+                    _metricsScope.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
+                    _metrics.RecordConsensusConflict();
+                    StartClassicRound(cancellationToken);
+                    return;
+                }
 
-                StartClassicRound(roundNumber: 2, cancellationToken);
-                activeProtocolMetrics = _classicMetrics;
-                return;
+                if (_currentRank.Round >= 2)
+                {
+                    _log.ClassicRoundTimeout(timedOutRound, delay);
+                    _metricsScope.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
+                    ScheduleClassicRoundRestart(cancellationToken);
+                    return;
+                }
+
+                throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
+
+            case ConsensusEvent.ClassicRestart(var expectedRound, _):
+                if (_currentRank.Round != expectedRound)
+                {
+                    return;
+                }
+
+                if (_currentRank.Round == 1)
+                {
+                    // We allow direct transition into round 2 when fast round has already been abandoned.
+                    StartClassicRound(cancellationToken);
+                    return;
+                }
+
+                if (_scheduledClassicRoundStart is not { } scheduledRound)
+                {
+                    return;
+                }
+
+                if (_currentRank.Round >= 2)
+                {
+                    StartClassicRound(scheduledRound, cancellationToken);
+                    return;
+                }
+
+                throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
 
             case ConsensusEvent.DeliveryFailure(var failedEndpoint, var failedRank):
-                HandleDeliveryFailure(failedEndpoint, failedRank, ref activeProtocolMetrics, cancellationToken);
-                return;
-
-            case ConsensusEvent.ClassicTimeout(var timedOutRound, var delay):
-                if (!_isInClassic || timedOutRound != _currentClassicRound)
-                {
-                    return;
-                }
-
-                _log.ClassicRoundTimeout(timedOutRound, delay);
-                _classicMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
-
-                var nextRound = timedOutRound + 1;
-                if (_scheduledClassicRound is { } scheduled)
-                {
-                    nextRound = Math.Max(nextRound, scheduled);
-                }
-
-                _scheduledClassicRound = null;
-                StartClassicRound(nextRound, cancellationToken);
+                HandleDeliveryFailure(failedEndpoint, failedRank, cancellationToken);
                 return;
 
             default:
                 throw new UnreachableException($"Unexpected event type: {@event.GetType().Name}");
         }
     }
+
 
     private void HandleInbound(
         RapidClusterRequest request,
@@ -416,8 +434,8 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         switch (request.ContentCase)
         {
-            case RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage:
-                HandleFastRoundPhase2b(request.FastRoundPhase2BMessage, consensusStopwatch, cancellationToken);
+            case RapidClusterRequest.ContentOneofCase.Phase2BMessage:
+                HandlePhase2bMessage(request.Phase2BMessage, consensusStopwatch, cancellationToken);
                 return;
 
             case RapidClusterRequest.ContentOneofCase.Phase1AMessage:
@@ -432,114 +450,138 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                 _paxosAcceptor.HandlePhase2aMessage(request.Phase2AMessage, cancellationToken);
                 return;
 
-            case RapidClusterRequest.ContentOneofCase.Phase2BMessage:
-                _paxosLearner.HandlePhase2bMessage(request.Phase2BMessage);
-                return;
-
-            case RapidClusterRequest.ContentOneofCase.PaxosNackMessage:
-                if (!_isInClassic)
-                {
-                    return;
-                }
-
-                var requestedRound = HandlePaxosNackMessage(request.PaxosNackMessage);
-                if (requestedRound is { } nackRound)
-                {
-                    RegisterClassicNegativeVote(request.PaxosNackMessage.Sender, nackRound, cancellationToken);
-                }
-
-                return;
-
             default:
                 throw new ArgumentException($"Unexpected message case: {request.ContentCase}");
         }
     }
 
-    private void HandleFastRoundPhase2b(FastRoundPhase2bMessage proposalMessage, Stopwatch consensusStopwatch, CancellationToken cancellationToken)
+    private bool UpdateFastRoundOutcome(bool deliveryFailure, Endpoint? failedEndpoint)
     {
-        if (_isInClassic)
-        {
-            return;
-        }
-
-        var messageConfigId = proposalMessage.ConfigurationId.ToConfigurationId();
-        _fastLog.HandleFastRoundProposalReceived(proposalMessage.Sender, proposalMessage.Proposal, messageConfigId);
-
-        if (messageConfigId != _configurationId)
-        {
-            _fastLog.ConfigurationMismatch(_configurationId, messageConfigId);
-            return;
-        }
-
-        if (!_fastVotesReceived.Add(proposalMessage.Sender))
-        {
-            _fastLog.DuplicateFastRoundVote(proposalMessage.Sender);
-            return;
-        }
-
-        _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.FastVote);
-
-        var proposal = proposalMessage.Proposal;
-        if (proposal == null)
-        {
-            return;
-        }
-
-        ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(_fastVotesPerProposal, proposal, out _);
-        ++entry;
-
-        var count = entry;
         var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
         var threshold = _membershipSize - f;
 
-        _fastLog.FastRoundVoteCount(count, _fastVotesReceived.Count, threshold, f);
-
-        if (count >= threshold)
+        if (deliveryFailure)
         {
-            _fastLog.DecidedViewChange(proposal);
-            _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Success);
-            CompleteDecided(_fastMetrics, consensusStopwatch, proposal);
-            return;
+            if (failedEndpoint == null)
+            {
+                throw new InvalidOperationException("failedEndpoint must be provided when deliveryFailure is true.");
+            }
+
+            if (!_deliveryFailureEndpoints.Add(failedEndpoint))
+            {
+                return false;
+            }
         }
 
-        // Once we receive threshold total votes without any single proposal reaching threshold,
-        // fast round cannot succeed and we should fall back.
-        if (_fastVotesReceived.Count >= threshold)
-        {
-            _fastLog.FastRoundMayNotSucceed();
-            _log.FastRoundFailedEarly();
-            _fastMetrics.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
-            _metrics.RecordConsensusConflict();
+        var failures = _deliveryFailureEndpoints.Count;
 
-            StartClassicRound(roundNumber: 2, cancellationToken);
+        // Early fallback is only warranted when it's impossible for any proposal
+        // to still reach the Fast Paxos threshold with the remaining responsive acceptors.
+        var possibleRemainingVotes = _membershipSize - failures;
+        if (possibleRemainingVotes >= threshold)
+        {
+            return false;
         }
+
+        if (Interlocked.Exchange(ref _fallbackSignaled, 1) != 0)
+        {
+            return false;
+        }
+
+        _fastLog.EarlyFallbackNeeded(failures, f, threshold);
+        return true;
     }
 
-    private void StartClassicRound(int roundNumber, CancellationToken cancellationToken)
+
+
+
+    private void StartClassicRound(CancellationToken cancellationToken)
     {
-        _timeout.Dispose();
-        _classicRestartTimer.Dispose();
-        _scheduledClassicRound = null;
+        StartClassicRound(targetRound: null, cancellationToken);
+    }
 
-        _isInClassic = true;
-
-        if (roundNumber <= _currentClassicRound)
+    private void StartClassicRound(int? targetRound, CancellationToken cancellationToken)
+    {
+        if (_currentRank.Round == 1)
         {
-            return;
+            if (targetRound is not null and not 2)
+            {
+                throw new ArgumentOutOfRangeException(nameof(targetRound), targetRound, "Fast-round fallback must start classic round 2.");
+            }
+
+            _timer.Dispose();
+            var nodeId = _membershipViewAccessor.CurrentView.GetNodeId(_myAddr);
+            var nodeIndex = unchecked((int)nodeId);
+            _currentRank = new Rank { Round = 2, NodeIndex = nodeIndex };
+        }
+        else if (_currentRank.Round >= 2)
+        {
+            if (targetRound is { } specifiedRound)
+            {
+                if (specifiedRound <= _currentRank.Round)
+                {
+                    return;
+                }
+
+                _highestRoundSeen = Math.Max(_highestRoundSeen, specifiedRound - 1);
+                _currentRank = new Rank { Round = specifiedRound, NodeIndex = _currentRank.NodeIndex };
+            }
+            else
+            {
+                // This round is being abandoned; track it so we advance monotonically.
+                _highestRoundSeen = Math.Max(_highestRoundSeen, _currentRank.Round);
+                _currentRank = new Rank { Round = _highestRoundSeen + 1, NodeIndex = _currentRank.NodeIndex };
+            }
+        }
+        else
+        {
+            throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
         }
 
-        _currentClassicRound = roundNumber;
+        _scheduledClassicRoundStart = null;
+        _scheduledClassicRoundDelay = null;
+        _classicRestartTimer.Dispose();
 
-        var delay = GetRetryDelay(roundNumber);
-        _log.StartingClassicRound(roundNumber, delay);
-        _classicMetrics.RecordRoundStarted(_metrics);
+        _negativeVoters.Clear();
+        _candidateValue = null;
+        _phase1bResponses.Clear();
 
-        var nodeId = _membershipViewAccessor.CurrentView.GetNodeId(_myAddr);
-        var nodeIndex = unchecked((int)nodeId);
+        _deliveryFailureEndpoints.Clear();
+        _votesPerProposal.Clear();
+        _votesReceived.Clear();
+        _fallbackSignaled = 0;
 
-        StartPhase1a(new Rank { Round = roundNumber, NodeIndex = nodeIndex }, cancellationToken);
+        var delay = GetRetryDelay(_currentRank.Round);
+        _log.StartingClassicRound(_currentRank.Round, delay);
+        _metricsScope.RecordRoundStarted(_metrics);
 
-        _timeout.Schedule(
+        _paxosLog.PrepareCalled(_myAddr, _currentRank);
+
+        var prepare = new Phase1aMessage
+        {
+            ConfigurationId = _configurationId.ToProtobuf(),
+            Sender = _myAddr,
+            Rank = _currentRank
+        };
+
+        var request = prepare.ToRapidClusterRequest();
+        _paxosLog.BroadcastingPhase1a();
+
+        _broadcaster.Broadcast(
+            request,
+            _currentRank,
+            (failedEndpoint, rank) => _events.Writer.TryWrite(new ConsensusEvent.DeliveryFailure(failedEndpoint, rank)),
+            cancellationToken);
+
+        // Ensure our acceptor responds to our prepare without relying on network loopback.
+        var localPhase1b = _paxosAcceptor.HandlePhase1aMessageLocal(prepare);
+        if (localPhase1b != null)
+        {
+            HandlePhase1bMessage(localPhase1b, cancellationToken);
+        }
+
+        var timedOutRound = _currentRank.Round;
+        _timer.Schedule(
             _sharedResources.TimeProvider,
             delay,
             () =>
@@ -549,71 +591,115 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     return;
                 }
 
-                _events.Writer.TryWrite(new ConsensusEvent.ClassicTimeout(roundNumber, delay));
+                _events.Writer.TryWrite(new ConsensusEvent.Timeout(timedOutRound, delay));
             });
+
     }
 
-    private void StartPhase1a(Rank round, CancellationToken cancellationToken)
+    private void HandlePhase2bMessage(
+        Phase2bMessage phase2bMessage,
+        Stopwatch consensusStopwatch,
+        CancellationToken cancellationToken)
     {
-        if (_currentClassicRank.Round > round.Round)
-        {
-            _paxosLog.StartPhase1aSkipped(_currentClassicRank.Round, round.Round);
-            return;
-        }
-
-        if (_paxosLearner.IsDecided)
-        {
-            return;
-        }
-
-        _currentClassicRank = round;
-        _candidateValue = null;
-        _phase1bMessages.Clear();
-
-        _paxosLog.PrepareCalled(_myAddr, _currentClassicRank);
-
-        var prepare = new Phase1aMessage
-        {
-            ConfigurationId = _configurationId.ToProtobuf(),
-            Sender = _myAddr,
-            Rank = _currentClassicRank
-        };
-
-        var request = prepare.ToRapidClusterRequest();
-        _paxosLog.BroadcastingPhase1a();
-
-        _broadcaster.Broadcast(
-            request,
-            _currentClassicRank,
-            (failedEndpoint, rank) => _events.Writer.TryWrite(new ConsensusEvent.DeliveryFailure(failedEndpoint, rank)),
-            cancellationToken);
-    }
-
-    private int? HandlePaxosNackMessage(PaxosNackMessage nack)
-    {
-        var messageConfigId = nack.ConfigurationId.ToConfigurationId();
+        var messageConfigId = phase2bMessage.ConfigurationId.ToConfigurationId();
         if (messageConfigId != _configurationId)
         {
-            return null;
+            if (phase2bMessage.Rnd.Round == 1)
+            {
+                _fastLog.ConfigurationMismatch(_configurationId, messageConfigId);
+            }
+
+            return;
         }
 
-        // We only react to NACKs for our current round. Older rounds are effectively stale.
-        if (!nack.Received.Equals(_currentClassicRank))
+        if (phase2bMessage.Rnd.Round == 1)
         {
-            return null;
+            if (_currentRank.Round != 1)
+            {
+                return;
+            }
+
+            if (!phase2bMessage.Rnd.Equals(_currentRank))
+            {
+                return;
+            }
+
+            _fastLog.HandleFastRoundProposalReceived(phase2bMessage.Sender, phase2bMessage.Proposal, messageConfigId);
+
+            if (!_votesReceived.Add(phase2bMessage.Sender))
+            {
+                _fastLog.DuplicateFastRoundVote(phase2bMessage.Sender);
+                return;
+            }
+
+            _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.FastVote);
+
+            var proposal = phase2bMessage.Proposal;
+            if (proposal == null)
+            {
+                return;
+            }
+
+            ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(_votesPerProposal, proposal, out _);
+            ++entry;
+
+            var count = entry;
+            var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
+            var threshold = _membershipSize - f;
+            _fastLog.FastRoundVoteCount(count, _votesReceived.Count, threshold, f);
+
+            if (count >= threshold)
+            {
+                _fastLog.DecidedViewChange(proposal);
+                _metricsScope.RecordRoundCompleted(_metrics, MetricNames.Results.Success);
+                CompleteDecided(_metricsScope, consensusStopwatch, proposal);
+                return;
+            }
+
+            if (UpdateFastRoundOutcome(deliveryFailure: false, failedEndpoint: null))
+            {
+                _fastLog.FastRoundMayNotSucceed();
+                _log.FastRoundFailedEarly();
+                _metricsScope.RecordRoundCompleted(_metrics, MetricNames.Results.Conflict);
+                _metrics.RecordConsensusConflict();
+
+                StartClassicRound(cancellationToken);
+            }
+
+            return;
         }
 
-        if (RankComparer.Instance.Compare(nack.Promised, _currentClassicRank) <= 0)
+        if (_currentRank.Round >= 2)
         {
-            return null;
+            if (RankComparer.Instance.Compare(phase2bMessage.Rnd, _currentRank) > 0)
+            {
+                RegisterClassicNegativeVote(
+                    phase2bMessage.Sender,
+                    nackRound: _currentRank.Round,
+                    highestRoundSeen: phase2bMessage.Rnd.Round,
+                    cancellationToken);
+                return;
+            }
+
+            if (!phase2bMessage.Rnd.Equals(_currentRank))
+            {
+                return;
+            }
+
+            var highestSeen = phase2bMessage.Rnd.Round;
+            if (highestSeen > _highestRoundSeen)
+            {
+                _highestRoundSeen = highestSeen;
+            }
         }
 
-        return nack.Promised.Round + 1;
+        _paxosLearner.HandlePhase2bMessage(phase2bMessage);
     }
+
 
     private void HandlePhase1bMessage(Phase1bMessage phase1bMessage, CancellationToken cancellationToken)
     {
-        if (!_isInClassic)
+        if (_currentRank.Round < 2)
         {
             return;
         }
@@ -627,25 +713,43 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             return;
         }
 
-        if (!phase1bMessage.Rnd.Equals(_currentClassicRank))
+        var highestSeen = Math.Max(phase1bMessage.Rnd.Round, phase1bMessage.Vrnd.Round);
+        if (highestSeen > _highestRoundSeen)
         {
-            _paxosLog.Phase1bRoundMismatch(_currentClassicRank, phase1bMessage.Rnd);
+            _highestRoundSeen = highestSeen;
+        }
+
+        // Treat a Phase1b from a higher promised round as a negative vote (NACK).
+        // This indicates another coordinator is ahead, so our current round may be unsatisfiable.
+        if (RankComparer.Instance.Compare(phase1bMessage.Rnd, _currentRank) > 0)
+        {
+            RegisterClassicNegativeVote(
+                phase1bMessage.Sender,
+                nackRound: _currentRank.Round,
+                highestRoundSeen: phase1bMessage.Rnd.Round,
+                cancellationToken);
+            return;
+        }
+
+        if (!phase1bMessage.Rnd.Equals(_currentRank))
+        {
+            _paxosLog.Phase1bRoundMismatch(_currentRank, phase1bMessage.Rnd);
             return;
         }
 
         _metrics.RecordConsensusVoteReceived(MetricNames.VoteTypes.Phase1b);
-        _phase1bMessages.Add(phase1bMessage);
+        _phase1bResponses.Add(phase1bMessage);
 
         var majorityThreshold = _membershipSize / 2 + 1;
         var f = (int)Math.Floor((_membershipSize - 1) / 4.0);
-        _paxosLog.Phase1bCollected(_phase1bMessages.Count, majorityThreshold, f);
+        _paxosLog.Phase1bCollected(_phase1bResponses.Count, majorityThreshold, f);
 
-        if (_phase1bMessages.Count < majorityThreshold)
+        if (_phase1bResponses.Count < majorityThreshold)
         {
             return;
         }
 
-        var chosenValue = ChooseValue(_phase1bMessages, _membershipSize);
+        var chosenValue = ChooseValue(_phase1bResponses, _membershipSize);
 
         if (_candidateValue != null || chosenValue == null)
         {
@@ -659,16 +763,24 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         {
             ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
-            Rnd = _currentClassicRank,
+            Rnd = _currentRank,
             Proposal = _candidateValue
         };
 
         var request = phase2a.ToRapidClusterRequest();
         _broadcaster.Broadcast(
             request,
-            _currentClassicRank,
+            _currentRank,
             (failedEndpoint, rank) => _events.Writer.TryWrite(new ConsensusEvent.DeliveryFailure(failedEndpoint, rank)),
             cancellationToken);
+
+        // Ensure we do not depend on the broadcaster sending Phase2a to ourselves.
+        // Route the local acceptor response through the same event loop.
+        var localPhase2b = _paxosAcceptor.HandlePhase2aMessageLocal(phase2a);
+        if (localPhase2b != null)
+        {
+            _events.Writer.TryWrite(new ConsensusEvent.Inbound(localPhase2b.ToRapidClusterRequest(), cancellationToken));
+        }
     }
 
     internal static MembershipProposal? ChooseValue(List<Phase1bMessage> phase1bMessages, int n)
@@ -723,13 +835,13 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     {
         if (_paxosLearner.Decided is ConsensusResult.Decided classicDecided)
         {
-            CompleteDecided(_classicMetrics, consensusStopwatch, classicDecided.Value);
+            CompleteDecided(_metricsScope, consensusStopwatch, classicDecided.Value);
             return true;
         }
 
         if (_paxosLearner.Decided is ConsensusResult.Cancelled && cancellationToken.IsCancellationRequested)
         {
-            CompleteCancelled(_classicMetrics, recordRoundCompleted: true, cancellationToken);
+            CompleteCancelled(_metricsScope, recordRoundCompleted: true, cancellationToken);
             return true;
         }
 
@@ -856,7 +968,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             await task.ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
         }
 
-        _timeout.Dispose();
+        _timer.Dispose();
         _classicRestartTimer.Dispose();
 
         _onDecidedTcs.TrySetCanceled();

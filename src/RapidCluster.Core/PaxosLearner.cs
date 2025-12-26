@@ -54,6 +54,14 @@ internal sealed class PaxosLearner
     /// </summary>
     public void HandlePhase2bMessage(Phase2bMessage phase2bMessage)
     {
+        // Fast round votes are transported as Phase2b messages, but are handled by the coordinator
+        // with a different threshold (N - f). The Paxos learner uses a classic majority threshold,
+        // so it must ignore fast-round traffic.
+        if (phase2bMessage.Rnd.Round == 1)
+        {
+            return;
+        }
+
         var messageConfigId = phase2bMessage.ConfigurationId.ToConfigurationId();
         _log.HandlePhase2bReceived(phase2bMessage.Sender, phase2bMessage.Rnd, phase2bMessage.Proposal, messageConfigId);
 

@@ -48,6 +48,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private bool _announcedProposal;
     private ConsensusCoordinator _consensusInstance = null!;
 
+    // Unstable mode timeout handling (cut detection)
+    private readonly OneShotTimer _unstableModeTimer = new();
+    private ConfigurationId _unstableModeTimerConfigId;
+    private bool _unstableModeTimerArmed;
+
     // Initialization state
     private bool _initialized;
 
@@ -586,6 +591,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Recreate cut detector for the new cluster size
         _cutDetection = _cutDetectorFactory.Create(_membershipView);
 
+        // Reset unstable-mode timeout state (per-view)
+        _unstableModeTimer.Dispose();
+        _unstableModeTimerArmed = false;
+        _unstableModeTimerConfigId = _membershipView.ConfigurationId;
+
         // Update broadcaster membership
         _broadcaster.SetMembership([.. _membershipView.Members]);
 
@@ -726,7 +736,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RapidClusterRequest.ContentOneofCase.JoinMessage => await HandleJoinMessageAsync(msg.JoinMessage, cancellationToken).ConfigureAwait(true),
             RapidClusterRequest.ContentOneofCase.BatchedAlertMessage => HandleBatchedAlertMessage(msg.BatchedAlertMessage, cancellationToken),
             RapidClusterRequest.ContentOneofCase.ProbeMessage => HandleProbeMessage(msg.ProbeMessage, cancellationToken),
-            RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage or
             RapidClusterRequest.ContentOneofCase.Phase1AMessage or
             RapidClusterRequest.ContentOneofCase.Phase1BMessage or
             RapidClusterRequest.ContentOneofCase.Phase2AMessage or
@@ -745,7 +754,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             RapidClusterRequest.ContentOneofCase.JoinMessage => MetricNames.MessageTypes.JoinRequest,
             RapidClusterRequest.ContentOneofCase.BatchedAlertMessage => MetricNames.MessageTypes.BatchedAlert,
             RapidClusterRequest.ContentOneofCase.ProbeMessage => MetricNames.MessageTypes.ProbeRequest,
-            RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage => MetricNames.MessageTypes.FastRoundPhase2b,
             RapidClusterRequest.ContentOneofCase.Phase1AMessage => MetricNames.MessageTypes.Phase1a,
             RapidClusterRequest.ContentOneofCase.Phase1BMessage => MetricNames.MessageTypes.Phase1b,
             RapidClusterRequest.ContentOneofCase.Phase2AMessage => MetricNames.MessageTypes.Phase2a,
@@ -1016,6 +1024,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var implicitProposals = _cutDetection.InvalidateFailingEdges();
             _log.ImplicitEdgeInvalidation(implicitProposals.Count);
 
+            // If there are nodes in unstable mode, arm a timeout so they don't block indefinitely.
+            ArmUnstableModeTimeoutIfNeeded();
+
             // Record cut detected for implicit proposals
             if (implicitProposals.Count > 0)
             {
@@ -1033,6 +1044,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 if (proposals.Count > 0 && !_announcedProposal)
                 {
                     _announcedProposal = true;
+                    DisarmUnstableModeTimeout();
+
                     var currentConfigurationId = _membershipView.ConfigurationId;
                     var proposalList = proposals.ToList();
                     _log.InitiatingConsensus(proposalList);
@@ -1100,7 +1113,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         return request.ContentCase switch
         {
-            RapidClusterRequest.ContentOneofCase.FastRoundPhase2BMessage => ConfigurationId.FromProtobuf(request.FastRoundPhase2BMessage.ConfigurationId),
             RapidClusterRequest.ContentOneofCase.Phase1AMessage => ConfigurationId.FromProtobuf(request.Phase1AMessage.ConfigurationId),
             RapidClusterRequest.ContentOneofCase.Phase1BMessage => ConfigurationId.FromProtobuf(request.Phase1BMessage.ConfigurationId),
             RapidClusterRequest.ContentOneofCase.Phase2AMessage => ConfigurationId.FromProtobuf(request.Phase2AMessage.ConfigurationId),
@@ -1990,9 +2002,95 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 return;
             }
 
+            // Consensus decided, so any unstable-mode timeout is obsolete.
+            DisarmUnstableModeTimeout();
+
             await DecideViewChange(await decision, configurationId);
         }, CancellationToken.None, TaskContinuationOptions.None, _sharedResources.TaskScheduler);
         continuationTask.Unwrap().Ignore();
+    }
+
+    private void ArmUnstableModeTimeoutIfNeeded()
+    {
+        if (_disposed != 0)
+        {
+            return;
+        }
+
+        if (_announcedProposal)
+        {
+            return;
+        }
+
+        if (!_cutDetection.HasNodesInUnstableMode())
+        {
+            DisarmUnstableModeTimeout();
+            return;
+        }
+
+        if (_unstableModeTimerArmed && _unstableModeTimerConfigId == _membershipView.ConfigurationId)
+        {
+            return;
+        }
+
+        _unstableModeTimerArmed = true;
+        _unstableModeTimerConfigId = _membershipView.ConfigurationId;
+
+        _unstableModeTimer.Schedule(
+            _sharedResources.TimeProvider,
+            _options.UnstableModeTimeout,
+            () => OnUnstableModeTimeout(_unstableModeTimerConfigId));
+    }
+
+    private void DisarmUnstableModeTimeout()
+    {
+        if (!_unstableModeTimerArmed)
+        {
+            return;
+        }
+
+        _unstableModeTimer.Dispose();
+        _unstableModeTimerArmed = false;
+    }
+
+    private void OnUnstableModeTimeout(ConfigurationId expectedConfigId)
+    {
+        if (_disposed != 0)
+        {
+            return;
+        }
+
+        lock (_membershipUpdateLock)
+        {
+            if (expectedConfigId != _membershipView.ConfigurationId)
+            {
+                return;
+            }
+
+            if (_announcedProposal)
+            {
+                return;
+            }
+
+            if (!_cutDetection.HasNodesInUnstableMode())
+            {
+                DisarmUnstableModeTimeout();
+                return;
+            }
+
+            var forcedProposals = _cutDetection.ForcePromoteUnstableNodes();
+            if (forcedProposals.Count == 0)
+            {
+                DisarmUnstableModeTimeout();
+                return;
+            }
+
+            _announcedProposal = true;
+            DisarmUnstableModeTimeout();
+
+            var membershipProposal = CreateMembershipProposal(forcedProposals);
+            _consensusInstance.Propose(membershipProposal, _stoppingCts.Token);
+        }
     }
 
     /// <summary>
@@ -2159,6 +2257,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             fd.Dispose();
         }
         _failureDetectors.Clear();
+
+        _unstableModeTimer.Dispose();
 
         // Dispose consensus instance (may be null if initialization failed)
         if (_consensusInstance is not null)

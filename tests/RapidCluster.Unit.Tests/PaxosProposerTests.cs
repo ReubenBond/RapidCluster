@@ -99,13 +99,14 @@ public sealed class ClassicProposerConsensusCoordinatorTests
 
         while (broadcasted.TryDequeue(out _)) { }
 
+        // A Phase1b with a lower round should be ignored.
         coordinator.HandleMessages(new RapidClusterRequest
         {
             Phase1BMessage = new Phase1bMessage
             {
                 Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
-                Rnd = new Rank { Round = phase1aRank.Round + 1, NodeIndex = phase1aRank.NodeIndex },
+                Rnd = new Rank { Round = phase1aRank.Round - 1, NodeIndex = phase1aRank.NodeIndex },
                 Vrnd = new Rank { Round = 1, NodeIndex = 1 },
                 Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002))
             }

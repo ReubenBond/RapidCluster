@@ -47,10 +47,11 @@ public sealed class FastRoundConsensusCoordinatorTests
         {
             coordinator.HandleMessages(new RapidClusterRequest
             {
-                FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+                Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = configId.ToProtobuf(),
                     Sender = Utils.HostFromParts("127.0.0.1", 2000 + i, nodeId: Utils.GetNextNodeId()),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
                     Proposal = proposal
                 }
             }, TestContext.Current.CancellationToken);
@@ -94,10 +95,11 @@ public sealed class FastRoundConsensusCoordinatorTests
         {
             coordinator.HandleMessages(new RapidClusterRequest
             {
-                FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+                Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = configId.ToProtobuf(),
                     Sender = Utils.HostFromParts("127.0.0.1", 2000 + i, nodeId: Utils.GetNextNodeId()),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
                     Proposal = proposal
                 }
             }, TestContext.Current.CancellationToken);
@@ -149,13 +151,15 @@ public sealed class FastRoundConsensusCoordinatorTests
         {
             coordinator.HandleMessages(new RapidClusterRequest
             {
-                FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+                Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = configId.ToProtobuf(),
-                    Sender = Utils.HostFromParts("127.0.0.1", 3000 + i, nodeId: Utils.GetNextNodeId()),
+                    Sender = Utils.HostFromParts("127.0.0.1", 2000 + i, nodeId: Utils.GetNextNodeId()),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
                     Proposal = proposal
                 }
             }, TestContext.Current.CancellationToken);
+
         }
 
         if (threshold > 1)
@@ -166,15 +170,17 @@ public sealed class FastRoundConsensusCoordinatorTests
 
         coordinator.HandleMessages(new RapidClusterRequest
         {
-            FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+            Phase2BMessage = new Phase2bMessage
             {
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.1", 4000, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
                 Proposal = proposal
             }
         }, TestContext.Current.CancellationToken);
 
         _ = await coordinator.Decided.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
     }
 
     private static MembershipProposal CreateProposal(ConfigurationId configId, params Endpoint[] endpoints)

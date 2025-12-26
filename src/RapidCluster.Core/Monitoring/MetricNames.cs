@@ -234,6 +234,7 @@ public static class MetricNames
 
     internal static class Protocols
     {
+        public const string Consensus = "consensus";
         public const string FastPaxos = "fast_paxos";
         public const string ClassicPaxos = "classic_paxos";
     }

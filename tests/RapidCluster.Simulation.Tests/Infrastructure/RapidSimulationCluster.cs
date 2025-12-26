@@ -186,6 +186,10 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         {
             var joiner = CreateJoinerNode(seedNode, i, options);
             result.Add(joiner);
+
+            // Ensure the cluster catches up between sequential joins.
+            // This avoids subsequent joins using stale configuration IDs.
+            WaitForConvergence();
         }
 
         WaitForConvergence();
@@ -608,6 +612,44 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     protected override void OnMaxIterationsReached(int maxIterations)
     {
         _log.MaxIterationsReached(maxIterations);
+
+        // Emit diagnostics at Information level so they show up
+        // even when the full debug log gets truncated.
+        var diagnostics = BuildMaxIterationDiagnostics(maxItemsPerQueue: 10);
+        _log.MaxIterationsReachedWithDiagnostics(maxIterations, diagnostics);
+    }
+
+    private string BuildMaxIterationDiagnostics(int maxItemsPerQueue)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"SimulatedTime={TimeProvider.GetUtcNow():O}");
+
+        sb.AppendLine($"ClusterQueue: Items={TaskQueue.ScheduledItems.Count}, NextWaiting={TaskQueue.NextWaitingDueTime:O}");
+        AppendQueueHead(sb, TaskQueue, maxItemsPerQueue);
+
+        foreach (var node in Nodes)
+        {
+            var ctx = node.Context;
+            sb.AppendLine($"Node={node.NetworkAddress} State={ctx.State} Items={ctx.TaskQueue.ScheduledItems.Count} HasReady={ctx.HasReadyTasks} NextWaiting={ctx.NextWaitingDueTime:O}");
+            AppendQueueHead(sb, ctx.TaskQueue, maxItemsPerQueue);
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendQueueHead(System.Text.StringBuilder sb, SimulationTaskQueue queue, int maxItems)
+    {
+        var count = 0;
+        foreach (var item in queue.ScheduledItems)
+        {
+            if (count++ >= maxItems)
+            {
+                sb.AppendLine("  ...");
+                break;
+            }
+
+            sb.AppendLine($"  {item.GetType().Name} Due={item.DueTime:O}");
+        }
     }
 
     /// <inheritdoc />

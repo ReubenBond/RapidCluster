@@ -18,38 +18,47 @@ public sealed class MembershipView
     /// <summary>
     /// An empty membership view with no members. Used as the initial state before the cluster is initialized.
     /// </summary>
-    public static MembershipView Empty { get; } = new(0, ConfigurationId.Empty, [], 0);
+    public static MembershipView Empty { get; } = new(0, ConfigurationId.Empty, [], [], 0);
 
     private readonly ImmutableArray<ImmutableArray<MemberInfo>> _rings;
+    private readonly ImmutableArray<int> _offsets;
     private readonly ImmutableSortedDictionary<Endpoint, MemberInfo> _memberInfoByEndpoint;
+    private readonly ImmutableDictionary<Endpoint, int> _endpointToBaseIndex;
 
     /// <summary>
     /// Initializes a new immutable MembershipView instance.
     /// </summary>
     /// <param name="ringCount">Number of monitoring rings.</param>
     /// <param name="configurationId">The configuration identifier for this view.</param>
-    /// <param name="rings">The rings of MemberInfo (each ring is sorted by its comparator).</param>
+    /// <param name="rings">The rings of MemberInfo (ring 0 is the base order).</param>
+    /// <param name="offsets">The offsets for each ring (offset[r] defines successor relationship for ring r).</param>
     /// <param name="maxNodeId">The highest node ID ever assigned.</param>
-    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<MemberInfo>> rings, long maxNodeId)
+    internal MembershipView(int ringCount, ConfigurationId configurationId, ImmutableArray<ImmutableArray<MemberInfo>> rings, ImmutableArray<int> offsets, long maxNodeId)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(ringCount);
         ArgumentOutOfRangeException.ThrowIfNotEqual(rings.Length, ringCount, "Number of rings does not match ring count");
+        ArgumentOutOfRangeException.ThrowIfNotEqual(offsets.Length, ringCount, "Number of offsets does not match ring count");
         RingCount = ringCount;
         ConfigurationId = configurationId;
         _rings = rings;
+        _offsets = offsets;
         MaxNodeId = maxNodeId;
 
         // Build endpoint -> MemberInfo lookup from the first ring (all rings have the same members)
         // Use EndpointAddressComparer to ignore NodeId when checking membership
-        var builder = ImmutableSortedDictionary.CreateBuilder<Endpoint, MemberInfo>(EndpointAddressComparer.Instance);
+        var memberBuilder = ImmutableSortedDictionary.CreateBuilder<Endpoint, MemberInfo>(EndpointAddressComparer.Instance);
+        var indexBuilder = ImmutableDictionary.CreateBuilder<Endpoint, int>(EndpointAddressComparer.Instance);
         if (rings.Length > 0)
         {
-            foreach (var memberInfo in rings[0])
+            for (var i = 0; i < rings[0].Length; i++)
             {
-                builder[memberInfo.Endpoint] = memberInfo;
+                var memberInfo = rings[0][i];
+                memberBuilder[memberInfo.Endpoint] = memberInfo;
+                indexBuilder[memberInfo.Endpoint] = i;
             }
         }
-        _memberInfoByEndpoint = builder.ToImmutable();
+        _memberInfoByEndpoint = memberBuilder.ToImmutable();
+        _endpointToBaseIndex = indexBuilder.ToImmutable();
     }
 
     /// <summary>
@@ -220,14 +229,18 @@ public sealed class MembershipView
             return [];
         }
 
+        // Observers are the nodes that monitor this node (predecessors in each ring).
+        // Using offset-based computation: predecessor_r(baseOrder[i]) = baseOrder[(i - offset_r + N) mod N]
+        var baseOrder = _rings[0];
+        var n = baseOrder.Length;
+        var nodeIndex = _endpointToBaseIndex[node];
+
         var observers = ImmutableArray.CreateBuilder<Endpoint>(RingCount);
-        for (var k = 0; k < RingCount; k++)
+        for (var r = 0; r < RingCount; r++)
         {
-            var ring = _rings[k];
-            var index = FindIndex(ring, node);
-            // Successor wraps around
-            var successorIndex = (index + 1) % ring.Length;
-            observers.Add(ring[successorIndex].Endpoint);
+            var offset = _offsets[r];
+            var predecessorIndex = (nodeIndex - offset + n) % n;
+            observers.Add(baseOrder[predecessorIndex].Endpoint);
         }
         return observers.MoveToImmutable();
     }
@@ -252,7 +265,20 @@ public sealed class MembershipView
             return [];
         }
 
-        return GetPredecessorsOf(node);
+        // Subjects are the nodes monitored by this node (successors in each ring).
+        // Using offset-based computation: successor_r(baseOrder[i]) = baseOrder[(i + offset_r) mod N]
+        var baseOrder = _rings[0];
+        var n = baseOrder.Length;
+        var nodeIndex = _endpointToBaseIndex[node];
+
+        var subjects = ImmutableArray.CreateBuilder<Endpoint>(RingCount);
+        for (var r = 0; r < RingCount; r++)
+        {
+            var offset = _offsets[r];
+            var successorIndex = (nodeIndex + offset) % n;
+            subjects.Add(baseOrder[successorIndex].Endpoint);
+        }
+        return subjects.MoveToImmutable();
     }
 
     /// <summary>
@@ -271,17 +297,22 @@ public sealed class MembershipView
             return [];
         }
 
-        // For a joining node, find where it would be inserted and return predecessors
-        var subjects = ImmutableArray.CreateBuilder<Endpoint>(RingCount);
+        // For a joining node, we select K unique observers from the existing membership.
+        // We use ring 0's hash-based ordering to find the insertion point, then select
+        // the K predecessors (wrapping around) as observers.
+        // This ensures deterministic, consistent observer selection across all nodes.
+        var ring0 = _rings[0];
+        var insertionPoint = FindInsertionPoint(ring0, node, 0);
+
+        var observers = ImmutableArray.CreateBuilder<Endpoint>(RingCount);
         for (var k = 0; k < RingCount; k++)
         {
-            var ring = _rings[k];
-            var insertionPoint = FindInsertionPoint(ring, node, k);
-            // Predecessor wraps around
-            var predecessorIndex = (insertionPoint - 1 + ring.Length) % ring.Length;
-            subjects.Add(ring[predecessorIndex].Endpoint);
+            // Select k-th predecessor in ring 0 order
+            var predecessorIndex = (insertionPoint - 1 - k + ring0.Length * RingCount) % ring0.Length;
+            observers.Add(ring0[predecessorIndex].Endpoint);
         }
-        return subjects.MoveToImmutable();
+
+        return observers.MoveToImmutable();
     }
 
     /// <summary>
@@ -341,20 +372,6 @@ public sealed class MembershipView
     }
 
     private string DebuggerDisplay => $"MembershipView(Size={Size}, Config={ConfigurationId}, Rings={RingCount})";
-
-    private ImmutableArray<Endpoint> GetPredecessorsOf(Endpoint node)
-    {
-        var subjects = ImmutableArray.CreateBuilder<Endpoint>(RingCount);
-        for (var k = 0; k < RingCount; k++)
-        {
-            var ring = _rings[k];
-            var index = FindIndex(ring, node);
-            // Predecessor wraps around
-            var predecessorIndex = (index - 1 + ring.Length) % ring.Length;
-            subjects.Add(ring[predecessorIndex].Endpoint);
-        }
-        return subjects.MoveToImmutable();
-    }
 
     private static int FindIndex(ImmutableArray<MemberInfo> ring, Endpoint node)
     {

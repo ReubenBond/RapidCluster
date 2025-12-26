@@ -113,10 +113,11 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
         var request = new RapidClusterRequest
         {
-            FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+            Phase2BMessage = new Phase2bMessage
             {
                 ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
                 Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
             }
         };
@@ -237,10 +238,11 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             var request = new RapidClusterRequest
             {
-                FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+                Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
                     Proposal = proposal
                 }
             };
@@ -261,14 +263,16 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         coordinator.Propose(proposal, TestContext.Current.CancellationToken);
 
         // Send votes with wrong config ID - should not throw
+        var wrongConfigId = new ConfigurationId(new ClusterId(888), version: 999);
         for (var i = 0; i < 3; i++)
         {
             var request = new RapidClusterRequest
             {
-                FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+                Phase2BMessage = new Phase2bMessage
                 {
-                    ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(), // Wrong config ID
+                    ConfigurationId = wrongConfigId.ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
                     Proposal = proposal
                 }
             };
@@ -344,10 +348,11 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             var request = new RapidClusterRequest
             {
-                FastRoundPhase2BMessage = new FastRoundPhase2bMessage
+                Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                     Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
                     Proposal = proposal
                 }
             };
@@ -438,12 +443,12 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         // A single NACK should not restart classic Paxos immediately.
         coordinator.HandleMessages(new RapidClusterRequest
         {
-            PaxosNackMessage = new PaxosNackMessage
+            Phase2BMessage = new Phase2bMessage
             {
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
-                Received = phase1aRank,
-                Promised = new Rank { Round = 5, NodeIndex = 7 }
+                Rnd = new Rank { Round = 5, NodeIndex = 7 },
+                Proposal = null
             }
         }, TestContext.Current.CancellationToken);
 
@@ -456,12 +461,12 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         // and should restart after backoff.
         coordinator.HandleMessages(new RapidClusterRequest
         {
-            PaxosNackMessage = new PaxosNackMessage
+            Phase2BMessage = new Phase2bMessage
             {
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
-                Received = phase1aRank,
-                Promised = new Rank { Round = 5, NodeIndex = 9 }
+                Rnd = new Rank { Round = 5, NodeIndex = 9 },
+                Proposal = null
             }
         }, TestContext.Current.CancellationToken);
 

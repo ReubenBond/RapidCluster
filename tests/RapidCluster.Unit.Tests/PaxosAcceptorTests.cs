@@ -60,9 +60,10 @@ public sealed class PaxosAcceptorTests
         }, TestContext.Current.CancellationToken);
 
         Assert.Equal(3, sent.Count);
-        Assert.Equal(RapidClusterRequest.ContentOneofCase.PaxosNackMessage, sent[1].Request.ContentCase);
-        Assert.Equal(2, sent[1].Request.PaxosNackMessage.Promised.Round);
-        Assert.Equal(2, sent[2].Request.PaxosNackMessage.Promised.Round);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1BMessage, sent[1].Request.ContentCase);
+        Assert.Equal(2, sent[1].Request.Phase1BMessage.Rnd.Round);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1BMessage, sent[2].Request.ContentCase);
+        Assert.Equal(2, sent[2].Request.Phase1BMessage.Rnd.Round);
     }
 
     [Fact]
@@ -138,11 +139,12 @@ public sealed class PaxosAcceptorTests
 
         Assert.Empty(broadcasted);
 
-        // Phase1a sent a Phase1b, then Phase2a rejection sent a NACK.
+        // Phase1a sent a Phase1b, then Phase2a rejection replied with a Phase2b NACK.
         Assert.Equal(2, sent.Count);
         Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase1BMessage, sent[0].Request.ContentCase);
-        Assert.Equal(RapidClusterRequest.ContentOneofCase.PaxosNackMessage, sent[1].Request.ContentCase);
-        Assert.Equal(2, sent[1].Request.PaxosNackMessage.Promised.Round);
+        Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase2BMessage, sent[1].Request.ContentCase);
+        Assert.Equal(2, sent[1].Request.Phase2BMessage.Rnd.Round);
+        Assert.Null(sent[1].Request.Phase2BMessage.Proposal);
 
         // Accept at promised rank should be accepted and broadcast.
         acceptor.HandlePhase2aMessage(new Phase2aMessage
@@ -157,7 +159,7 @@ public sealed class PaxosAcceptorTests
         Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase2BMessage, broadcasted[0].ContentCase);
         Assert.Equal(2, broadcasted[0].Phase2BMessage.Rnd.Round);
 
-        // Duplicate accept for same round should not rebroadcast.
+        // Duplicate accept for same round should rebroadcast (idempotency).
         acceptor.HandlePhase2aMessage(new Phase2aMessage
         {
             Sender = coordinator,
@@ -166,7 +168,8 @@ public sealed class PaxosAcceptorTests
             Proposal = proposal
         }, TestContext.Current.CancellationToken);
 
-        Assert.Single(broadcasted);
+        Assert.Equal(2, broadcasted.Count);
+        Assert.All(broadcasted, msg => Assert.Equal(RapidClusterRequest.ContentOneofCase.Phase2BMessage, msg.ContentCase));
     }
 
     [Fact]

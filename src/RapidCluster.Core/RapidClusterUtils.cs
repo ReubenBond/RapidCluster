@@ -71,9 +71,6 @@ public static class RapidClusterMessageExtensions
     public static RapidClusterRequest ToRapidClusterRequest(this ProbeMessage msg) =>
         new() { ProbeMessage = msg };
 
-    public static RapidClusterRequest ToRapidClusterRequest(this FastRoundPhase2bMessage msg) =>
-        new() { FastRoundPhase2BMessage = msg };
-
     public static RapidClusterRequest ToRapidClusterRequest(this Phase1aMessage msg) =>
         new() { Phase1AMessage = msg };
 
@@ -85,9 +82,6 @@ public static class RapidClusterMessageExtensions
 
     public static RapidClusterRequest ToRapidClusterRequest(this Phase2bMessage msg) =>
         new() { Phase2BMessage = msg };
-
-    public static RapidClusterRequest ToRapidClusterRequest(this PaxosNackMessage msg) =>
-        new() { PaxosNackMessage = msg };
 
     public static RapidClusterRequest ToRapidClusterRequest(this LeaveMessage msg) =>
         new() { LeaveMessage = msg };

@@ -242,6 +242,80 @@ public class MembershipViewTests
         Assert.Single(view2.GetObserversOf(n1).ToHashSet());
     }
 
+    [Fact]
+    public void MonitoringSubjects_AvoidWorstCaseDuplicatesForSimulationStyleAddresses()
+    {
+        var builder = new MembershipViewBuilder(K);
+
+        // Matches simulation patterns: identical hostname, sequential ports.
+        var nodes = new Endpoint[5];
+        for (var nodeId = 0; nodeId < nodes.Length; nodeId++)
+        {
+            nodes[nodeId] = Utils.HostFromParts("node", nodeId, Utils.GetNextNodeId());
+            builder.RingAdd(nodes[nodeId]);
+        }
+
+        var view = builder.Build();
+
+        // With 5 nodes and max K=10, actual ring count is clamped to 4.
+        Assert.Equal(4, view.RingCount);
+
+        foreach (var node in nodes)
+        {
+            var subjects = view.GetSubjectsOf(node);
+            Assert.Equal(view.RingCount, subjects.Length);
+
+            // With the unique monitoring ring construction, each node should monitor
+            // K unique subjects (no duplicates across rings).
+            var uniqueSubjects = subjects.ToHashSet(EndpointAddressComparer.Instance).Count;
+            Assert.Equal(view.RingCount, uniqueSubjects);
+        }
+    }
+
+    [Fact]
+    public void MonitoringSubjects_AllNodesHaveUniqueSubjectsAndObservers()
+    {
+        const int numNodes = 15;
+        var builder = new MembershipViewBuilder(K);
+
+        var nodes = new Endpoint[numNodes];
+        for (var i = 0; i < numNodes; i++)
+        {
+            nodes[i] = Utils.HostFromParts("node", i, Utils.GetNextNodeId());
+            builder.RingAdd(nodes[i]);
+        }
+
+        var view = builder.Build();
+
+        // With 15 nodes and max K=10, ring count should be 10
+        Assert.Equal(K, view.RingCount);
+
+        foreach (var node in nodes)
+        {
+            var subjects = view.GetSubjectsOf(node);
+            var observers = view.GetObserversOf(node);
+
+            // Each node should have exactly K subjects and K observers
+            Assert.Equal(K, subjects.Length);
+            Assert.Equal(K, observers.Length);
+
+            // All subjects should be unique (no duplicates)
+            var uniqueSubjects = subjects.ToHashSet(EndpointAddressComparer.Instance).Count;
+            Assert.Equal(K, uniqueSubjects);
+
+            // All observers should be unique (no duplicates)
+            var uniqueObservers = observers.ToHashSet(EndpointAddressComparer.Instance).Count;
+            Assert.Equal(K, uniqueObservers);
+
+            // Node should not monitor itself
+            Assert.DoesNotContain(node, subjects, EndpointAddressComparer.Instance);
+
+            // Node should not be observed by itself
+            Assert.DoesNotContain(node, observers, EndpointAddressComparer.Instance);
+        }
+    }
+
+
     /// <summary>
     /// Verify configuration ID changes with membership changes
     /// </summary>

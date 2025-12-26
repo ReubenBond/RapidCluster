@@ -290,29 +290,33 @@ public class PaxosTests
     }
 
     [Fact]
-    public void FastRoundPhase2bMessageCreationSetsAllFields()
+    public void FastRoundPhase2bMessageCreationUsesReservedFastRoundRank()
     {
         var sender = Utils.HostFromParts("127.0.0.1", 1234);
 
-        var msg = new FastRoundPhase2bMessage
+        var msg = new Phase2bMessage
         {
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
+            Rnd = new Rank { Round = 1, NodeIndex = 0 },
             Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
         };
 
         Assert.Equal(sender, msg.Sender);
         Assert.Equal(100, msg.ConfigurationId.Version);
+        Assert.Equal(1, msg.Rnd.Round);
+        Assert.Equal(0, msg.Rnd.NodeIndex);
         Assert.Single(msg.Proposal.Members);
     }
 
     [Fact]
     public void FastRoundPhase2bMessageEmptyProposalIsValid()
     {
-        var msg = new FastRoundPhase2bMessage
+        var msg = new Phase2bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
+            Rnd = new Rank { Round = 1, NodeIndex = 0 }
         };
 
         Assert.Null(msg.Proposal);
@@ -327,10 +331,11 @@ public class PaxosTests
             proposal.Members.Add(Utils.HostFromParts("10.0.0." + i, 5000, Utils.GetNextNodeId()));
         }
 
-        var msg = new FastRoundPhase2bMessage
+        var msg = new Phase2bMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
+            Rnd = new Rank { Round = 1, NodeIndex = 0 },
             Proposal = proposal
         };
 

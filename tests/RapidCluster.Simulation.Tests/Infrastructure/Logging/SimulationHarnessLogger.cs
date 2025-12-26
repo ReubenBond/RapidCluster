@@ -86,6 +86,9 @@ internal sealed partial class SimulationHarnessLogger(ILogger<RapidSimulationClu
     [LoggerMessage(Level = LogLevel.Debug, Message = "Max iterations ({MaxIterations}) reached")]
     public partial void MaxIterationsReached(int maxIterations);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Max iterations ({MaxIterations}) reached. Diagnostics:\n{Diagnostics}")]
+    public partial void MaxIterationsReachedWithDiagnostics(int maxIterations, string diagnostics);
+
     [LoggerMessage(Level = LogLevel.Debug, Message = "Simulation reached idle state")]
     public partial void SimulationReachedIdleState();
 

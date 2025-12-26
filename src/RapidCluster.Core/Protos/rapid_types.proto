@@ -24,21 +24,23 @@ message ConfigurationId
 // All-in-one message type.
 message RapidClusterRequest
 {
+    reserved 5, 12;
+    reserved "fastRoundPhase2bMessage", "paxosNackMessage";
+
     oneof content {
          PreJoinMessage preJoinMessage = 1;
          JoinMessage joinMessage = 2;
          BatchedAlertMessage batchedAlertMessage = 3;
          ProbeMessage probeMessage = 4;
-         FastRoundPhase2bMessage fastRoundPhase2bMessage = 5;
          Phase1aMessage phase1aMessage = 6;
          Phase1bMessage phase1bMessage = 7;
          Phase2aMessage phase2aMessage = 8;
          Phase2bMessage phase2bMessage = 9;
          LeaveMessage leaveMessage = 10;
          MembershipViewRequest membershipViewRequest = 11;
-         PaxosNackMessage paxosNackMessage = 12;
-    }
+     }
 }
+
 
 message RapidClusterResponse
 {
@@ -137,17 +139,11 @@ message MembershipProposal
     int64 max_node_id = 4;
 }
 
-// ******* Fast Paxos Phase 2 message *******
-
-message FastRoundPhase2bMessage
-{
-    Endpoint sender = 1;
-    ConfigurationId configurationId = 2;
-    MembershipProposal proposal = 3;
-}
-
-
-// ******* Classic Paxos messages *********
+// ******* Paxos messages *********
+//
+// We model fast and classic Paxos acceptor responses using the same message type:
+// - Fast round uses Rank { round = 1, nodeIndex = 0 } as a reserved proposer id.
+// - Classic rounds use Rank { round >= 2, nodeIndex = <stable node id> }.
 message Rank
 {
     int32 round = 1;
@@ -185,15 +181,6 @@ message Phase2bMessage
     Rank rnd = 3;
     MembershipProposal proposal = 4;
 }
-
-message PaxosNackMessage
-{
-    Endpoint sender = 1;
-    ConfigurationId configurationId = 2;
-    Rank received = 3;
-    Rank promised = 4;
-}
-
 
 message ConsensusResponse
 {

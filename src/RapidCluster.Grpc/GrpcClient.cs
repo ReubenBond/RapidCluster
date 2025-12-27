@@ -26,6 +26,7 @@ internal sealed partial class GrpcClient(
     private readonly ILogger<GrpcClient> _logger = logger;
     private readonly ConcurrentDictionary<string, Pb.MembershipService.MembershipServiceClient> _clients = new();
     private readonly ConcurrentDictionary<int, Task> _pendingTasks = new();
+    private readonly CancellationTokenSource _stoppingCts = new();
     private int _taskIdCounter;
     private bool _disposed;
 
@@ -42,6 +43,9 @@ internal sealed partial class GrpcClient(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "RPC failed to {Remote}")]
     private partial void LogRpcFailed(Exception ex, LoggableEndpoint Remote);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "RPC unavailable to {Remote} (node may be shutting down)")]
+    private partial void LogRpcUnavailable(LoggableEndpoint Remote);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "GrpcClient stopping, waiting for {Count} pending tasks")]
     private partial void LogStopping(int Count);
@@ -62,7 +66,10 @@ internal sealed partial class GrpcClient(
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        // Wait for all pending tasks to complete (with a timeout)
+        // Cancel all pending operations immediately
+        await _stoppingCts.CancelAsync();
+
+        // Wait for all pending tasks to complete (they should finish quickly now)
         var pendingTasks = _pendingTasks.Values.ToArray();
         if (pendingTasks.Length > 0)
         {
@@ -99,7 +106,17 @@ internal sealed partial class GrpcClient(
         catch (RpcException ex)
         {
             stopwatch.Stop();
-            LogRpcFailed(ex, new LoggableEndpoint(remote));
+
+            // Log at Debug level for expected shutdown-related errors, Error level for others
+            if (ex.StatusCode is StatusCode.Unavailable or StatusCode.Cancelled)
+            {
+                LogRpcUnavailable(new LoggableEndpoint(remote));
+            }
+            else
+            {
+                LogRpcFailed(ex, new LoggableEndpoint(remote));
+            }
+
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, ex.StatusCode.ToString());
             _metrics.RecordGrpcCallDuration(SendRequestMethod, ex.StatusCode.ToString(), stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Network);
@@ -117,7 +134,7 @@ internal sealed partial class GrpcClient(
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "One-way messages ignore failures but may invoke callback")]
     private async Task SendOneWayMessageInternalAsync(Endpoint remote, RapidClusterRequest request, Rank? rank, int taskId, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stoppingCts.Token);
         cts.CancelAfter(_options.GrpcTimeout);
 
         var client = GetOrCreateClient(remote);
@@ -198,6 +215,9 @@ internal sealed partial class GrpcClient(
         if (_disposed) return;
         _disposed = true;
 
+        // Cancel any remaining pending operations (may already be cancelled by StopAsync)
+        await _stoppingCts.CancelAsync();
+
         // Wait for all pending tasks to complete (with a timeout)
         var pendingTasks = _pendingTasks.Values.ToArray();
         if (pendingTasks.Length > 0)
@@ -213,6 +233,7 @@ internal sealed partial class GrpcClient(
             }
         }
 
+        _stoppingCts.Dispose();
         _clients.Clear();
     }
 }

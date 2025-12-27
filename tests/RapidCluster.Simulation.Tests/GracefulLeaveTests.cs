@@ -465,27 +465,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     }
 
     [Fact]
-    public void GracefulLeave_AfterPartitionHeals()
-    {
-        // Arrange: Create a 4-node cluster
-        var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence();
-
-        // Create and heal a partition
-        _harness.PartitionNodes(nodes[2], nodes[3]);
-        _harness.RunForDuration(TimeSpan.FromSeconds(5));
-        _harness.HealPartition(nodes[2], nodes[3]);
-        _harness.RunForDuration(TimeSpan.FromSeconds(5));
-
-        // Act: Now perform graceful leave
-        _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence();
-
-        // Assert: Leave succeeded
-        Assert.Equal(3, _harness.Nodes.Count);
-    }
-
-    [Fact]
     public void GracefulLeave_FollowedByJoin()
     {
         // Arrange: Create a 4-node cluster

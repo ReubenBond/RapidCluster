@@ -300,4 +300,8 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Filtered out alert message with mismatched ClusterId: received {MessageClusterId} but local is {LocalClusterId}")]
     private partial void AlertFilteredByClusterIdCore(LoggableClusterId messageClusterId, LoggableClusterId localClusterId);
     public void AlertFilteredByClusterId(ClusterId messageClusterId, ClusterId localClusterId) => AlertFilteredByClusterIdCore(new(messageClusterId), new(localClusterId));
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Filtered out alert message with stale ConfigurationId: received {MessageConfigId} but current is {CurrentConfigId}")]
+    private partial void AlertFilteredByConfigurationIdCore(LoggableConfigurationId messageConfigId, LoggableConfigurationId currentConfigId);
+    public void AlertFilteredByConfigurationId(ConfigurationId messageConfigId, ConfigurationId currentConfigId) => AlertFilteredByConfigurationIdCore(new(messageConfigId), new(currentConfigId));
 }

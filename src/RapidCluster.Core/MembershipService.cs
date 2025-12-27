@@ -986,10 +986,22 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             var maxRingNumber = _membershipView.RingCount;
             for (var ringNumber = 0; ringNumber < maxRingNumber; ringNumber++)
             {
+                var currentConfigurationId = _membershipView.ConfigurationId;
                 foreach (var msg in messageBatch.Messages)
                 {
                     if (!msg.RingNumber.Contains(ringNumber))
                     {
+                        continue;
+                    }
+
+                    // Filter out stale messages from old configurations.
+                    // The batch-level filter only checks if ANY message matches, but we must
+                    // also filter individual messages to prevent stale alerts from affecting
+                    // the cut detector (e.g., old JOIN alerts causing spurious unstable mode).
+                    var msgConfigId = msg.ConfigurationId.ToConfigurationId();
+                    if (msgConfigId != currentConfigurationId)
+                    {
+                        _log.AlertFilteredByConfigurationId(msgConfigId, currentConfigurationId);
                         continue;
                     }
 

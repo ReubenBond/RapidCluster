@@ -532,36 +532,6 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     }
 
     /// <summary>
-    /// Waits for all non-suspended nodes to converge to the same membership size.
-    /// Suspended nodes are excluded from the check since they cannot process messages.
-    /// </summary>
-    public void WaitForConvergence(int expectedSize, int maxIterations = 100000)
-    {
-        if (!RunUntilConverged(expectedSize, maxIterations))
-        {
-            var suspendedNodes = Nodes.Where(n => n.IsSuspended).ToList();
-            throw new TimeoutException($"Nodes did not converge to size {expectedSize}. " +
-                $"Active node sizes: [{string.Join(", ", ActiveNodes.Select(n => n.MembershipSize))}], " +
-                $"Suspended nodes: {suspendedNodes.Count}");
-        }
-    }
-
-    /// <summary>
-    /// Waits for the specified nodes to converge to the same membership size.
-    /// Use this overload when some nodes (e.g., isolated/partitioned nodes) should be excluded from the check.
-    /// </summary>
-    public void WaitForConvergence(IEnumerable<RapidSimulationNode> nodes, int expectedSize, int maxIterations = 100000)
-    {
-        ArgumentNullException.ThrowIfNull(nodes);
-        var nodeList = nodes.ToList();
-        if (!RunUntilConverged(nodeList, expectedSize, maxIterations))
-        {
-            throw new TimeoutException($"Nodes did not converge to size {expectedSize}. " +
-                $"Current sizes: [{string.Join(", ", nodeList.Select(n => n.MembershipSize))}]");
-        }
-    }
-
-    /// <summary>
     /// Waits for a specific node to reach the expected membership size.
     /// </summary>
     public void WaitForNodeSize(RapidSimulationNode node, int expectedSize, int maxIterations = 100000)

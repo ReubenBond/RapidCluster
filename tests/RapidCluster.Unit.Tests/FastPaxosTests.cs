@@ -91,7 +91,13 @@ public sealed class FastRoundConsensusCoordinatorTests
         coordinator.Propose(proposal, TestContext.Current.CancellationToken);
 
         var threshold = membershipSize - (int)Math.Floor((membershipSize - 1) / 4.0);
-        for (var i = 0; i < threshold - 1; i++)
+
+        // The coordinator's Propose() method broadcasts the proposal and also
+        // enqueues its own vote as an inbound event. So we need to send
+        // (threshold - 2) external votes to have (threshold - 1) total votes.
+        var externalVotesBeforeThreshold = Math.Max(0, threshold - 2);
+
+        for (var i = 0; i < externalVotesBeforeThreshold; i++)
         {
             coordinator.HandleMessages(new RapidClusterRequest
             {
@@ -147,7 +153,13 @@ public sealed class FastRoundConsensusCoordinatorTests
 
         var threshold = membershipSize - (int)Math.Floor((membershipSize - 1) / 4.0);
 
-        for (var i = 0; i < Math.Max(0, threshold - 1); i++)
+        // The coordinator's Propose() method broadcasts the proposal and also
+        // enqueues its own vote as an inbound event. So we need to send
+        // (threshold - 2) external votes to get to (threshold - 1) total votes,
+        // then send one more to reach the threshold.
+        var externalVotesBeforeThreshold = Math.Max(0, threshold - 2);
+
+        for (var i = 0; i < externalVotesBeforeThreshold; i++)
         {
             coordinator.HandleMessages(new RapidClusterRequest
             {
@@ -159,15 +171,17 @@ public sealed class FastRoundConsensusCoordinatorTests
                     Proposal = proposal
                 }
             }, TestContext.Current.CancellationToken);
-
         }
 
+        // Only check "not decided" if we haven't already reached threshold
+        // (which happens when threshold <= 1, i.e., membershipSize == 1)
         if (threshold > 1)
         {
             await Task.Delay(50, TestContext.Current.CancellationToken);
             Assert.False(coordinator.Decided.IsCompleted);
         }
 
+        // Send the final vote that should push us to the threshold
         coordinator.HandleMessages(new RapidClusterRequest
         {
             Phase2BMessage = new Phase2bMessage

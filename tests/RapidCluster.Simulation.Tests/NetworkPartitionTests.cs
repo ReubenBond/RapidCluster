@@ -30,7 +30,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Create bidirectional partition
         _harness.PartitionNodes(seedNode, joiner);
@@ -66,7 +66,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Isolate joiner2
         _harness.IsolateNode(joiner2);
@@ -74,7 +74,8 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         // Wait for failure detection and removal
         // With 3 nodes, the remaining 2 can reach consensus to remove the isolated node
         // Only check the non-isolated nodes - the isolated node won't see the updated view
-        _harness.WaitForConvergence([seedNode, joiner1], expectedSize: 2);
+        _harness.WaitForNodeSize(seedNode, expectedSize: 2);
+        _harness.WaitForNodeSize(joiner1, expectedSize: 2);
 
         Assert.Equal(2, seedNode.MembershipSize);
         Assert.Equal(2, joiner1.MembershipSize);
@@ -108,7 +109,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Isolate joiner2
         _harness.IsolateNode(joiner2);
@@ -152,7 +153,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Isolate multiple nodes
         _harness.IsolateNode(joiner2);
@@ -192,7 +193,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Create partition
         _harness.PartitionNodes(seedNode, joiner);
@@ -211,7 +212,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         for (var i = 0; i < 5; i++)
         {

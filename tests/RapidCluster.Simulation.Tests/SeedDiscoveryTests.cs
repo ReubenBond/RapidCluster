@@ -39,7 +39,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner.IsInitialized);
         Assert.Equal(2, joiner.MembershipSize);
@@ -73,12 +73,12 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Join with multiple seeds configured
         var joiner3 = _harness.CreateJoinerNodeWithMultipleSeeds([seedNode, joiner1, joiner2], nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner3.IsInitialized);
         Assert.Equal(4, joiner3.MembershipSize);
@@ -93,12 +93,12 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Join with seedNode first in the list
         var joiner2 = _harness.CreateJoinerNodeWithMultipleSeeds([seedNode, joiner1], nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner2.IsInitialized);
         Assert.Equal(3, joiner2.MembershipSize);
@@ -116,18 +116,18 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash the original seed
         _harness.CrashNode(seedNode);
 
         // Wait for cluster to stabilize
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Join with secondary seed (joiner1) - should work since seedNode is down
         var joiner4 = _harness.CreateJoinerNodeWithMultipleSeeds([joiner1, joiner2], nodeId: 4);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner4.IsInitialized);
         Assert.Equal(4, joiner4.MembershipSize);
@@ -156,7 +156,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Create node with duplicate seeds
         var duplicateSeeds = new List<Endpoint>
@@ -168,7 +168,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         };
         var joiner2 = _harness.CreateJoinerNodeWithSeedAddresses(duplicateSeeds, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner2.IsInitialized);
         Assert.Equal(3, joiner2.MembershipSize);
@@ -185,7 +185,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
     {
         var seedNode = _harness.CreateSeedNode();
 
-        _harness.WaitForConvergence(expectedSize: 1);
+        _harness.WaitForConvergence();
 
         // Get the address that the joiner will use
         var joinerAddress = RapidClusterUtils.HostFromParts("node", 1);
@@ -195,7 +195,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seedsIncludingSelf = new List<Endpoint> { joinerAddress, seedNode.Address };
         var joiner = _harness.CreateJoinerNodeWithSeedAddresses(seedsIncludingSelf, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner.IsInitialized);
         Assert.Equal(2, joiner.MembershipSize);
@@ -211,7 +211,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Get the address that joiner2 will use
         var joiner2Address = RapidClusterUtils.HostFromParts("node", 2);
@@ -228,7 +228,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         };
         var joiner2 = _harness.CreateJoinerNodeWithSeedAddresses(seedsWithMultipleSelf, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner2.IsInitialized);
         Assert.Equal(3, joiner2.MembershipSize);
@@ -253,7 +253,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         // Join a new node using any existing node as seed
         var joiner = _harness.CreateJoinerNodeWithMultipleSeeds([nodes[0], nodes[2], nodes[4]], nodeId: 5);
 
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner.IsInitialized);
         Assert.Equal(6, joiner.MembershipSize);
@@ -328,7 +328,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Verify initial state
         Assert.Equal(3, seedNode.MembershipSize);

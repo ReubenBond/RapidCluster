@@ -12,7 +12,7 @@ namespace RapidCluster.Simulation.Tests.Infrastructure;
 /// using var collector = new ObservableCollector&lt;MembershipView&gt;(node.ViewAccessor.Updates);
 /// 
 /// // Run simulation or perform operations...
-/// harness.WaitForConvergence(expectedSize: 3);
+/// harness.WaitForConvergence();
 /// 
 /// // Inspect collected items
 /// var viewsWithSize3 = collector.Items.Where(v => v.Size == 3).ToList();

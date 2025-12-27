@@ -151,7 +151,7 @@ public sealed class MessageDeliveryTests : IAsyncLifetime
         // The join protocol has retry logic with exponential backoff
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner.IsInitialized);
         Assert.Equal(2, joiner.MembershipSize);
@@ -171,12 +171,12 @@ public sealed class MessageDeliveryTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 200000);
+        _harness.WaitForConvergence();
 
         // Add another node with message loss active
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 200000);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
     }

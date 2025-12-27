@@ -73,7 +73,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         // Join a node - this should trigger a callback that the collector CAN see
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -102,11 +102,11 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var joinerCallbackLog = new ConcurrentBag<MembershipView>();
         var collector = CreateViewCollector(joiner1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Trigger another membership change so joiner1 receives a callback
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, joinerCallbackLog);
@@ -132,7 +132,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.RunUntilIdle();
 
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector1, callbackLog1);
@@ -164,15 +164,15 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner1Collector = CreateViewCollector(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner2Collector = CreateViewCollector(joiner2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Add a third joiner so that joiner1 and joiner2 both receive at least one callback
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Collect all views after final convergence
         CollectViews(seedCollector, seedCallbackLog);
@@ -207,10 +207,10 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.RunUntilIdle();
 
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -237,7 +237,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.RunUntilIdle();
 
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -263,14 +263,14 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Start collecting after first convergence
         var collector = CreateViewCollector(seedNode);
 
         // Add another node - this triggers a view change we will capture
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -294,7 +294,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Start collecting AFTER convergence, so we have a clean starting point
         var callbackLog = new ConcurrentBag<MembershipView>();
@@ -306,7 +306,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.CrashNode(joiner2);
 
         // Wait for failure detection
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -335,11 +335,11 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         // First joiner - triggers first callback
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Second joiner - triggers second callback with different config ID
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -371,11 +371,11 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var joiner1CallbackLog = new ConcurrentBag<MembershipView>();
         var joiner1Collector = CreateViewCollector(joiner1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Add a third node so both seed and joiner1 receive callbacks
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(seedCollector, seedCallbackLog);
@@ -399,7 +399,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
     {
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Add subscription after join
         var callbackLog = new ConcurrentBag<MembershipView>();
@@ -407,7 +407,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         // Trigger another membership change
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbackLog);
@@ -436,7 +436,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         // This should work fine
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, successfulCallbacks);
@@ -461,7 +461,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         // Trigger a membership change to get a callback
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, callbacks);

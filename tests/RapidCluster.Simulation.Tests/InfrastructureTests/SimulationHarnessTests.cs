@@ -83,7 +83,7 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
     {
         var seed = _harness.CreateSeedNode(0);
         var joiner = _harness.CreateJoinerNode(seed, nodeId: 1);
-        _harness.WaitForConvergence(2);
+        _harness.WaitForConvergence();
 
         // Just test that the method doesn't throw
         _harness.IsolateNode(joiner);
@@ -97,7 +97,7 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
     {
         var seed = _harness.CreateSeedNode(0);
         var joiner = _harness.CreateJoinerNode(seed, nodeId: 1);
-        _harness.WaitForConvergence(2);
+        _harness.WaitForConvergence();
 
         _harness.IsolateNode(joiner);
         _harness.ReconnectNode(joiner);
@@ -347,7 +347,7 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
         var seed = _harness.CreateSeedNode(0);
         var joiner = _harness.CreateJoinerNode(seed, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Suspend the joiner node
         joiner.Suspend();
@@ -374,7 +374,7 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seed, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seed, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Suspend nodes 1 and 2
         joiner1.Suspend();
@@ -461,9 +461,11 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
 
         // Waiting for size 5 when only 1 node exists should timeout
+        // Using WaitForNodeSize since parameterless WaitForConvergence would succeed
+        // with a single node (active count = 1, node sees 1)
         Assert.Throws<TimeoutException>(() =>
         {
-            _harness.WaitForConvergence(expectedSize: 5, maxIterations: 100);
+            _harness.WaitForNodeSize(seedNode, expectedSize: 5, maxIterations: 100);
         });
     }
 

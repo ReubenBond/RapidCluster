@@ -39,12 +39,12 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Join a new node with multiple seeds configured (all available)
         var joiner3 = _harness.CreateJoinerNodeWithMultipleSeeds([seedNode, joiner1, joiner2], nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner3.IsInitialized);
         Assert.Equal(4, joiner3.MembershipSize);
@@ -63,20 +63,20 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash the original seed node
         _harness.CrashNode(seedNode);
 
         // Wait for failure detection
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Join a new node with multiple seeds configured
         // First seed (seedNode) is crashed, so it should fail over to joiner1
         // Note: We pass seedNode first but it's crashed, so the join will try joiner1
         var joiner4 = _harness.CreateJoinerNodeWithMultipleSeeds([joiner1, joiner2], nodeId: 4);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner4.IsInitialized);
         Assert.Equal(4, joiner4.MembershipSize);
@@ -95,19 +95,19 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
         var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
 
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash two nodes
         _harness.CrashNode(seedNode);
         _harness.CrashNode(joiner1);
 
         // Wait for failure detection (3 remaining nodes can reach quorum)
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Join with multiple seeds - first two are crashed, third (joiner2) is available
         var joiner5 = _harness.CreateJoinerNodeWithMultipleSeeds([joiner2, joiner3, joiner4], nodeId: 5);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner5.IsInitialized);
         Assert.Equal(4, joiner5.MembershipSize);
@@ -130,7 +130,7 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Suspend the seed node (it won't respond to messages)
         seedNode.Suspend();
@@ -162,7 +162,7 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Suspend all nodes so they don't respond
         seedNode.Suspend();
@@ -197,14 +197,14 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Create a node with duplicate seeds in the list
         // MembershipService should deduplicate these
         var duplicateSeeds = new List<Endpoint> { seedNode.Address, seedNode.Address, joiner1.Address, seedNode.Address };
         var joiner3 = _harness.CreateJoinerNodeWithSeedAddresses(duplicateSeeds, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner3.IsInitialized);
         Assert.Equal(4, joiner3.MembershipSize);
@@ -226,12 +226,12 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Join with seedNode first in the list - it should be tried first and succeed
         var joiner3 = _harness.CreateJoinerNodeWithMultipleSeeds([seedNode, joiner1, joiner2], nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner3.IsInitialized);
         // The join succeeded, which means at least one seed worked

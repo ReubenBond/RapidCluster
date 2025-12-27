@@ -200,7 +200,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         // Test a large cluster (20 nodes)
         var nodes = _harness.CreateCluster(size: 20);
 
-        _harness.WaitForConvergence(expectedSize: 20);
+        _harness.WaitForConvergence();
 
         Assert.All(nodes, n => Assert.Equal(20, n.MembershipSize));
     }
@@ -215,7 +215,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
     {
         var nodes = _harness.CreateCluster(size: 10);
 
-        _harness.WaitForConvergence(expectedSize: 10);
+        _harness.WaitForConvergence();
 
         Assert.Equal(10, nodes.Count);
         Assert.All(nodes, n => Assert.True(n.IsInitialized));

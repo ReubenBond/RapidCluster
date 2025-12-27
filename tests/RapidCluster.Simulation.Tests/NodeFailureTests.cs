@@ -34,14 +34,14 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash one joiner
         _harness.CrashNode(joiner2);
 
         // Wait for failure detection and removal
         // The remaining 2 nodes can reach consensus to remove the crashed node
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.Equal(2, seedNode.MembershipSize);
         Assert.Equal(2, joiner1.MembershipSize);
@@ -67,7 +67,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash one joiner
         _harness.CrashNode(joiner1);
@@ -93,7 +93,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
     {
         var nodes = _harness.CreateCluster(size: 5);
 
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash two nodes
         _harness.CrashNode(nodes[3]);
@@ -101,7 +101,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
 
         // Wait for failure detection
         // 3 out of 5 nodes remain, which is a majority for consensus
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, node => Assert.Equal(3, node.MembershipSize));
     }
@@ -113,7 +113,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash nodes sequentially
         _harness.CrashNode(joiner2);
@@ -131,7 +131,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash multiple nodes "simultaneously"
         _harness.CrashNode(joiner2);
@@ -149,7 +149,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash the original seed node
         _harness.CrashNode(seedNode);
@@ -189,7 +189,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash the original seed
         _harness.CrashNode(seedNode);
@@ -201,13 +201,13 @@ public sealed class NodeFailureTests : IAsyncLifetime
         // 2. Alert broadcast and processing
         // 3. Consensus protocol (FastPaxos or classic Paxos with recovery delay)
         // Use a higher iteration count to allow for all these steps.
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Join through one of the remaining joiners (which are still part of the cluster)
         var joiner3 = _harness.CreateJoinerNode(joiner1, nodeId: 3);
 
         Assert.True(joiner3.IsInitialized);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
         Assert.Equal(3, joiner1.MembershipSize);
     }
 
@@ -227,7 +227,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Crash the joiner immediately
         _harness.CrashNode(joiner);

@@ -58,7 +58,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Both nodes should have the same ClusterId
         var seedClusterId = seedNode.CurrentView.ConfigurationId.ClusterId;
@@ -79,7 +79,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // ClusterId should remain stable across all membership changes
         Assert.Equal(initialClusterId, seedNode.CurrentView.ConfigurationId.ClusterId);
@@ -96,13 +96,13 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var initialClusterId = seedNode.CurrentView.ConfigurationId.ClusterId;
 
         // Remove one node
         _harness.RemoveNodeGracefully(joiner2);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // ClusterId should remain stable
         Assert.Equal(initialClusterId, seedNode.CurrentView.ConfigurationId.ClusterId);
@@ -117,7 +117,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var initialClusterId = seedNode.CurrentView.ConfigurationId.ClusterId;
 
@@ -125,7 +125,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         _harness.CrashNode(joiner2);
 
         // Let failure detection and consensus run
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // ClusterId should remain stable
         Assert.Equal(initialClusterId, seedNode.CurrentView.ConfigurationId.ClusterId);
@@ -150,7 +150,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var initialVersion = seedNode.CurrentView.ConfigurationId.Version;
 
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Version should have increased
         Assert.True(seedNode.CurrentView.ConfigurationId.Version > initialVersion);
@@ -177,7 +177,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(nodes[8]);
 
         var remainingNodes = nodes.Take(8).ToList();
-        _harness.WaitForConvergence(remainingNodes, expectedSize: 8);
+        _harness.WaitForConvergence();
 
         // ClusterId should still be consistent
         Assert.All(remainingNodes, node =>
@@ -191,13 +191,19 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var seed1 = _harness.CreateSeedNode(nodeId: 0);
         var joiner1a = _harness.CreateJoinerNode(seed1, nodeId: 1);
         var joiner1b = _harness.CreateJoinerNode(seed1, nodeId: 2);
-        _harness.WaitForConvergence([seed1, joiner1a, joiner1b], expectedSize: 3);
+        // Wait for the first cluster to converge to 3 nodes
+        _harness.WaitForNodeSize(seed1, expectedSize: 3);
+        _harness.WaitForNodeSize(joiner1a, expectedSize: 3);
+        _harness.WaitForNodeSize(joiner1b, expectedSize: 3);
 
         // Create second cluster (nodes 100-102) - independent cluster
         var seed2 = _harness.CreateSeedNode(nodeId: 100);
         var joiner2a = _harness.CreateJoinerNode(seed2, nodeId: 101);
         var joiner2b = _harness.CreateJoinerNode(seed2, nodeId: 102);
-        _harness.WaitForConvergence([seed2, joiner2a, joiner2b], expectedSize: 3);
+        // Wait for the second cluster to converge to 3 nodes
+        _harness.WaitForNodeSize(seed2, expectedSize: 3);
+        _harness.WaitForNodeSize(joiner2a, expectedSize: 3);
+        _harness.WaitForNodeSize(joiner2b, expectedSize: 3);
 
         // The two clusters should have different ClusterIds
         var clusterId1 = seed1.CurrentView.ConfigurationId.ClusterId;

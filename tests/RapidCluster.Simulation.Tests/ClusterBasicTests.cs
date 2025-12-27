@@ -123,7 +123,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.Equal(seedNode.CurrentView.ConfigurationId, joiner.CurrentView.ConfigurationId);
     }
@@ -136,13 +136,13 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Joiner2 leaves gracefully
         _harness.RemoveNodeGracefully(joiner2);
 
         // Wait for remaining nodes to see the leave
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.Equal(2, seedNode.MembershipSize);
         Assert.Equal(2, joiner1.MembershipSize);
@@ -156,13 +156,13 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Seed leaves gracefully
         _harness.RemoveNodeGracefully(seedNode);
 
         // Wait for remaining nodes to see the leave
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.Equal(2, joiner1.MembershipSize);
         Assert.Equal(2, joiner2.MembershipSize);
@@ -209,7 +209,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // All nodes should have the same membership size
         Assert.Equal(3, seedNode.MembershipSize);
@@ -226,7 +226,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Configuration ID should have changed after membership change
         // Note: Configuration IDs are hashes, so they change but don't necessarily increase monotonically
@@ -243,7 +243,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var view = seedNode.CurrentView;
         var addresses = view.Members.Select(m => $"{m.Hostname}:{m.Port}").ToHashSet();

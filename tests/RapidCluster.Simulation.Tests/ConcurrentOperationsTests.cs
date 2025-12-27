@@ -38,7 +38,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
@@ -54,7 +54,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Suspend one node
         joiner1.Suspend();
@@ -66,7 +66,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         joiner1.Resume();
 
         // All should converge
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
@@ -78,7 +78,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     public void JoinWhileMultipleNodesSuspended()
     {
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Suspend minority (2 out of 5)
         nodes[3].Suspend();
@@ -92,7 +92,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         nodes[4].Resume();
 
         // All should converge to 6
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(6, n.MembershipSize));
     }
@@ -108,7 +108,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash one node
         _harness.CrashNode(joiner3);
@@ -117,7 +117,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
 
         // Wait for convergence (should have 4 nodes: original 4 - 1 crash + 1 join)
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
@@ -130,7 +130,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     {
         // Start with 5 nodes
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash one node
         _harness.CrashNode(nodes[4]);
@@ -145,7 +145,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var newNode2 = _harness.CreateJoinerNode(nodes[0], nodeId: 6);
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 5, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         Assert.Equal(5, _harness.Nodes.Count);
     }
@@ -157,7 +157,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     public void FailureDuringConsensusHandled()
     {
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Suspend nodes to delay consensus
         nodes[3].Suspend();
@@ -171,7 +171,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         nodes[4].Resume();
 
         // Cluster should eventually converge
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
@@ -186,14 +186,14 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Leave and join close together
         _harness.RemoveNodeGracefully(joiner2);
 
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
     }
@@ -205,7 +205,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     public void MultipleLeavesWithJoins()
     {
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var nodeIdCounter = 5;
 
@@ -216,7 +216,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(nodes[3]);
         var newNode2 = _harness.CreateJoinerNode(nodes[0], nodeId: nodeIdCounter++);
 
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(5, n.MembershipSize));
     }
@@ -228,7 +228,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     public void SuspendedNodeDoesNotParticipateInConsensus()
     {
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Suspend one node
         nodes[3].Suspend();
@@ -238,7 +238,11 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var newNode = _harness.CreateJoinerNode(nodes[0], nodeId: 4);
 
         // Drive propagation to the non-suspended nodes.
-        _harness.WaitForConvergence([nodes[0], nodes[1], nodes[2], newNode], expectedSize: 5);
+        // Wait for the active nodes to see membership of 5 (4 original + 1 new)
+        _harness.WaitForNodeSize(nodes[0], expectedSize: 5);
+        _harness.WaitForNodeSize(nodes[1], expectedSize: 5);
+        _harness.WaitForNodeSize(nodes[2], expectedSize: 5);
+        _harness.WaitForNodeSize(newNode, expectedSize: 5);
 
         // Remaining active nodes should see the new member
         Assert.Equal(5, nodes[0].MembershipSize);
@@ -250,7 +254,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
 
         // Resume and let it catch up
         nodes[3].Resume();
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(5, n.MembershipSize));
     }
@@ -262,7 +266,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     public void TimedSuspensionWorksCorrectly()
     {
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Suspend node for a duration
         nodes[2].SuspendFor(TimeSpan.FromSeconds(2));
@@ -283,7 +287,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     public void OperationsStallWhenMajoritySuspended()
     {
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Suspend majority (3 out of 5)
         nodes[2].Suspend();
@@ -303,7 +307,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         nodes[3].Resume();
         nodes[4].Resume();
 
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(6, n.MembershipSize));
     }
@@ -350,7 +354,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
     {
         // Start with 6 nodes
         var nodes = _harness.CreateCluster(size: 6);
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         var nodeIdCounter = 6;
 
@@ -376,7 +380,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         nodes[5].Resume();
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 7, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(7, n.MembershipSize));
     }
@@ -391,7 +395,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var nodeIdCounter = 3;
 
@@ -405,7 +409,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
             // Add new node
             var newNode = _harness.CreateJoinerNode(seedNode, nodeId: nodeIdCounter++);
 
-            _harness.WaitForConvergence(expectedSize: 3);
+            _harness.WaitForConvergence();
         }
 
         // Verify final consistency
@@ -456,7 +460,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         nodes[4].Resume();
 
         // Cluster should converge to 6 nodes (4 active + 2 rejoined)
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
     }
 
 }

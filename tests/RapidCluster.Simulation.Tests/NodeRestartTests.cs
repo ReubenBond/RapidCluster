@@ -40,7 +40,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Record the original NodeId for joiner1
         var originalNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
@@ -50,11 +50,11 @@ public sealed class NodeRestartTests : IAsyncLifetime
         _harness.CrashNode(joiner1);
 
         // Wait for failure detection to remove the crashed node
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Restart with the SAME nodeId (same address)
         var restartedNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Verify the restarted node got a NEW (higher) NodeId
         var newNodeId = restartedNode.CurrentView.GetNodeId(restartedNode.Address);
@@ -77,18 +77,18 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Record the original NodeId
         var originalNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
 
         // Graceful leave
         _harness.RemoveNodeGracefully(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Restart with the SAME nodeId (same address)
         var restartedNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Verify the restarted node got a NEW (higher) NodeId
         var newNodeId = restartedNode.CurrentView.GetNodeId(restartedNode.Address);
@@ -107,7 +107,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var previousNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
         var currentNode = joiner1;
@@ -117,11 +117,11 @@ public sealed class NodeRestartTests : IAsyncLifetime
         {
             // Crash the node
             _harness.CrashNode(currentNode);
-            _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+            _harness.WaitForConvergence();
 
             // Restart with same address
             currentNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-            _harness.WaitForConvergence(expectedSize: 3);
+            _harness.WaitForConvergence();
 
             // Verify NodeId increased
             var newNodeId = currentNode.CurrentView.GetNodeId(currentNode.Address);
@@ -142,19 +142,19 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Record the original NodeId for seed
         var originalNodeId = seedNode.CurrentView.GetNodeId(seedNode.Address);
 
         // Crash the seed node
         _harness.CrashNode(seedNode);
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Restart seed with same address (nodeId: 0)
         // Note: Must join through an existing member since it's no longer the seed
         var restartedSeed = _harness.CreateJoinerNode(joiner1, nodeId: 0);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Verify the restarted seed got a NEW (higher) NodeId
         var newNodeId = restartedSeed.CurrentView.GetNodeId(restartedSeed.Address);
@@ -175,7 +175,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
         var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
 
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Record original NodeIds
         var originalId1 = joiner1.CurrentView.GetNodeId(joiner1.Address);
@@ -184,14 +184,14 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Crash both nodes (3 remaining is still a majority)
         _harness.CrashNode(joiner1);
         _harness.CrashNode(joiner2);
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Restart both with same addresses
         var restarted1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var restarted2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Verify both got new NodeIds
         var newId1 = restarted1.CurrentView.GetNodeId(restarted1.Address);
@@ -217,7 +217,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Initial MaxNodeId should be 3 (seed=1, joiner1=2, joiner2=3)
         var initialMaxId = seedNode.CurrentView.MaxNodeId;
@@ -225,10 +225,10 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         // Crash and restart joiner1
         _harness.CrashNode(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         var restarted = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // MaxNodeId should have increased
         var newMaxId = seedNode.CurrentView.MaxNodeId;
@@ -252,7 +252,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash joiner1 while another node is joining
         _harness.CrashNode(joiner1);
@@ -261,11 +261,11 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
 
         // Wait for cluster to stabilize
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Now restart joiner1 at its original address
         var restarted1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Verify all nodes converged
         Assert.All(_harness.Nodes, n => Assert.Equal(5, n.MembershipSize));
@@ -282,7 +282,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var currentNode = joiner1;
         var previousMaxId = seedNode.CurrentView.MaxNodeId;
@@ -291,10 +291,10 @@ public sealed class NodeRestartTests : IAsyncLifetime
         for (var i = 0; i < 3; i++)
         {
             _harness.CrashNode(currentNode);
-            _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+            _harness.WaitForConvergence();
 
             currentNode = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-            _harness.WaitForConvergence(expectedSize: 3);
+            _harness.WaitForConvergence();
 
             // Verify MaxNodeId increased
             var currentMaxId = seedNode.CurrentView.MaxNodeId;
@@ -319,18 +319,18 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash and restart joiner1
         _harness.CrashNode(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         var restarted1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Now add a new node - the restarted node must participate in consensus
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Verify all nodes see the new member
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
@@ -352,7 +352,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Get the original NodeId from the membership view
         var originalNodeId = joiner1.CurrentView.GetNodeId(joiner1.Address);
@@ -360,10 +360,10 @@ public sealed class NodeRestartTests : IAsyncLifetime
 
         // Crash and restart
         _harness.CrashNode(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         var restarted = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // The restarted node should have the same hostname:port
         var newAddress = restarted.Address;

@@ -37,15 +37,15 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Graceful leave
         _harness.RemoveNodeGracefully(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Rejoin with a new node ID (simulating a restart with new identity)
         var rejoined = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(rejoined.IsInitialized);
         Assert.Equal(3, seedNode.MembershipSize);
@@ -64,17 +64,17 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash joiner1
         _harness.CrashNode(joiner1);
 
         // Wait for failure detection to remove the crashed node
-        _harness.WaitForConvergence(expectedSize: 2, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Rejoin with a new node ID
         var rejoined = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(rejoined.IsInitialized);
         Assert.Equal(3, seedNode.MembershipSize);
@@ -92,21 +92,21 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // First leave and rejoin cycle
         _harness.RemoveNodeGracefully(joiner2);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         var rejoined1 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Second leave and rejoin cycle
         _harness.RemoveNodeGracefully(rejoined1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         var rejoined2 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(rejoined2.IsInitialized);
         Assert.Equal(3, seedNode.MembershipSize);
@@ -123,15 +123,15 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Seed leaves gracefully
         _harness.RemoveNodeGracefully(seedNode);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // New node joins through one of the remaining nodes
         var joiner3 = _harness.CreateJoinerNode(joiner1, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner3.IsInitialized);
         Assert.Equal(3, joiner1.MembershipSize);
@@ -150,21 +150,21 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Two nodes leave
         _harness.RemoveNodeGracefully(joiner2);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(joiner3);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Both rejoin
         var rejoined1 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var rejoined2 = _harness.CreateJoinerNode(seedNode, nodeId: 5);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(rejoined1.IsInitialized);
         Assert.True(rejoined2.IsInitialized);
@@ -184,7 +184,7 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash a node but don't wait for full convergence
         _harness.CrashNode(joiner3);
@@ -194,7 +194,7 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
 
         // Eventually all should converge to 4 nodes
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         Assert.True(joiner4.IsInitialized);
     }
@@ -210,16 +210,16 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Rapid leave/rejoin cycles
         for (var i = 0; i < 3; i++)
         {
             _harness.RemoveNodeGracefully(joiner2);
-            _harness.WaitForConvergence(expectedSize: 2);
+            _harness.WaitForConvergence();
 
             joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 3 + i);
-            _harness.WaitForConvergence(expectedSize: 3);
+            _harness.WaitForConvergence();
         }
 
         Assert.Equal(3, seedNode.MembershipSize);
@@ -237,23 +237,23 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Node leaves
         _harness.RemoveNodeGracefully(joiner1);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // New node joins
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Another node leaves
         _harness.RemoveNodeGracefully(joiner2);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Another new node joins
         var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Verify final state
         Assert.Equal(3, seedNode.MembershipSize);
@@ -273,21 +273,21 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Isolate one node
         _harness.IsolateNode(joiner3);
 
         // Wait for failure detection to kick out the isolated node
         // Only check the non-isolated nodes - the isolated node won't see the updated view
-        _harness.WaitForConvergence([seedNode, joiner1, joiner2], expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Crash the isolated node (simulating it being removed)
         _harness.CrashNode(joiner3);
 
         // Reconnect wouldn't help since the node is crashed, but we can add a new one
         var newJoiner = _harness.CreateJoinerNode(seedNode, nodeId: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.Equal(4, seedNode.MembershipSize);
         Assert.Equal(4, newJoiner.MembershipSize);
@@ -305,17 +305,17 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Crash the original seed
         _harness.CrashNode(seedNode);
 
         // Wait for failure detection
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Rejoin through a different node
         var newJoiner = _harness.CreateJoinerNode(joiner1, nodeId: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.True(newJoiner.IsInitialized);
         Assert.Equal(4, joiner1.MembershipSize);
@@ -329,21 +329,21 @@ public sealed class NodeRejoinTests : IAsyncLifetime
     {
         // Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash 2 nodes (leaving 3 which is still a majority)
         _harness.CrashNode(nodes[3]);
         _harness.CrashNode(nodes[4]);
 
         // Wait for failure detection
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         // Add new nodes to recover
         var newNode1 = _harness.CreateJoinerNode(nodes[0], nodeId: 5);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var newNode2 = _harness.CreateJoinerNode(nodes[0], nodeId: 6);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         Assert.Equal(5, nodes[0].MembershipSize);
         Assert.Equal(5, newNode1.MembershipSize);
@@ -362,24 +362,24 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Cycle 1: Crash and recover
         _harness.CrashNode(joiner3);
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         var recovery1 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Verify consistency
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
 
         // Cycle 2: Crash and recover
         _harness.CrashNode(joiner2);
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 500000);
+        _harness.WaitForConvergence();
 
         var recovery2 = _harness.CreateJoinerNode(seedNode, nodeId: 5);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Verify final consistency
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));

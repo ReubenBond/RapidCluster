@@ -30,7 +30,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Both nodes should have accepted the membership change via consensus
         Assert.Equal(2, seedNode.MembershipSize);
@@ -50,7 +50,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         // Wait for full convergence
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // All nodes should eventually reach consensus on membership
         Assert.Equal(3, seedNode.MembershipSize);
@@ -81,7 +81,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // All nodes should have the same view of membership (consensus decision)
         var seedMembers = seedNode.CurrentView.Members.Select(m => $"{m.Hostname}:{m.Port}").OrderBy(x => x).ToList();
@@ -98,7 +98,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // Create 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
 
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash 1 node (minority)
         _harness.CrashNode(nodes[4]);
@@ -115,7 +115,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // Create 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
 
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash 3 nodes (majority)
         _harness.CrashNode(nodes[2]);
@@ -143,7 +143,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Both nodes should be properly initialized after membership change
         Assert.True(seedNode.IsInitialized);
@@ -163,7 +163,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // All nodes should eventually agree
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
@@ -198,7 +198,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // This would require injecting a proposal with an old configuration ID
         // and verifying it's rejected - needs low-level protocol access
@@ -214,7 +214,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // All nodes should have the same final configuration
         var configId = seedNode.CurrentView.ConfigurationId;
@@ -251,7 +251,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         Assert.True(joiner.IsInitialized, "Joiner should be initialized after join with retries");
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.Equal(2, seedNode.MembershipSize);
         Assert.Equal(2, joiner.MembershipSize);
@@ -264,14 +264,14 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // If one node crashes, Fast Paxos cannot succeed, but Classic Paxos can
         // because it only needs majority (2 out of 3)
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Crash one node
         _harness.CrashNode(nodes[2]);
 
         // The remaining 2 nodes should eventually reach consensus via Classic Paxos
         // to remove the crashed node
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         Assert.Equal(2, nodes[0].MembershipSize);
         Assert.Equal(2, nodes[1].MembershipSize);
@@ -283,12 +283,12 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // For N=5, f=1, Fast Paxos needs 4 nodes (N-f=4)
         // Classic Paxos needs majority = 3
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash one node - Fast Paxos still works with 4 nodes
         _harness.CrashNode(nodes[4]);
 
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
@@ -299,14 +299,14 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // For N=5, f=1, Fast Paxos needs 4 nodes
         // If 2 crash, only 3 remain - Fast Paxos fails, Classic Paxos succeeds
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash two nodes
         _harness.CrashNode(nodes[3]);
         _harness.CrashNode(nodes[4]);
 
         // Classic Paxos should succeed with 3 nodes (majority)
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
     }
@@ -320,7 +320,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
 
         // Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Now crash a node - this will trigger:
         // 1. Fast Paxos attempt (fails because needs all 3)
@@ -329,7 +329,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
 
         // If RegisterFastRoundVote is implemented correctly, the remaining nodes
         // will have recorded their fast round votes and Phase1b will report them
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // All remaining nodes should have consistent membership
         Assert.Equal(nodes[0].CurrentView.ConfigurationId, nodes[1].CurrentView.ConfigurationId);
@@ -349,14 +349,14 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // With 3 remaining, Classic Paxos can succeed
         // Multiple remaining nodes may try to become coordinator
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash 2 nodes to force Classic Paxos
         _harness.CrashNode(nodes[3]);
         _harness.CrashNode(nodes[4]);
 
         // Should converge despite potential coordinator competition
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         Assert.Equal(3, nodes[0].MembershipSize);
         Assert.Equal(3, nodes[1].MembershipSize);
@@ -377,7 +377,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // - After 2nd crash: 2 remaining, need majority of 3 (2) - achievable with 2 nodes
 
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Verify initial state
         Assert.All(nodes, n => Assert.Equal(4, n.MembershipSize));
@@ -386,7 +386,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         _harness.CrashNode(nodes[3]);
 
         // Wait for convergence to 3 - the remaining 3 nodes can reach majority (3/4)
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Verify all remaining nodes see size 3
         Assert.Equal(3, nodes[0].MembershipSize);
@@ -402,7 +402,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         _harness.CrashNode(nodes[2]);
 
         // Wait for convergence to 2 - the remaining 2 nodes can reach majority (2/3)
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Verify all remaining nodes see size 2
         Assert.Equal(2, nodes[0].MembershipSize);
@@ -423,7 +423,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Record the configuration ID after first consensus
         var configAfterJoins = seedNode.CurrentView.ConfigurationId;

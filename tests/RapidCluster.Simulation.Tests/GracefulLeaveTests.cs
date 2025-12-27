@@ -94,7 +94,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var leavingNode = nodes[2];
         var remainingNodes = new[] { nodes[0], nodes[1] };
@@ -111,7 +111,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var leavingNode = nodes[2];
 
@@ -128,7 +128,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster (need 4 for quorum after seed leaves)
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var seedNode = nodes[0];
         var remainingNodes = nodes.Skip(1).ToList();
@@ -137,7 +137,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(seedNode);
 
         // Assert: Remaining nodes converge
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
     }
 
@@ -146,7 +146,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var middleNode = nodes[2];
         var remainingNodes = nodes.Where(n => n != middleNode).ToList();
@@ -155,7 +155,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(middleNode);
 
         // Assert: Remaining nodes converge
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
     }
 
@@ -164,7 +164,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var lastNode = nodes[3];
         var remainingNodes = nodes.Take(3).ToList();
@@ -173,7 +173,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(lastNode);
 
         // Assert: Remaining nodes converge
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
     }
 
@@ -182,14 +182,14 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Act: Two nodes leave sequentially
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Three nodes remain
         Assert.Equal(3, _harness.Nodes.Count);
@@ -201,17 +201,17 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 6-node cluster
         var nodes = _harness.CreateCluster(size: 6);
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         // Act: Three nodes leave sequentially
         _harness.RemoveNodeGracefully(nodes[5]);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Three nodes remain
         Assert.Equal(3, _harness.Nodes.Count);
@@ -223,17 +223,17 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 6-node cluster
         var nodes = _harness.CreateCluster(size: 6);
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         // Act: Remove alternating nodes (1, 3, 5 - keeping 0, 2, 4)
         _harness.RemoveNodeGracefully(nodes[1]);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[5]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Correct nodes remain
         Assert.Contains(nodes[0], _harness.Nodes);
@@ -247,7 +247,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var keepNode = nodes[0];
 
@@ -266,14 +266,14 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Act: Seed leaves first, then others
         _harness.RemoveNodeGracefully(nodes[0]); // seed
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Three nodes remain (1, 2, 3)
         Assert.Equal(3, _harness.Nodes.Count);
@@ -287,13 +287,13 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster and set up view collector before any actions
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var collector = CreateViewCollector(nodes[0]);
 
         // Act: One node gracefully leaves
         _harness.RemoveNodeGracefully(nodes[2]);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Assert: View changes were emitted
         var viewChangeCount = CountViewChanges(collector);
@@ -305,7 +305,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster and set up view collectors before any actions
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var collectors = new[]
         {
@@ -316,7 +316,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Act: Node 3 gracefully leaves
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: All remaining nodes received notification
         var viewChangeCounts = collectors.Select(CountViewChanges).ToArray();
@@ -328,16 +328,16 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster and set up view collector before any actions
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var collector = CreateViewCollector(nodes[0]);
 
         // Act: Two nodes leave
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[2]);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Assert: Observed sizes should include 3 and 2
         var observedSizes = CollectViewChangeMembershipSizes(collector);
@@ -350,13 +350,13 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var initialConfigId = nodes[0].CurrentView.ConfigurationId;
 
         // Act: Node gracefully leaves
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Configuration ID changed and version increased
         var newConfigId = nodes[0].CurrentView.ConfigurationId;
@@ -370,17 +370,17 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var configIds = new List<ConfigurationId> { nodes[0].CurrentView.ConfigurationId };
 
         // Act: Multiple nodes leave
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
         configIds.Add(nodes[0].CurrentView.ConfigurationId);
 
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
         configIds.Add(nodes[0].CurrentView.ConfigurationId);
 
         // Assert: Configuration IDs have strictly increasing versions
@@ -396,7 +396,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster with message drops
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Enable some message drops
         _harness.Network.MessageDropRate = 0.1; // 10% drop rate
@@ -405,7 +405,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(nodes[3]);
 
         // Wait for convergence with higher iteration count due to retries
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 200000);
+        _harness.WaitForConvergence();
 
         // Clean up
         _harness.Network.MessageDropRate = 0;
@@ -419,7 +419,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster with network delays
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Enable delays
         _harness.Network.EnableDelays = true;
@@ -430,7 +430,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(nodes[3]);
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 150000);
+        _harness.WaitForConvergence();
 
         // Clean up
         _harness.Network.EnableDelays = false;
@@ -444,7 +444,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var leavingNode = nodes[4];
 
@@ -469,7 +469,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Create and heal a partition
         _harness.PartitionNodes(nodes[2], nodes[3]);
@@ -479,7 +479,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Act: Now perform graceful leave
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Leave succeeded
         Assert.Equal(3, _harness.Nodes.Count);
@@ -490,14 +490,14 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Act: One leaves, then new one joins
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var newNode = _harness.CreateJoinerNode(nodes[0], nodeId: 10);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Assert: New configuration is correct
         Assert.Equal(4, _harness.Nodes.Count);
@@ -510,14 +510,14 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Act: Join then leave
         var newNode = _harness.CreateJoinerNode(nodes[0], nodeId: 10);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[2]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Correct membership
         Assert.Equal(3, _harness.Nodes.Count);
@@ -530,20 +530,20 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Act: Complex sequence of leaves and joins
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var newNode1 = _harness.CreateJoinerNode(nodes[0], nodeId: 10);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var newNode2 = _harness.CreateJoinerNode(nodes[1], nodeId: 11);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Assert: Final state correct
         Assert.Equal(5, _harness.Nodes.Count);
@@ -558,15 +558,15 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Crash one node
         _harness.CrashNode(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Act: Graceful leave after crash
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Cluster converged correctly
         Assert.Equal(3, _harness.Nodes.Count);
@@ -577,14 +577,14 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Act: Graceful leave then crash
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.CrashNode(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Cluster converged correctly
         Assert.Equal(3, _harness.Nodes.Count);
@@ -595,11 +595,11 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create minimum viable cluster (3 nodes for consensus)
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Act: Reduce to 2 nodes (still functional but at limit)
         _harness.RemoveNodeGracefully(nodes[2]);
-        _harness.WaitForConvergence(expectedSize: 2);
+        _harness.WaitForConvergence();
 
         // Assert: Cluster still functional with 2 nodes
         Assert.Equal(2, _harness.Nodes.Count);
@@ -610,14 +610,14 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a cluster with metadata
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var leavingNode = nodes[3];
         var leavingAddress = leavingNode.Address;
 
         // Act: Graceful leave
         _harness.RemoveNodeGracefully(leavingNode);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Leaving node's address no longer in membership
         var remainingAddresses = nodes[0].CurrentView.Members;
@@ -629,7 +629,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 6-node cluster
         var nodes = _harness.CreateCluster(size: 6);
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         // Act: Rapid successive leaves with minimal delay between
         _harness.RemoveNodeGracefully(nodes[5]);
@@ -638,7 +638,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         _harness.RemoveNodeGracefully(nodes[3]);
 
         // Now wait for convergence
-        _harness.WaitForConvergence(expectedSize: 3, maxIterations: 300000);
+        _harness.WaitForConvergence();
 
         // Assert: Final state correct
         Assert.Equal(3, _harness.Nodes.Count);
@@ -649,11 +649,11 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Act: Graceful leave
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: All remaining nodes have identical membership views
         var membershipSets = _harness.Nodes
@@ -672,11 +672,11 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Act: Graceful leave
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: All remaining nodes have same configuration ID
         var configIds = _harness.Nodes.Select(n => n.CurrentView.ConfigurationId).Distinct().ToList();
@@ -688,7 +688,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster where monitoring relationships exist
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // In the K=3 model, each node is observed by K other nodes
         // When a node leaves, its observers should update their monitoring
@@ -697,7 +697,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Act: Node that's being observed leaves
         _harness.RemoveNodeGracefully(leavingNode);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Cluster restructures and remains healthy
         Assert.Equal(3, _harness.Nodes.Count);
@@ -709,11 +709,11 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster for more complex monitoring topology
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Remove a node - other nodes will take over monitoring duties
         _harness.RemoveNodeGracefully(nodes[1]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         // Advance time to trigger failure detection cycles
         _harness.RunForDuration(TimeSpan.FromSeconds(10));
@@ -729,17 +729,17 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 6-node cluster
         var nodes = _harness.CreateCluster(size: 6);
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         // Act: Multiple nodes leave (some may be observers of remaining nodes)
         _harness.RemoveNodeGracefully(nodes[5]);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[4]);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         _harness.RemoveNodeGracefully(nodes[3]);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         // Assert: Remaining nodes are healthy
         Assert.Equal(3, _harness.Nodes.Count);
@@ -756,7 +756,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
             FailureDetectorInterval = TimeSpan.FromMinutes(10)
         };
         var nodes = _harness.CreateCluster(size: 5, options);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Suspend one node (not the one leaving)
         nodes[3].Suspend();
@@ -768,7 +768,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         nodes[3].Resume();
 
         // Wait for convergence
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 200000);
+        _harness.WaitForConvergence();
 
         // Assert: Cluster converged to 4 nodes (only the leaving node removed)
         Assert.Equal(4, _harness.Nodes.Count);
@@ -779,7 +779,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var suspendedNode = nodes[2];
 
@@ -795,7 +795,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Wait for convergence - expect size 4 because:
         // - Node 4 left gracefully
         // - Suspended node was detected as failed and kicked, but auto-rejoins after resume
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 200000);
+        _harness.WaitForConvergence();
 
         // Assert: Suspended node should have rejoined after being kicked
         Assert.Contains(suspendedNode, _harness.Nodes);
@@ -807,7 +807,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         // Suspend a node - this makes it effectively down (won't respond to probes)
         var suspendedNode = nodes[1];
@@ -822,7 +822,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Wait for convergence - expect size 4 because:
         // - Node 4 left gracefully
         // - Suspended node was detected as failed and kicked, but auto-rejoins after resume
-        _harness.WaitForConvergence(expectedSize: 4, maxIterations: 200000);
+        _harness.WaitForConvergence();
 
         // Assert: Suspended node should have rejoined after being kicked
         Assert.Equal(4, _harness.Nodes.Count);

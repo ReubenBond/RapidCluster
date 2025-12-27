@@ -31,7 +31,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -51,7 +51,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -77,7 +77,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -105,7 +105,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -129,7 +129,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var addrA = RapidClusterUtils.Loggable(nodes[0].Address);
         var addrB = RapidClusterUtils.Loggable(nodes[1].Address);
@@ -154,7 +154,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster for quorum
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var observer = nodes[0];
         var monitored = nodes[1];
@@ -180,7 +180,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster for quorum
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var observer = nodes[0];
         var monitored = nodes[1];
@@ -213,7 +213,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster for better fault tolerance
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -239,7 +239,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -266,7 +266,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var addrA = RapidClusterUtils.Loggable(nodes[0].Address);
         var addrB = RapidClusterUtils.Loggable(nodes[1].Address);
@@ -297,7 +297,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster where one node is central
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var centralNode = nodes[0];
         var addrCentral = RapidClusterUtils.Loggable(centralNode.Address);
@@ -331,7 +331,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster
         var nodes = _harness.CreateCluster(size: 5);
-        _harness.WaitForConvergence(expectedSize: 5);
+        _harness.WaitForConvergence();
 
         var centralNode = nodes[0];
         var addrCentral = RapidClusterUtils.Loggable(centralNode.Address);
@@ -364,7 +364,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var nodeA = nodes[0];
         var nodeB = nodes[1];
@@ -400,7 +400,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 6-node cluster
         var nodes = _harness.CreateCluster(size: 6);
-        _harness.WaitForConvergence(expectedSize: 6);
+        _harness.WaitForConvergence();
 
         // Create two groups: [0,1,2] and [3,4,5]
         // Group 1 cannot reach Group 2, but Group 2 can reach Group 1
@@ -443,7 +443,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var seedNode = nodes[0];
         var addrSeed = RapidClusterUtils.Loggable(seedNode.Address);
@@ -468,7 +468,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var leavingNode = nodes[3];
         var seedNode = nodes[0];
@@ -495,7 +495,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         // Arrange: Create a 10-node cluster so MultiNodeCutDetector is used (K > 1)
         // This provides better fault tolerance for asymmetric partition scenarios
         var nodes = _harness.CreateCluster(size: 10);
-        _harness.WaitForConvergence(expectedSize: 10);
+        _harness.WaitForConvergence();
 
         // Create asymmetric partitions between existing nodes
         var addr0 = RapidClusterUtils.Loggable(nodes[0].Address);
@@ -519,7 +519,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var isolatedSender = nodes[0];
         var addrIsolated = RapidClusterUtils.Loggable(isolatedSender.Address);
@@ -558,7 +558,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var isolatedReceiver = nodes[0];
         var addrIsolated = RapidClusterUtils.Loggable(isolatedReceiver.Address);
@@ -590,7 +590,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster with multiple asymmetric partitions
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var addr0 = RapidClusterUtils.Loggable(nodes[0].Address);
         var addr1 = RapidClusterUtils.Loggable(nodes[1].Address);
@@ -618,7 +618,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 3-node cluster
         var nodes = _harness.CreateCluster(size: 3);
-        _harness.WaitForConvergence(expectedSize: 3);
+        _harness.WaitForConvergence();
 
         var addr0 = RapidClusterUtils.Loggable(nodes[0].Address);
         var addr1 = RapidClusterUtils.Loggable(nodes[1].Address);
@@ -646,7 +646,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
     {
         // Arrange: Create a 4-node cluster
         var nodes = _harness.CreateCluster(size: 4);
-        _harness.WaitForConvergence(expectedSize: 4);
+        _harness.WaitForConvergence();
 
         var addr0 = RapidClusterUtils.Loggable(nodes[0].Address);
         var addr1 = RapidClusterUtils.Loggable(nodes[1].Address);

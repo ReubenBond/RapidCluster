@@ -22,8 +22,8 @@ namespace RapidCluster;
 internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDisposable
 {
     private readonly MembershipServiceLogger _log;
-    private ICutDetector _cutDetection = null!;
-    private readonly ICutDetectorFactory _cutDetectorFactory;
+    private CutDetector _cutDetection = null!;
+    private readonly ILogger<CutDetector> _cutDetectorLogger;
     private readonly Endpoint _myAddr;
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<Endpoint, Channel<TaskCompletionSource<RapidClusterResponse>>> _joinersToRespondTo = new(EndpointAddressComparer.Instance);
@@ -136,12 +136,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         IBroadcasterFactory broadcasterFactory,
         IEdgeFailureDetectorFactory edgeFailureDetector,
         IConsensusCoordinatorFactory consensusCoordinatorFactory,
-        ICutDetectorFactory cutDetectorFactory,
         MembershipViewAccessor viewAccessor,
         SharedResources sharedResources,
         RapidClusterMetrics metrics,
         ISeedProvider seedProvider,
-        ILogger<MembershipService> logger)
+        ILogger<MembershipService> logger,
+        ILogger<CutDetector> cutDetectorLogger)
     {
         var opts = RapidClusterOptions.Value;
         _myAddr = opts.ListenAddress.ToProtobuf();
@@ -165,7 +165,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         _membershipView = MembershipView.Empty;
-        _cutDetectorFactory = cutDetectorFactory;
+        _cutDetectorLogger = cutDetectorLogger;
         _sharedResources = sharedResources;
         _messagingClient = messagingClient;
         _broadcaster = broadcasterFactory.Create();
@@ -319,9 +319,18 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var configId = new ConfigurationId(_clusterId, 0);
         _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [seedMemberInfo], maxNodeId: 1)
             .BuildWithConfigurationId(configId);
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
+        _cutDetection = CreateCutDetector(_membershipView);
 
         FinalizeInitialization();
+    }
+
+    /// <summary>
+    /// Creates a new CutDetector for the given membership view with appropriate H/L parameters.
+    /// </summary>
+    private CutDetector CreateCutDetector(MembershipView view)
+    {
+        var (_, highWatermark, lowWatermark) = _options.GetEffectiveParameters(view.Size);
+        return new CutDetector(view, highWatermark, lowWatermark, _cutDetectorLogger);
     }
 
     private static long ComputeClusterHash(List<Endpoint> seeds)
@@ -442,7 +451,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             memberInfos,
             successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
 
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
+        _cutDetection = CreateCutDetector(_membershipView);
 
         FinalizeInitialization();
         _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
@@ -586,8 +595,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Update the view (metadata is embedded in MemberInfo within the view)
         _membershipView = newView;
 
-        // Recreate cut detector for the new cluster size
-        _cutDetection = _cutDetectorFactory.Create(_membershipView);
+        // Update cut detector for the new view, preserving valid pending state
+        var (_, highWatermark, lowWatermark) = _options.GetEffectiveParameters(_membershipView.Size);
+        _cutDetection.UpdateView(_membershipView, highWatermark, lowWatermark);
 
         // Reset unstable-mode timeout state (per-view)
         _unstableModeTimer.Dispose();

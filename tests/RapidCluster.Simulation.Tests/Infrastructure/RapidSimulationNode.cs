@@ -31,7 +31,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     private readonly SharedResources _sharedResources;
     private readonly PingPongFailureDetectorFactory _failureDetectorFactory;
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
-    private readonly CutDetectorFactory _cutDetectorFactory;
+    private readonly ILogger<CutDetector> _cutDetectorLogger;
     private readonly MembershipViewAccessor _viewAccessor;
     private readonly ILogger<MembershipService> _membershipServiceLogger;
     private readonly CancellationTokenSource _disposeCts = new();
@@ -170,10 +170,8 @@ internal sealed class RapidSimulationNode : SimulationNode
             _metrics,
             consensusCoordinatorLogger);
 
-        // Create cut detector factory
-        var simpleCutDetectorLogger = _loggerFactory.CreateLogger<SimpleCutDetector>();
-        var multiNodeCutDetectorLogger = _loggerFactory.CreateLogger<MultiNodeCutDetector>();
-        _cutDetectorFactory = new CutDetectorFactory(Options.Create(_protocolOptions), simpleCutDetectorLogger, multiNodeCutDetectorLogger);
+        // Create cut detector logger
+        _cutDetectorLogger = _loggerFactory.CreateLogger<CutDetector>();
 
         // Create the MembershipService (but don't initialize it yet)
         var rapidClusterOptions = new RapidClusterOptions
@@ -191,12 +189,12 @@ internal sealed class RapidSimulationNode : SimulationNode
             broadcasterFactory,
             _failureDetectorFactory,
             _consensusCoordinatorFactory,
-            _cutDetectorFactory,
             _viewAccessor,
             _sharedResources,
             _metrics,
             seedProvider,
-            _membershipServiceLogger);
+            _membershipServiceLogger,
+            _cutDetectorLogger);
     }
 
     /// <summary>

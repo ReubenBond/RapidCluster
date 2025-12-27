@@ -130,9 +130,6 @@ public static class RapidClusterServiceCollectionExtensions
         // Register ConsensusCoordinator factory
         services.AddSingleton<IConsensusCoordinatorFactory, ConsensusCoordinatorFactory>();
 
-        // Register CutDetector factory
-        services.AddSingleton<ICutDetectorFactory, CutDetectorFactory>();
-
         // Register seed provider (default to ConfigurationSeedProvider if not already registered)
         services.TryAddSingleton<ISeedProvider, ConfigurationSeedProvider>();
 

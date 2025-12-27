@@ -5,9 +5,9 @@ using RapidCluster.Pb;
 namespace RapidCluster.Unit.Tests;
 
 /// <summary>
-/// Tests for simple cut detection used in clusters where MultiNodeCutDetector constraints cannot be satisfied
+/// Tests for CutDetector in simple mode (K &lt; 3).
 /// </summary>
-public class SimpleCutDetectorTests
+public class CutDetectorSimpleModeTests
 {
     private static readonly ConfigurationId DefaultConfigId = new(new ClusterId(888), -1); // Should not affect the following tests
 
@@ -26,7 +26,7 @@ public class SimpleCutDetectorTests
     }
 
     /// <summary>
-    /// Creates a MembershipView for testing SimpleCutDetector.
+    /// Creates a MembershipView for testing CutDetector.
     /// </summary>
     private static MembershipView CreateTestView(int numNodes = 3, int k = 2)
     {
@@ -44,7 +44,7 @@ public class SimpleCutDetectorTests
     public void Constructor_K1_Succeeds()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
@@ -52,7 +52,7 @@ public class SimpleCutDetectorTests
     public void Constructor_K2_Succeeds()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
@@ -61,7 +61,7 @@ public class SimpleCutDetectorTests
     {
         // MembershipViewBuilder throws on creation with k <= 0
         // This test verifies that the validation happens at the MembershipViewBuilder level,
-        // which prevents SimpleCutDetector from ever receiving a view with RingCount=0
+        // which prevents CutDetector from ever receiving a view with RingCount=0
         Assert.Throws<ArgumentOutOfRangeException>(() => new MembershipViewBuilder(0));
     }
 
@@ -69,21 +69,21 @@ public class SimpleCutDetectorTests
     public void Constructor_K3_Succeeds()
     {
         var view = CreateTestView(10, 3);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
     [Fact]
     public void Constructor_NullView_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new SimpleCutDetector(null!));
+        Assert.Throws<ArgumentNullException>(() => new CutDetector(null!));
     }
 
     [Fact]
     public void K1_SingleVoteTriggersProposal()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -98,7 +98,7 @@ public class SimpleCutDetectorTests
     public void K1_DuplicateVoteIgnored()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -114,7 +114,7 @@ public class SimpleCutDetectorTests
     public void K1_MultipleDestinationsEachGetProposal()
     {
         var view = CreateTestView(3, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
@@ -131,7 +131,7 @@ public class SimpleCutDetectorTests
     public void K2_SingleVoteDoesNotTriggerProposal()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -145,7 +145,7 @@ public class SimpleCutDetectorTests
     public void K2_TwoVotesTriggersProposal()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src1 = Utils.HostFromParts("127.0.0.1", 1);
         var src2 = Utils.HostFromParts("127.0.0.1", 2);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
@@ -163,7 +163,7 @@ public class SimpleCutDetectorTests
     public void K2_DuplicateRingNumberIgnored()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src1 = Utils.HostFromParts("127.0.0.1", 1);
         var src2 = Utils.HostFromParts("127.0.0.1", 2);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
@@ -181,7 +181,7 @@ public class SimpleCutDetectorTests
     public void K2_MultipleDestinationsIndependent()
     {
         var view = CreateTestView(4, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src1 = Utils.HostFromParts("127.0.0.1", 1);
         var src2 = Utils.HostFromParts("127.0.0.1", 2);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
@@ -207,7 +207,7 @@ public class SimpleCutDetectorTests
         // Since detectors are now immutable and replaced on view change,
         // we test that a new detector starts fresh
         var view = CreateTestView(2, 1);
-        var detector1 = new SimpleCutDetector(view);
+        var detector1 = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -215,7 +215,7 @@ public class SimpleCutDetectorTests
         Assert.Equal(1, detector1.GetNumProposals());
 
         // Create new detector (simulating view change)
-        var detector2 = new SimpleCutDetector(view);
+        var detector2 = new CutDetector(view);
         Assert.Equal(0, detector2.GetNumProposals());
     }
 
@@ -223,14 +223,14 @@ public class SimpleCutDetectorTests
     public void NewDetector_AcceptsNewProposals()
     {
         var view = CreateTestView(2, 1);
-        var detector1 = new SimpleCutDetector(view);
+        var detector1 = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         detector1.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
 
         // Create new detector (simulating view change)
-        var detector2 = new SimpleCutDetector(view);
+        var detector2 = new CutDetector(view);
 
         // Same message should trigger proposal again on new detector
         var result = detector2.AggregateForProposal(CreateAlertMessage(src, dst, EdgeStatus.Up, DefaultConfigId, 0));
@@ -242,7 +242,7 @@ public class SimpleCutDetectorTests
     public void EdgeStatus_UpAndDownBothWork()
     {
         var view = CreateTestView(3, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
@@ -259,7 +259,7 @@ public class SimpleCutDetectorTests
     public void MultipleRingNumbers_K1_TriggersOnFirst()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -283,7 +283,7 @@ public class SimpleCutDetectorTests
     public void RingNumber_LargerThanK_Throws()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -296,7 +296,7 @@ public class SimpleCutDetectorTests
     public void RingNumber_Negative_Throws()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -308,7 +308,7 @@ public class SimpleCutDetectorTests
     public void RingNumber_Zero_Valid()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -321,7 +321,7 @@ public class SimpleCutDetectorTests
     public void RingNumber_MultipleRingsCountAsMultipleVotes()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -337,7 +337,7 @@ public class SimpleCutDetectorTests
     public void AggregateForProposal_NullMessage_Throws()
     {
         var view = CreateTestView(2, 1);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
 
         Assert.Throws<ArgumentNullException>(() => detector.AggregateForProposal(null!));
     }
@@ -346,7 +346,7 @@ public class SimpleCutDetectorTests
     public void InvalidateFailingEdges_NoDownEvents_ReturnsEmpty()
     {
         var view = CreateTestView(3, 2);
-        var detector = new SimpleCutDetector(view);
+        var detector = new CutDetector(view);
 
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
@@ -405,7 +405,7 @@ public class SimpleCutDetectorTests
                 // Use actual ring count for iterations
                 var actualRingCount = view.RingCount;
 
-                var detector = new SimpleCutDetector(view);
+                var detector = new CutDetector(view);
 
                 var subject = nodes[0];
 
@@ -447,7 +447,7 @@ public class SimpleCutDetectorTests
                 // Use actual ring count
                 var actualRingCount = view.RingCount;
 
-                var detector = new SimpleCutDetector(view);
+                var detector = new CutDetector(view);
 
                 // Create an unknown endpoint
                 var unknownEndpoint = new Endpoint
@@ -479,8 +479,8 @@ public class SimpleCutDetectorTests
     [Fact]
     public void HasNodesInUnstableMode_ReturnsTrue_WhenPendingProposals()
     {
-        var view = CreateTestView(5, 2); // Small cluster uses SimpleCutDetector
-        var detector = new SimpleCutDetector(view);
+        var view = CreateTestView(5, 2); // Small cluster uses CutDetector
+        var detector = new CutDetector(view);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Add 1 report (pending, needs 2)
@@ -493,8 +493,8 @@ public class SimpleCutDetectorTests
     [Fact]
     public void ForcePromoteUnstableNodes_PromotesPendingNodes()
     {
-        var view = CreateTestView(5, 2); // Small cluster uses SimpleCutDetector
-        var detector = new SimpleCutDetector(view);
+        var view = CreateTestView(5, 2); // Small cluster uses CutDetector
+        var detector = new CutDetector(view);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Add 1 report (pending, needs 2)

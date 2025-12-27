@@ -94,7 +94,7 @@ internal sealed partial class GrpcClient(
 
         try
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stoppingCts.Token);
             cts.CancelAfter(_options.GrpcTimeout);
 
             var response = await client.SendRequestAsync(request, cancellationToken: cts.Token);

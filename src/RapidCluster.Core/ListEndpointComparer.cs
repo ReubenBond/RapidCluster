@@ -134,8 +134,18 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         if (y is null) return 1;
 
         // First compare by configurationId
-        var configCompare = x.ConfigurationId.ToConfigurationId().CompareTo(y.ConfigurationId.ToConfigurationId());
-        if (configCompare != 0) return configCompare;
+        var xConfigId = x.ConfigurationId.ToConfigurationId();
+        var yConfigId = y.ConfigurationId.ToConfigurationId();
+
+        // If ClusterIds differ, compare them first for deterministic ordering
+        if (xConfigId.ClusterId != yConfigId.ClusterId)
+        {
+            return xConfigId.ClusterId.Value.CompareTo(yConfigId.ClusterId.Value);
+        }
+
+        // Same ClusterId, compare by version
+        var versionCompare = xConfigId.Version.CompareTo(yConfigId.Version);
+        if (versionCompare != 0) return versionCompare;
 
         // Then by member count
         var countCompare = x.Members.Count.CompareTo(y.Members.Count);

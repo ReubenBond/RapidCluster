@@ -39,6 +39,9 @@ public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, I
     }
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the two views have different <see cref="RapidCluster.ClusterId"/>s.
+    /// </exception>
     public int CompareTo(ClusterMembershipView? other)
     {
         return other is null ? 1 : ConfigurationId.CompareTo(other.ConfigurationId);

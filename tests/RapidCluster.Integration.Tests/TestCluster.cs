@@ -50,7 +50,7 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddSingleton(_loggerFactory);
         builder.ConfigureRapidClusterKestrel(port);
 
-        builder.Services.AddRapidCluster(options =>
+        builder.Services.AddRapidClusterManual(options =>
         {
             options.ListenAddress = address;
             options.SeedAddresses = [address]; // Same as listen = seed node
@@ -62,6 +62,10 @@ internal sealed class TestCluster : IAsyncDisposable
 
         await app.StartAsync(cancellationToken).ConfigureAwait(true);
         _apps.Add(app);
+
+        // Start the cluster AFTER the gRPC server is listening
+        var lifecycle = app.Services.GetRequiredService<IRapidClusterLifecycle>();
+        await lifecycle.StartAsync(cancellationToken).ConfigureAwait(true);
 
         var cluster = app.Services.GetRequiredService<IRapidCluster>();
 
@@ -85,7 +89,7 @@ internal sealed class TestCluster : IAsyncDisposable
         builder.Services.AddSingleton(_loggerFactory);
         builder.ConfigureRapidClusterKestrel(port);
 
-        builder.Services.AddRapidCluster(options =>
+        builder.Services.AddRapidClusterManual(options =>
         {
             options.ListenAddress = address;
             options.SeedAddresses = [address];
@@ -98,6 +102,10 @@ internal sealed class TestCluster : IAsyncDisposable
 
         await app.StartAsync(cancellationToken).ConfigureAwait(true);
         _apps.Add(app);
+
+        // Start the cluster AFTER the gRPC server is listening
+        var lifecycle = app.Services.GetRequiredService<IRapidClusterLifecycle>();
+        await lifecycle.StartAsync(cancellationToken).ConfigureAwait(true);
 
         var cluster = app.Services.GetRequiredService<IRapidCluster>();
 

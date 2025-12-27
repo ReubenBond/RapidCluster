@@ -24,10 +24,6 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var seedAddress = CreateAddress(_cluster.GetNextPort());
 
         var (app, cluster) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-
-        // Give it a moment to initialize
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
         var clusterId = cluster.CurrentView.ConfigurationId.ClusterId;
 
         Assert.NotEqual(ClusterId.None, clusterId);
@@ -83,9 +79,6 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-
-        // Capture initial ClusterId
-        await Task.Delay(500, TestContext.Current.CancellationToken);
         var initialClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
         // Add a node
@@ -105,8 +98,6 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var seedAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
         var initialClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
         // Add multiple nodes sequentially
@@ -133,8 +124,6 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
 
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
         var initialVersion = seed.CurrentView.ConfigurationId.Version;
         var initialClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
@@ -156,19 +145,14 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
     [Fact]
     public async Task ClusterId_Is_Deterministic_For_Same_Seed()
     {
-        // Create first cluster
         var seedAddress1 = CreateAddress(_cluster.GetNextPort());
         var (seedApp1, seed1) = await _cluster.CreateSeedNodeAsync(seedAddress1, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
         var clusterId1 = seed1.CurrentView.ConfigurationId.ClusterId;
 
-        // Stop it
         await seedApp1.StopAsync(TestContext.Current.CancellationToken);
 
-        // Create another cluster with a different address
         var seedAddress2 = CreateAddress(_cluster.GetNextPort());
         var (seedApp2, seed2) = await _cluster.CreateSeedNodeAsync(seedAddress2, TestContext.Current.CancellationToken);
-        await Task.Delay(500, TestContext.Current.CancellationToken);
         var clusterId2 = seed2.CurrentView.ConfigurationId.ClusterId;
 
         // Different addresses should produce different ClusterIds
@@ -205,8 +189,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
-        // Give time for view updates to be collected
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         cts.SafeCancel();
 
         // All view updates should have the same ClusterId

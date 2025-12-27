@@ -127,6 +127,9 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     [LoggerMessage(Level = LogLevel.Warning, Message = "Probe exception for {Subject} (consecutive failures: {ConsecutiveFailures}/{Threshold})")]
     private partial void LogProbeException(Exception ex, LoggableEndpoint Subject, int ConsecutiveFailures, int Threshold);
 
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Probe cancelled for {Subject} (shutting down)")]
+    private partial void LogProbeCancelled(LoggableEndpoint Subject);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Node {Subject} declared down after {ConsecutiveFailures} consecutive probe failures")]
     private partial void LogNodeDeclaredDown(LoggableEndpoint Subject, int ConsecutiveFailures);
 
@@ -144,10 +147,17 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
 
     private async Task ProbeAsync()
     {
-        while (_disposed == 0)
+        try
         {
-            await Task.Delay(_probeInterval, _sharedResources.TimeProvider, _cts.Token).ConfigureAwait(true);
-            await ProbeOnceAsync().ConfigureAwait(true);
+            while (_disposed == 0)
+            {
+                await Task.Delay(_probeInterval, _sharedResources.TimeProvider, _cts.Token).ConfigureAwait(true);
+                await ProbeOnceAsync().ConfigureAwait(true);
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            // Normal shutdown - expected when the failure detector is disposed
         }
     }
 
@@ -193,6 +203,12 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
                 CheckForStaleView(response.ProbeResponse);
             }
         }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            // Normal shutdown - log at debug level and don't count as failure
+            stopwatch.Stop();
+            LogProbeCancelled(new LoggableEndpoint(_subject));
+        }
         catch (Exception ex)
         {
             stopwatch.Stop();
@@ -222,7 +238,8 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
             var localConfigId = _viewAccessor.CurrentView.ConfigurationId;
             var remoteConfigId = ConfigurationId.FromProtobuf(probeResponse.ConfigurationId);
 
-            if (remoteConfigId > localConfigId)
+            // Only compare if ClusterIds match - different ClusterIds mean different clusters
+            if (remoteConfigId.ClusterId == localConfigId.ClusterId && remoteConfigId > localConfigId)
             {
                 LogStaleViewDetected(new LoggableEndpoint(_subject), remoteConfigId, localConfigId);
                 _onStaleViewDetected(_subject, remoteConfigId, localConfigId);

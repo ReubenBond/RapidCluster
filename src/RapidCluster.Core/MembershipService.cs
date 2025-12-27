@@ -1157,11 +1157,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Bidirectional stale view detection: if the prober has a higher config ID,
         // we need to catch up. This handles the case where we're being monitored by
         // nodes that have advanced past us (e.g., we missed a consensus round).
-        var senderConfigId = probeMessage.ConfigurationId;
+        var senderConfigId = probeMessage.ConfigurationId.ToConfigurationId();
         var localConfigId = _membershipView.ConfigurationId;
-        if (senderConfigId.ToConfigurationId() > localConfigId && probeMessage.Sender != null)
+        // Only compare if ClusterIds match - a node with empty ClusterId hasn't joined yet
+        if (senderConfigId.ClusterId == localConfigId.ClusterId
+            && senderConfigId > localConfigId
+            && probeMessage.Sender != null)
         {
-            OnStaleViewDetected(probeMessage.Sender, senderConfigId.ToConfigurationId(), localConfigId);
+            OnStaleViewDetected(probeMessage.Sender, senderConfigId, localConfigId);
         }
 
         return new ProbeResponse
@@ -1892,6 +1895,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             {
                 // We're still in membership - compute status changes and apply the view
                 var nodeStatusChanges = new List<NodeStatusChange>();
+                var addedNodes = new List<Endpoint>();
 
                 // Nodes that left (in old but not in new)
                 foreach (var node in oldMembers)
@@ -1909,11 +1913,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     {
                         var metadata = metadataMap.GetValueOrDefault(node, new Metadata());
                         nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Up, metadata));
+                        // Track added nodes so we can notify any waiting joiners
+                        addedNodes.Add(node);
                     }
                 }
 
-                // Apply the new view
-                oldConsensus = SetMembershipView(newView, nodeStatusChanges, addedNodes: null);
+                // Apply the new view - pass addedNodes so waiting joiners get notified
+                oldConsensus = SetMembershipView(newView, nodeStatusChanges, addedNodes);
             }
         }
 

@@ -2217,6 +2217,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Cancel any ongoing consensus immediately to avoid waiting for round timeouts
         _consensusInstance?.Cancel();
 
+        // Stop all failure detectors immediately to prevent probe noise during shutdown
+        foreach (var fd in _failureDetectors)
+        {
+            fd.Dispose();
+        }
+        _failureDetectors.Clear();
+
         // Send leave messages to observers
         try
         {
@@ -2291,7 +2298,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _stoppingCts.SafeCancel(_log.Logger);
         _stoppingCts.Dispose();
 
-        // Dispose failure detectors
+        // Dispose failure detectors (may already be disposed by StopAsync)
         foreach (var fd in _failureDetectors)
         {
             fd.Dispose();

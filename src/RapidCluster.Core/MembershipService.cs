@@ -22,8 +22,8 @@ namespace RapidCluster;
 internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDisposable
 {
     private readonly MembershipServiceLogger _log;
-    private CutDetector _cutDetection = null!;
     private readonly ILogger<CutDetector> _cutDetectorLogger;
+    private readonly CutDetector _cutDetection;
     private readonly Endpoint _myAddr;
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<Endpoint, Channel<TaskCompletionSource<RapidClusterResponse>>> _joinersToRespondTo = new(EndpointAddressComparer.Instance);
@@ -166,6 +166,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         _membershipView = MembershipView.Empty;
         _cutDetectorLogger = cutDetectorLogger;
+
+        // Create cut detector with empty view - it will be updated via UpdateView() during initialization
+        // Use default H/L values (0) for empty view since GetEffectiveParameters requires size >= 1
+        _cutDetection = new CutDetector(MembershipView.Empty, highWaterMark: 0, lowWaterMark: 0, cutDetectorLogger);
+
         _sharedResources = sharedResources;
         _messagingClient = messagingClient;
         _broadcaster = broadcasterFactory.Create();
@@ -319,18 +324,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         var configId = new ConfigurationId(_clusterId, 0);
         _membershipView = new MembershipViewBuilder(_options.ObserversPerSubject, [seedMemberInfo], maxNodeId: 1)
             .BuildWithConfigurationId(configId);
-        _cutDetection = CreateCutDetector(_membershipView);
 
         FinalizeInitialization();
-    }
-
-    /// <summary>
-    /// Creates a new CutDetector for the given membership view with appropriate H/L parameters.
-    /// </summary>
-    private CutDetector CreateCutDetector(MembershipView view)
-    {
-        var (_, highWatermark, lowWatermark) = _options.GetEffectiveParameters(view.Size);
-        return new CutDetector(view, highWatermark, lowWatermark, _cutDetectorLogger);
     }
 
     private static long ComputeClusterHash(List<Endpoint> seeds)
@@ -450,8 +445,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             _options.ObserversPerSubject,
             memberInfos,
             successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
-
-        _cutDetection = CreateCutDetector(_membershipView);
 
         FinalizeInitialization();
         _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);

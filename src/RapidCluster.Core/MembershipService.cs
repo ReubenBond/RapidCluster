@@ -1360,6 +1360,14 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <summary>
     /// Batches outgoing AlertMessages into a single BatchAlertMessage.
     /// </summary>
+    /// <remarks>
+    /// The batching strategy is:
+    /// 1. Wait for the first item to arrive (blocking wait)
+    /// 2. Once an item arrives, wait for the batching window to collect more items
+    /// 3. Read all available items and broadcast
+    /// 
+    /// This ensures low latency for the first item while still allowing batching.
+    /// </remarks>
     private async Task AlertBatcherAsync()
     {
         var buffer = new List<AlertMessage>();
@@ -1370,15 +1378,26 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             buffer.Clear();
             try
             {
-                await Task.Delay(_options.BatchingWindow, _sharedResources.TimeProvider, stoppingToken).ConfigureAwait(true);
-                await _sendQueue.Reader.WaitToReadAsync(stoppingToken);
+                // Wait for at least one item to be available (no timeout, just wait for work)
+                await _sendQueue.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(true);
+
+                // Read the first item that triggered the wait
                 while (_sendQueue.Reader.TryRead(out var msg))
                 {
                     buffer.Add(msg);
                 }
 
+                // If we have items, wait the batching window to allow more to accumulate
                 if (buffer.Count > 0)
                 {
+                    await Task.Delay(_options.BatchingWindow, _sharedResources.TimeProvider, stoppingToken).ConfigureAwait(true);
+
+                    // Read any additional items that arrived during the batching window
+                    while (_sendQueue.Reader.TryRead(out var msg))
+                    {
+                        buffer.Add(msg);
+                    }
+
                     _log.AlertBatcherBroadcast(buffer.Count);
 
                     var batchedMessage = new BatchedAlertMessage

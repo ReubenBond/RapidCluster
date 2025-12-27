@@ -216,7 +216,8 @@ public sealed class FastRoundConsensusCoordinatorTests
             RapidClusterRequest request,
             Rank? rank,
             BroadcastFailureCallback? onDeliveryFailure,
-            CancellationToken cancellationToken) { }
+            CancellationToken cancellationToken)
+        { }
 
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
     }
@@ -228,7 +229,8 @@ public sealed class FastRoundConsensusCoordinatorTests
             RapidClusterRequest request,
             Rank? rank,
             DeliveryFailureCallback? onDeliveryFailure,
-            CancellationToken cancellationToken) { }
+            CancellationToken cancellationToken)
+        { }
 
         public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new RapidClusterResponse());

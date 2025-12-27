@@ -297,7 +297,8 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             RapidClusterRequest request,
             Rank? rank,
             DeliveryFailureCallback? onDeliveryFailure,
-            CancellationToken cancellationToken) { }
+            CancellationToken cancellationToken)
+        { }
 
         public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new RapidClusterResponse());

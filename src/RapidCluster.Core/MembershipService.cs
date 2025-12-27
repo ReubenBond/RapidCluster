@@ -549,10 +549,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         lock (_membershipUpdateLock)
         {
-            // SetMembershipView handles all the setup - for initial join, nodeStatusChanges is null
-            // which causes GetInitialViewChange() to be used (all nodes marked as Up)
-            // Metadata is already embedded in the MembershipView, no need to pass separately
-            SetMembershipView(_membershipView, nodeStatusChanges: null, addedNodes: null);
+            // SetMembershipView handles all the setup including notifying any waiting joiners
+            SetMembershipView(_membershipView);
         }
 
         _log.MembershipServiceInitialized(_myAddr, _membershipView);
@@ -568,22 +566,22 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// - Creating new consensus instance
     /// - Publishing the view to the accessor
     /// - Publishing VIEW_CHANGE event
-    /// - Updating _memberNodeIds (either from nodeIdMap if provided, or incrementally)
+    /// - Notifying waiting joiners for any nodes that were added
     /// </summary>
     /// <param name="newView">The new membership view to apply (metadata is embedded in MemberInfo).</param>
-    /// <param name="nodeStatusChanges">The status changes to publish. If null, all nodes are treated as Up (initial join).</param>
-    /// <param name="addedNodes">Nodes that were added (for notifying waiting joiners). Can be null.</param>
     /// <returns>The previous consensus instance that should be disposed by the caller.</returns>
-    private ConsensusCoordinator? SetMembershipView(
-        MembershipView newView,
-        List<NodeStatusChange>? nodeStatusChanges,
-        List<Endpoint>? addedNodes)
+    private ConsensusCoordinator? SetMembershipView(MembershipView newView)
     {
         // Must be called under _membershipUpdateLock
         // Always capture the previous consensus instance to ensure it gets disposed.
         // This handles the case where SetMembershipView is called multiple times
         // during initialization (e.g., via ApplyLearnedMembershipView during join).
         var previousConsensusInstance = _consensusInstance;
+
+        // Capture old members BEFORE updating _membershipView so we can compute added nodes
+        var oldMembers = _membershipView?.Members is { } members
+            ? new HashSet<Endpoint>(members, EndpointAddressComparer.Instance)
+            : [];
 
         // Update the view (metadata is embedded in MemberInfo within the view)
         _membershipView = newView;
@@ -617,11 +615,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Create new failure detectors
         CreateFailureDetectorsForCurrentConfiguration();
 
-        // Notify waiting joiners if any nodes were added
-        if (addedNodes != null)
-        {
-            NotifyWaitingJoiners(addedNodes);
-        }
+        // Always notify waiting joiners for any nodes that were added.
+        // This is computed internally to ensure joiners are never missed.
+        NotifyWaitingJoiners(oldMembers);
 
         // Publish the new view to the accessor
         _viewAccessor.PublishView(_membershipView);
@@ -642,11 +638,19 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     /// <summary>
     /// Notifies joiners waiting for their join to complete.
+    /// Computes added nodes by comparing old members with current membership.
     /// </summary>
-    private void NotifyWaitingJoiners(List<Endpoint> addedNodes)
+    /// <param name="oldMembers">The set of members before the view change.</param>
+    private void NotifyWaitingJoiners(HashSet<Endpoint> oldMembers)
     {
-        foreach (var node in addedNodes)
+        // Find nodes that were added (in new view but not in old)
+        foreach (var node in _membershipView.Members)
         {
+            if (oldMembers.Contains(node))
+            {
+                continue;
+            }
+
             if (_joinersToRespondTo.Remove(node, out var channel))
             {
                 // Prevent new attempts from writing to the channel
@@ -1237,13 +1241,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             _announcedProposal = false;
 
-            // Track nodes that were added so we can notify their joiners after ALL nodes are processed
-            var addedNodes = new List<Endpoint>();
-
-            // Build status changes during the loop, capturing state BEFORE modifications
-            // This ensures consistent semantics: Up = joining, Down = leaving/failing
-            var nodeStatusChanges = new List<NodeStatusChange>(proposal.Members.Count);
-
             // Create a builder from the current view to make modifications
             // Use the protocol's ObserversPerSubject as the max ring count so the cluster
             // can grow beyond its current ring count when new nodes join
@@ -1272,13 +1269,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             // Track counts for metrics
             var removedCount = 0;
+            var addedCount = 0;
 
             // Nodes to remove: in current but not in proposed
             foreach (var node in currentMembers.Except(proposedMembers, EndpointAddressComparer.Instance))
             {
                 _log.RemovingNode(node);
                 builder.RingDelete(node);
-                nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Down, _membershipView.GetMetadata(node) ?? new Metadata()));
                 removedCount++;
             }
 
@@ -1302,19 +1299,17 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
                 _log.AddingNode(endpointWithNodeId);
                 builder.RingAdd(endpointWithNodeId, metadata);
-                nodeStatusChanges.Add(new NodeStatusChange(endpointWithNodeId, EdgeStatus.Up, metadata));
 
                 // Clean up joiner data (use original node key without node ID)
                 _joinerMetadata.Remove(node);
 
-                // Track this node for later notification (use endpoint with node ID)
-                addedNodes.Add(endpointWithNodeId);
+                addedCount++;
             }
 
             // Record metrics for added nodes
-            if (addedNodes.Count > 0)
+            if (addedCount > 0)
             {
-                _metrics.RecordNodesAdded(addedNodes.Count);
+                _metrics.RecordNodesAdded(addedCount);
             }
 
             // Build the new immutable view with incremented version
@@ -1322,8 +1317,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             _log.DecideViewChangeCleanup();
 
-            // Use SetMembershipView to apply all changes
-            previousConsensusInstance = SetMembershipView(newView, nodeStatusChanges, addedNodes);
+            // Use SetMembershipView to apply all changes (including notifying waiting joiners)
+            previousConsensusInstance = SetMembershipView(newView);
         }
 
         if (previousConsensusInstance != null)
@@ -1453,42 +1448,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             _log.ExtractJoinerUuidAndMetadata(alertMessage.EdgeDst);
         }
         return alertMessage;
-    }
-
-    /// <summary>
-    /// Formats a proposal or view change for application subscriptions.
-    /// Determines status based on current view state:
-    /// - Nodes NOT in view → EdgeStatus.Up (joining)
-    /// - Nodes IN view → EdgeStatus.Down (leaving/failing)
-    ///
-    /// For ViewChangeProposal: called BEFORE view update, so joining nodes aren't in view yet.
-    /// For ViewChange: status is captured inline BEFORE each node is added/removed.
-    /// Both cases produce consistent semantics: Up = joining, Down = leaving.
-    /// </summary>
-    private List<NodeStatusChange> CreateNodeStatusChangeList(IEnumerable<Endpoint> proposal)
-    {
-        var list = new List<NodeStatusChange>();
-        foreach (var node in proposal)
-        {
-            var status = _membershipView.IsHostPresent(node) ? EdgeStatus.Down : EdgeStatus.Up;
-            list.Add(new NodeStatusChange(node, status, _membershipView.GetMetadata(node) ?? new Metadata()));
-        }
-        return list;
-    }
-
-    /// <summary>
-    /// Prepares a view change notification for a node that has just become part of a cluster. This is invoked when the
-    /// membership service is first initialized by a new node, which only happens on a Cluster.join() or Cluster.start().
-    /// Therefore, all EdgeStatus values will be UP.
-    /// </summary>
-    private List<NodeStatusChange> GetInitialViewChange()
-    {
-        var list = new List<NodeStatusChange>();
-        foreach (var node in _membershipView.Members)
-        {
-            list.Add(new NodeStatusChange(node, EdgeStatus.Up, _membershipView.GetMetadata(node) ?? new Metadata()));
-        }
-        return list;
     }
 
     /// <summary>
@@ -1629,8 +1588,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 memberInfos,
                 successfulResponse.MaxNodeId).BuildWithConfigurationId(ConfigurationId.FromProtobuf(successfulResponse.ConfigurationId));
 
-            // Use SetMembershipView to apply all changes - for rejoin, all nodes are treated as Up
-            oldConsensus = SetMembershipView(newView, nodeStatusChanges: null, addedNodes: null);
+            // Use SetMembershipView to apply all changes (including notifying waiting joiners)
+            oldConsensus = SetMembershipView(newView);
         }
 
         // Dispose old consensus - track it so we await it during shutdown
@@ -1893,33 +1852,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
             else
             {
-                // We're still in membership - compute status changes and apply the view
-                var nodeStatusChanges = new List<NodeStatusChange>();
-                var addedNodes = new List<Endpoint>();
-
-                // Nodes that left (in old but not in new)
-                foreach (var node in oldMembers)
-                {
-                    if (!newMembers.Contains(node))
-                    {
-                        nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Down, _membershipView.GetMetadata(node) ?? new Metadata()));
-                    }
-                }
-
-                // Nodes that joined (in new but not in old)
-                foreach (var node in newMembers)
-                {
-                    if (!oldMembers.Contains(node))
-                    {
-                        var metadata = metadataMap.GetValueOrDefault(node, new Metadata());
-                        nodeStatusChanges.Add(new NodeStatusChange(node, EdgeStatus.Up, metadata));
-                        // Track added nodes so we can notify any waiting joiners
-                        addedNodes.Add(node);
-                    }
-                }
-
-                // Apply the new view - pass addedNodes so waiting joiners get notified
-                oldConsensus = SetMembershipView(newView, nodeStatusChanges, addedNodes);
+                // We're still in membership - apply the new view
+                // SetMembershipView will compute added nodes internally and notify waiting joiners
+                oldConsensus = SetMembershipView(newView);
             }
         }
 

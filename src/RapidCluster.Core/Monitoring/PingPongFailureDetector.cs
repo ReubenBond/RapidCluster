@@ -178,7 +178,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             var localConfigId = _viewAccessor?.CurrentView.ConfigurationId ?? ConfigurationId.Empty;
             var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId.ToProtobuf() }.ToRapidClusterRequest();
-            var response = await _client.SendMessageAsync(_subject, request, _cts.Token).ConfigureAwait(true);
+            var response = await _client.SendMessageAsync(_subject, request, _cts.Token).WaitAsync(_probeInterval).ConfigureAwait(true);
             stopwatch.Stop();
 
             if (response.ProbeResponse == null)

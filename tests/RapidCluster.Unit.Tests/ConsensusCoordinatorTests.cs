@@ -521,6 +521,433 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
     #endregion
 
+    #region Fast Round Early Abandonment Tests
+
+    /// <summary>
+    /// Verifies the fast round threshold calculation for various cluster sizes.
+    /// Fast Paxos threshold = N - floor((N-1)/4)
+    /// </summary>
+    [Theory]
+    [InlineData(3, 3)]   // f=0, threshold=3 (all must agree)
+    [InlineData(4, 4)]   // f=0, threshold=4 (all must agree)
+    [InlineData(5, 4)]   // f=1, threshold=4
+    [InlineData(6, 5)]   // f=1, threshold=5
+    [InlineData(9, 7)]   // f=2, threshold=7
+    [InlineData(10, 8)]  // f=2, threshold=8
+    [InlineData(13, 10)] // f=3, threshold=10
+    public void FastRound_ThresholdCalculation_IsCorrect(int membershipSize, int expectedThreshold)
+    {
+        var f = (int)Math.Floor((membershipSize - 1) / 4.0);
+        var threshold = membershipSize - f;
+        Assert.Equal(expectedThreshold, threshold);
+    }
+
+    /// <summary>
+    /// When votes are split between two proposals such that neither can reach threshold,
+    /// the fast round should abandon early and fall back to classic Paxos.
+    /// 
+    /// This test verifies that the fallback happens IMMEDIATELY after the conflicting vote,
+    /// NOT due to a timeout. We verify this by checking that Phase1a is broadcast without
+    /// advancing time.
+    /// 
+    /// Scenario: 5 nodes, threshold=4
+    /// - 2 votes for proposal A
+    /// - 2 votes for proposal B  
+    /// - 1 remaining voter
+    /// Neither A nor B can reach 4 votes, so we should abandon.
+    /// </summary>
+    [Fact]
+    public async Task FastRound_ConflictingProposals_AbandonsWhenNeitherCanReachThreshold()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var broadcaster = new NonFailingCapturingBroadcaster(broadcasted);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 5, broadcaster);
+
+        var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
+        var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
+
+        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+
+        // Vote 1 for A (from ourselves, via Propose)
+        // Vote 2 for A
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalA
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 1 for B
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalB
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 2 for B - at this point:
+        // - A has 2 votes, B has 2 votes, 1 remaining voter
+        // - A can get at most 3 votes, B can get at most 3 votes
+        // - Neither can reach threshold of 4, should abandon IMMEDIATELY
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.4", 1003, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalB
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Allow event loop to process without advancing time significantly
+        // (only a few milliseconds to let async processing complete)
+        await WaitForEventProcessingAsync();
+
+        // Should have started classic round IMMEDIATELY (Phase1a broadcast indicates fallback)
+        Assert.Contains(broadcasted,
+            r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage);
+    }
+
+    /// <summary>
+    /// When one proposal still has a path to reaching threshold despite conflicts,
+    /// the fast round should NOT abandon early.
+    /// 
+    /// Scenario: 5 nodes, threshold=4
+    /// - 3 votes for proposal A
+    /// - 1 vote for proposal B
+    /// - 1 remaining voter
+    /// A can still reach 4 votes if the remaining voter votes for A.
+    /// </summary>
+    [Fact]
+    public async Task FastRound_ConflictingProposals_DoesNotAbandonIfOneCanStillSucceed()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var broadcaster = new NonFailingCapturingBroadcaster(broadcasted);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 5, broadcaster);
+
+        var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
+        var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
+
+        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+
+        // Vote 1 for A (from ourselves)
+        // Vote 2 for A
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalA
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 3 for A
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalA
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 1 for B - at this point:
+        // - A has 3 votes, B has 1 vote, 1 remaining voter
+        // - A can reach 4 votes if remaining voter votes for A
+        // - Should NOT abandon
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.4", 1003, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalB
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Allow event loop to process without advancing time
+        await WaitForEventProcessingAsync();
+
+        // Should NOT have started classic round yet (no Phase1a should be broadcasted)
+        Assert.DoesNotContain(broadcasted,
+            r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage);
+    }
+
+    /// <summary>
+    /// When conflicting proposals are combined with delivery failures,
+    /// and no proposal can reach threshold, should abandon early.
+    /// 
+    /// Scenario: 5 nodes, threshold=4
+    /// - 2 votes for proposal A
+    /// - 1 vote for proposal B
+    /// - 1 delivery failure
+    /// - 1 remaining voter
+    /// A can get at most 3 votes (2 + 1 remaining), B can get at most 2
+    /// Neither can reach 4, should abandon.
+    /// </summary>
+    [Fact]
+    public async Task FastRound_ConflictingProposals_WithDeliveryFailure_AbandonsEarly()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var failedEndpoint = Utils.HostFromParts("127.0.0.5", 1004, nodeId: Utils.GetNextNodeId());
+        var broadcaster = new SingleFailureCapturingBroadcaster(broadcasted, failedEndpoint);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 5, broadcaster);
+
+        var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
+        var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
+
+        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+
+        // Vote 1 for A (from ourselves, delivery failure already reported)
+        // Vote 2 for A
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalA
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 1 for B - at this point:
+        // - A has 2 votes, B has 1 vote
+        // - 1 delivery failure (won't vote for anyone)
+        // - 1 remaining voter
+        // - A can get at most 3 votes, B can get at most 2
+        // - Neither can reach threshold of 4, should abandon IMMEDIATELY
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalB
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Allow event loop to process without advancing time
+        await WaitForEventProcessingAsync();
+
+        // Should have started classic round IMMEDIATELY
+        Assert.Contains(broadcasted,
+            r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage);
+    }
+
+    /// <summary>
+    /// Verifies that when all voters vote for the same proposal and threshold is reached,
+    /// the fast round decides successfully (sanity check - don't break happy path).
+    /// </summary>
+    [Fact]
+    public async Task FastRound_AllVotesSameProposal_DecidesSuccessfully()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var broadcaster = new NonFailingCapturingBroadcaster(broadcasted);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 3, broadcaster);
+
+        var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
+
+        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+
+        // Vote 1 (from ourselves, already counted via Propose)
+        // Vote 2
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposal
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 3 - threshold is 3 for N=3, should decide
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposal
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Allow event loop to process
+        await WaitForEventProcessingAsync();
+
+        Assert.True(coordinator.Decided.IsCompleted);
+        Assert.False(coordinator.Decided.IsFaulted);
+        Assert.False(coordinator.Decided.IsCanceled);
+    }
+
+    /// <summary>
+    /// Test early abandonment with larger cluster (N=9, threshold=7, f=2).
+    /// 
+    /// Scenario: 9 nodes, threshold=7
+    /// - 3 votes for proposal A
+    /// - 3 votes for proposal B
+    /// - 3 remaining voters
+    /// A can get at most 6 votes, B can get at most 6 votes
+    /// Neither can reach 7, should abandon.
+    /// </summary>
+    [Fact]
+    public async Task FastRound_LargeCluster_AbandonsWhenNoProposalCanReachThreshold()
+    {
+        var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
+        var configId = new ConfigurationId(new ClusterId(888), 1);
+
+        var broadcasted = new ConcurrentQueue<RapidClusterRequest>();
+        var broadcaster = new NonFailingCapturingBroadcaster(broadcasted);
+        var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 9, broadcaster);
+
+        var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
+        var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
+
+        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+
+        // Votes 1-2 for A (ourselves + one more)
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalA
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Vote 3 for A
+        coordinator.HandleMessages(new RapidClusterRequest
+        {
+            Phase2BMessage = new Phase2bMessage
+            {
+                ConfigurationId = configId.ToProtobuf(),
+                Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
+                Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                Proposal = proposalA
+            }
+        }, TestContext.Current.CancellationToken);
+
+        // Votes 1-3 for B
+        for (var i = 0; i < 3; i++)
+        {
+            coordinator.HandleMessages(new RapidClusterRequest
+            {
+                Phase2BMessage = new Phase2bMessage
+                {
+                    ConfigurationId = configId.ToProtobuf(),
+                    Sender = Utils.HostFromParts($"127.0.0.{4 + i}", 1003 + i, nodeId: Utils.GetNextNodeId()),
+                    Rnd = new Rank { Round = 1, NodeIndex = 0 },
+                    Proposal = proposalB
+                }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        // At this point: A=3, B=3, 3 remaining
+        // A can get at most 6, B can get at most 6
+        // Neither can reach 7, should abandon IMMEDIATELY
+
+        // Allow event loop to process without advancing time
+        await WaitForEventProcessingAsync();
+
+        // Should have started classic round IMMEDIATELY
+        Assert.Contains(broadcasted,
+            r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage);
+    }
+
+    /// <summary>
+    /// Helper method that allows the async event loop to process messages
+    /// without advancing simulated time significantly. This ensures we're
+    /// testing for immediate abandonment, not timeout-triggered abandonment.
+    /// </summary>
+    private async Task WaitForEventProcessingAsync()
+    {
+        // Yield to allow async event processing
+        // We only advance time by a tiny amount (1ms) to trigger any scheduled tasks
+        // but NOT enough to trigger the consensus timeout (which is 100ms+ in tests)
+        for (var i = 0; i < 10; i++)
+        {
+            _timeProvider.Advance(TimeSpan.FromMilliseconds(1));
+            await Task.Yield();
+        }
+    }
+
+    /// <summary>
+    /// A broadcaster that captures messages but does not report delivery failures.
+    /// </summary>
+    private sealed class NonFailingCapturingBroadcaster(ConcurrentQueue<RapidClusterRequest> broadcasted) : IBroadcaster
+    {
+        public void SetMembership(IReadOnlyList<Endpoint> membership) { }
+
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
+        {
+            broadcasted.Enqueue(request);
+        }
+
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        {
+            broadcasted.Enqueue(request);
+            // No delivery failures reported
+        }
+    }
+
+    /// <summary>
+    /// A broadcaster that captures messages and reports a single delivery failure for fast round.
+    /// </summary>
+    private sealed class SingleFailureCapturingBroadcaster(ConcurrentQueue<RapidClusterRequest> broadcasted, Endpoint failedEndpoint) : IBroadcaster
+    {
+        public void SetMembership(IReadOnlyList<Endpoint> membership) { }
+
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
+        {
+            broadcasted.Enqueue(request);
+        }
+
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
+        {
+            broadcasted.Enqueue(request);
+
+            // Report a single delivery failure for fast round
+            if (rank is { Round: 1 })
+            {
+                onDeliveryFailure?.Invoke(failedEndpoint, rank);
+            }
+        }
+    }
+
+    #endregion
+
     #region Factory Tests
 
     [Fact]

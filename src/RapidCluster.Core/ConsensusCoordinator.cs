@@ -474,11 +474,32 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         var failures = _deliveryFailureEndpoints.Count;
+        var votersWhoVoted = _votesReceived.Count;
 
-        // Early fallback is only warranted when it's impossible for any proposal
-        // to still reach the Fast Paxos threshold with the remaining responsive acceptors.
-        var possibleRemainingVotes = _membershipSize - failures;
-        if (possibleRemainingVotes >= threshold)
+        // Calculate how many voters haven't voted yet (and haven't failed delivery)
+        var remainingVoters = _membershipSize - votersWhoVoted - failures;
+
+        // Check if ANY proposal can still reach threshold.
+        // For each proposal, max possible votes = current votes + remaining voters.
+        // (Remaining voters could all vote for this proposal in the best case.)
+        var anyProposalCanSucceed = false;
+        foreach (var (_, voteCount) in _votesPerProposal)
+        {
+            var maxPossibleVotes = voteCount + remainingVoters;
+            if (maxPossibleVotes >= threshold)
+            {
+                anyProposalCanSucceed = true;
+                break;
+            }
+        }
+
+        // If no votes have been recorded yet, we can't determine impossibility
+        if (_votesPerProposal.Count == 0)
+        {
+            anyProposalCanSucceed = true;
+        }
+
+        if (anyProposalCanSucceed)
         {
             return false;
         }

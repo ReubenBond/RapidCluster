@@ -47,4 +47,7 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Dispose: cleaning up ConsensusCoordinator resources")]
     public partial void Dispose();
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Cancelling consensus coordinator")]
+    public partial void Cancelling();
 }

@@ -949,6 +949,23 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         return position / (double)view.Size * baseDelayMs * 0.25;
     }
 
+    /// <summary>
+    /// Cancels the consensus operation without waiting for it to complete.
+    /// Use this for fast shutdown. Call <see cref="DisposeAsync"/> after to clean up resources.
+    /// </summary>
+    public void Cancel()
+    {
+        _log.Cancelling();
+
+        _disposeCts.SafeCancel(_log.Logger);
+        _events.Writer.TryComplete();
+        _paxosLearner.Cancel();
+
+        // Dispose timers immediately to stop any scheduled callbacks
+        _timer.Dispose();
+        _classicRestartTimer.Dispose();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -958,6 +975,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _log.Dispose();
 
+        // Cancel if not already cancelled
         _disposeCts.SafeCancel(_log.Logger);
         _events.Writer.TryComplete();
 

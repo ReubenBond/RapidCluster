@@ -2214,6 +2214,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         _log.Stopping();
 
+        // Cancel any ongoing consensus immediately to avoid waiting for round timeouts
+        _consensusInstance?.Cancel();
+
         // Send leave messages to observers
         try
         {

@@ -54,7 +54,7 @@ internal sealed partial class RapidClusterLifecycleService(
         // Wait for either ApplicationStarted or stoppingToken to be triggered
         // Use SuppressThrowing so we don't throw when the token is cancelled
         await Task.Delay(Timeout.Infinite, linkedCts.Token)
-            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            .ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
 
         // If we're stopping, don't initialize
         if (stoppingToken.IsCancellationRequested)
@@ -66,7 +66,7 @@ internal sealed partial class RapidClusterLifecycleService(
 
         // Keep running until stoppingToken is cancelled
         await Task.Delay(Timeout.Infinite, stoppingToken)
-            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            .ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
     }
 
     /// <inheritdoc />

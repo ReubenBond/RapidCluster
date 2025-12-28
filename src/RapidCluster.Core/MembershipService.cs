@@ -31,7 +31,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     private readonly IMessagingClient _messagingClient;
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
-    private MembershipView _membershipView = null!;
+    private MembershipView _membershipView = MembershipView.Empty;
 
     // Fields used by batching logic.
     private readonly Channel<AlertMessage> _sendQueue;
@@ -165,8 +165,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _seedAddresses.Add(pbSeed);
             }
         }
-
-        _membershipView = MembershipView.Empty;
 
         // Create cut detector with configured thresholds - it will compute effective values via UpdateView()
         _cutDetector = new CutDetector(

@@ -304,4 +304,7 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Debug, Message = "Filtered out alert message with stale ConfigurationId: received {MessageConfigId} but current is {CurrentConfigId}")]
     private partial void AlertFilteredByConfigurationIdCore(LoggableConfigurationId messageConfigId, LoggableConfigurationId currentConfigId);
     public void AlertFilteredByConfigurationId(ConfigurationId messageConfigId, ConfigurationId currentConfigId) => AlertFilteredByConfigurationIdCore(new(messageConfigId), new(currentConfigId));
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Processing {Count} deferred proposals after consensus completed")]
+    public partial void ProcessingDeferredProposals(int count);
 }

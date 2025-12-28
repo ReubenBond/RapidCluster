@@ -46,7 +46,6 @@ internal sealed partial class CutDetector
     private readonly Dictionary<Endpoint, Dictionary<int, Endpoint>> _reportsPerHost = new(EndpointAddressComparer.Instance);
     private readonly SortedSet<Endpoint> _proposal = new(ProtobufEndpointComparer.Instance);
     private readonly SortedSet<Endpoint> _preProposal = new(ProtobufEndpointComparer.Instance);
-    private readonly HashSet<Endpoint> _alreadyProposed = new(EndpointAddressComparer.Instance);
     private bool _seenLinkDownEvents;
 
     /// <summary>
@@ -80,19 +79,16 @@ internal sealed partial class CutDetector
     [LoggerMessage(Level = LogLevel.Information, Message = "AggregateForProposal: proposing view change for {Count} nodes")]
     private partial void LogProposal(int Count);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "AggregateForProposal: dst={Dst} already proposed, skipping")]
-    private partial void LogAlreadyProposed(LoggableEndpoint Dst);
-
     [LoggerMessage(Level = LogLevel.Debug, Message = "InvalidateFailingEdges: checking {PreProposalCount} preProposal nodes, {ProposalCount} proposal nodes, seenLinkDownEvents={SeenDown}")]
     private partial void LogInvalidateStart(int PreProposalCount, int ProposalCount, bool SeenDown);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "InvalidateFailingEdges: implicit edge between observer={Observer} and nodeInFlux={NodeInFlux}, status={Status}")]
     private partial void LogImplicitEdge(LoggableEndpoint Observer, LoggableEndpoint NodeInFlux, EdgeStatus Status);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "ForcePromoteUnstableNodes: promoting {Count} nodes from unstable to proposal set")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ForcePromoteUnstableNodes: promoting {Count} nodes from unstable to proposal set")]
     private partial void LogForcePromote(int Count);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "UpdateView: updating from config {OldConfig} to {NewConfig}, K: {OldK} -> {NewK}, preserving {PreservedCount} pending proposals")]
+    [LoggerMessage(Level = LogLevel.Debug, Message = "UpdateView: updating from config {OldConfig} to {NewConfig}, K: {OldK} -> {NewK}, preserving {PreservedCount} pending proposals")]
     private partial void LogUpdateView(long OldConfig, long NewConfig, int OldK, int NewK, int PreservedCount);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "UpdateView: removing reports for node {Node} (reason: {Reason})")]
@@ -223,16 +219,9 @@ internal sealed partial class CutDetector
         if (numReportsForHost >= _highWaterMark)
         {
             _preProposal.Remove(linkDst);
-            if (_alreadyProposed.Add(linkDst))
-            {
-                _proposalCount++;
-                LogProposal(1);
-                return [linkDst];
-            }
-            else
-            {
-                LogAlreadyProposed(new LoggableEndpoint(linkDst));
-            }
+            _proposalCount++;
+            LogProposal(1);
+            return [linkDst];
         }
 
         return [];
@@ -262,10 +251,6 @@ internal sealed partial class CutDetector
                 // No outstanding updates, so all nodes that have crossed H are part of a single proposal
                 _proposalCount++;
                 var ret = new List<Endpoint>(_proposal);
-                foreach (var node in ret)
-                {
-                    _alreadyProposed.Add(node);
-                }
                 _proposal.Clear();
                 LogProposal(ret.Count);
                 return ret;
@@ -360,16 +345,9 @@ internal sealed partial class CutDetector
         }
 
         LogForcePromote(_preProposal.Count);
+        _proposalCount++;
 
-        var promoted = new List<Endpoint>();
-        foreach (var node in _preProposal)
-        {
-            if (_alreadyProposed.Add(node))
-            {
-                _proposalCount++;
-                promoted.Add(node);
-            }
-        }
+        var promoted = new List<Endpoint>(_preProposal);
         _preProposal.Clear();
         return promoted;
     }
@@ -396,10 +374,6 @@ internal sealed partial class CutDetector
         {
             _proposalCount++;
             var ret = new List<Endpoint>(_proposal);
-            foreach (var node in ret)
-            {
-                _alreadyProposed.Add(node);
-            }
             _proposal.Clear();
             return ret;
         }
@@ -447,7 +421,6 @@ internal sealed partial class CutDetector
                 _reportsPerHost.Remove(node);
                 _preProposal.Remove(node);
                 _proposal.Remove(node);
-                _alreadyProposed.Remove(node);
             }
 
             // Update view and compute effective thresholds
@@ -465,7 +438,6 @@ internal sealed partial class CutDetector
             {
                 // Clear all reports since ring assignments have changed
                 _reportsPerHost.Clear();
-                _alreadyProposed.Clear();
                 LogUpdateView(oldConfig, newConfig, oldK, newK, 0);
                 return;
             }
@@ -477,11 +449,6 @@ internal sealed partial class CutDetector
 
             foreach (var (node, reports) in _reportsPerHost)
             {
-                if (_alreadyProposed.Contains(node))
-                {
-                    continue; // Already proposed, skip
-                }
-
                 var count = reports.Count;
                 if (IsSimpleMode)
                 {

@@ -14,6 +14,31 @@ using RapidCluster.Pb;
 namespace RapidCluster;
 
 /// <summary>
+/// Tracks state for a node that is attempting to join the cluster.
+/// Consolidates response channels, metadata, and alert-sent tracking.
+/// </summary>
+internal sealed class JoinerInfo
+{
+    /// <summary>
+    /// Channel of TaskCompletionSource instances for pending join requests from this joiner.
+    /// Multiple requests can arrive if the joiner retries while waiting for consensus.
+    /// </summary>
+    public Channel<TaskCompletionSource<RapidClusterResponse>> ResponseChannel { get; } =
+        Channel.CreateUnbounded<TaskCompletionSource<RapidClusterResponse>>();
+
+    /// <summary>
+    /// The joiner's metadata. Initially set from the JoinMessage, may be updated from AlertMessages.
+    /// </summary>
+    public Metadata Metadata { get; set; } = new();
+
+    /// <summary>
+    /// Whether an alert has been sent for this joiner. Used to prevent duplicate alerts
+    /// when a joiner retries while consensus is in progress.
+    /// </summary>
+    public bool AlertSent { get; set; }
+}
+
+/// <summary>
 /// Membership server class that implements the Rapid protocol.
 ///
 /// Note: This class is not thread-safe yet. RpcServer.start() uses a single threaded messagingExecutor during the server
@@ -25,8 +50,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly CutDetector _cutDetector;
     private readonly Endpoint _myAddr;
     private readonly IBroadcaster _broadcaster;
-    private readonly Dictionary<Endpoint, Channel<TaskCompletionSource<RapidClusterResponse>>> _joinersToRespondTo = new(EndpointAddressComparer.Instance);
-    private readonly Dictionary<Endpoint, Metadata> _joinerMetadata = new(EndpointAddressComparer.Instance);
+
+    /// <summary>
+    /// Tracks all pending joiners - nodes that have sent JoinMessages and are waiting to be added.
+    /// Key: joiner endpoint, Value: JoinerInfo containing response channel, metadata, and alert-sent flag.
+    /// </summary>
+    private readonly Dictionary<Endpoint, JoinerInfo> _pendingJoiners = new(EndpointAddressComparer.Instance);
 
     private readonly IMessagingClient _messagingClient;
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
@@ -46,6 +75,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly RapidClusterProtocolOptions _options;
     private bool _announcedProposal;
     private ConsensusCoordinator _consensusInstance = null!;
+    private readonly SortedSet<Endpoint> _deferredProposals = new(ProtobufEndpointComparer.Instance); // Proposals deferred while consensus is running
 
     // Unstable mode timeout handling (cut detection)
     private readonly OneShotTimer _unstableModeTimer = new();
@@ -654,10 +684,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 continue;
             }
 
-            if (_joinersToRespondTo.Remove(node, out var channel))
+            // Remove pending joiner state - the node has now successfully joined
+            if (_pendingJoiners.Remove(node, out var joinerInfo))
             {
                 // Prevent new attempts from writing to the channel
-                channel.Writer.TryComplete();
+                joinerInfo.ResponseChannel.Writer.TryComplete();
 
                 var waitingCount = 0;
                 var config = _membershipView.Configuration;
@@ -674,13 +705,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 response.MetadataKeys.AddRange(allMetadata.Keys);
                 response.MetadataValues.AddRange(allMetadata.Values);
 
-                var RapidClusterResponse = response.ToRapidClusterResponse();
+                var rapidClusterResponse = response.ToRapidClusterResponse();
 
                 // Send response to all waiting tasks
-                while (channel.Reader.TryRead(out var tcs))
+                while (joinerInfo.ResponseChannel.Reader.TryRead(out var tcs))
                 {
                     waitingCount++;
-                    tcs.TrySetResult(RapidClusterResponse);
+                    tcs.TrySetResult(rapidClusterResponse);
                 }
 
                 _log.NotifyingJoiners(waitingCount, node);
@@ -704,17 +735,16 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         var configChangedResponse = response.ToRapidClusterResponse();
 
-        foreach (var kvp in _joinersToRespondTo)
+        foreach (var joinerInfo in _pendingJoiners.Values)
         {
-            var channel = kvp.Value;
-            channel.Writer.TryComplete();
+            joinerInfo.ResponseChannel.Writer.TryComplete();
 
-            while (channel.Reader.TryRead(out var tcs))
+            while (joinerInfo.ResponseChannel.Reader.TryRead(out var tcs))
             {
                 tcs.TrySetResult(configChangedResponse);
             }
         }
-        _joinersToRespondTo.Clear();
+        _pendingJoiners.Clear();
     }
 
     /// <summary>
@@ -821,27 +851,61 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         lock (_membershipUpdateLock)
         {
             var currentConfiguration = _membershipView.ConfigurationId;
+
+            // If the joiner is already in the ring, respond immediately with SafeToJoin
+            // This handles the case where:
+            // 1. Joiner's first attempt triggered consensus and they were added
+            // 2. But the joiner timed out waiting for the response
+            // 3. Joiner retries with the new config (or old config if they haven't updated)
+            if (_membershipView.IsHostPresent(joinMessage.Sender))
+            {
+                _log.JoinerAlreadyInRing();
+                var configuration = _membershipView.Configuration;
+                var responseBuilder = new JoinResponse
+                {
+                    Sender = _myAddr,
+                    StatusCode = JoinStatusCode.SafeToJoin,
+                    ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
+                    MaxNodeId = _membershipView.MaxNodeId
+                };
+                responseBuilder.Endpoints.AddRange(configuration.Endpoints);
+                var allMetadata = _membershipView.GetAllMetadata();
+                responseBuilder.MetadataKeys.AddRange(allMetadata.Keys);
+                responseBuilder.MetadataValues.AddRange(allMetadata.Values);
+
+                return responseBuilder.ToRapidClusterResponse();
+            }
+
             if (currentConfiguration == incomingConfigId)
             {
                 _log.EnqueueingSafeToJoin(joinMessage.Sender, _membershipView);
 
+                // Get or create JoinerInfo for this endpoint
+                ref var joinerInfo = ref CollectionsMarshal.GetValueRefOrAddDefault(_pendingJoiners, joinMessage.Sender, out var existed);
+                joinerInfo ??= new JoinerInfo { Metadata = joinMessage.Metadata };
 
+                // Enqueue TCS for this request
                 var tcs = new TaskCompletionSource<RapidClusterResponse>();
-                ref var channel = ref CollectionsMarshal.GetValueRefOrAddDefault(_joinersToRespondTo, joinMessage.Sender, out var _);
-                channel ??= Channel.CreateUnbounded<TaskCompletionSource<RapidClusterResponse>>();
-                channel.Writer.TryWrite(tcs);
+                joinerInfo.ResponseChannel.Writer.TryWrite(tcs);
 
-                var alertMsg = new AlertMessage
+                // Only send alert if this is a new joiner (not already alerted)
+                // This prevents duplicate alerts when a joiner retries while consensus is in progress
+                if (!joinerInfo.AlertSent)
                 {
-                    EdgeSrc = _myAddr,
-                    EdgeDst = joinMessage.Sender,
-                    EdgeStatus = EdgeStatus.Up,
-                    ConfigurationId = currentConfiguration.ToProtobuf(),
-                    Metadata = joinMessage.Metadata
-                };
-                alertMsg.RingNumber.AddRange(joinMessage.RingNumber);
+                    joinerInfo.AlertSent = true;
 
-                EnqueueAlertMessage(alertMsg);
+                    var alertMsg = new AlertMessage
+                    {
+                        EdgeSrc = _myAddr,
+                        EdgeDst = joinMessage.Sender,
+                        EdgeStatus = EdgeStatus.Up,
+                        ConfigurationId = currentConfiguration.ToProtobuf(),
+                        Metadata = joinMessage.Metadata
+                    };
+                    alertMsg.RingNumber.AddRange(joinMessage.RingNumber);
+
+                    EnqueueAlertMessage(alertMsg);
+                }
 
                 resultTask = tcs.Task;
             }
@@ -849,33 +913,16 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             {
                 // This handles the corner case where the configuration changed between phase 1 and phase 2
                 // of the joining node's bootstrap. It should attempt to rejoin the network.
-                var configuration = _membershipView.Configuration;
+                // Note: The case where the joiner is already in the ring is handled above (before config check).
                 _log.WrongConfiguration(joinMessage.Sender, incomingConfigId, _membershipView);
 
                 var responseBuilder = new JoinResponse
                 {
                     Sender = _myAddr,
+                    StatusCode = JoinStatusCode.ConfigChanged,
                     ConfigurationId = _membershipView.ConfigurationId.ToProtobuf(),
                     MaxNodeId = _membershipView.MaxNodeId
                 };
-
-                if (_membershipView.IsHostPresent(joinMessage.Sender))
-                {
-                    // Race condition where a observer already crossed H messages for the joiner and changed
-                    // the configuration, but the JoinPhase2 messages show up at the observer
-                    // after it has already added the joiner. In this case, we simply
-                    // tell the sender that they're safe to join.
-                    _log.JoinerAlreadyInRing();
-                    responseBuilder.StatusCode = JoinStatusCode.SafeToJoin;
-                    responseBuilder.Endpoints.AddRange(configuration.Endpoints);
-                    var allMetadata = _membershipView.GetAllMetadata();
-                    responseBuilder.MetadataKeys.AddRange(allMetadata.Keys);
-                    responseBuilder.MetadataValues.AddRange(allMetadata.Values);
-                }
-                else
-                {
-                    responseBuilder.StatusCode = JoinStatusCode.ConfigChanged;
-                }
 
                 return responseBuilder.ToRapidClusterResponse();
             }
@@ -947,8 +994,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             proposal.Members.Add(endpointWithNodeId);
 
-            // Add metadata for this member - check view first (for existing members), then joiner metadata
-            var metadata = _membershipView.GetMetadata(endpoint) ?? _joinerMetadata.GetValueOrDefault(endpoint, new Metadata());
+            // Add metadata for this member - check view first (for existing members), then pending joiner metadata
+            var metadata = _membershipView.GetMetadata(endpoint)
+                ?? (_pendingJoiners.TryGetValue(endpoint, out var joinerInfo) ? joinerInfo.Metadata : new Metadata());
             proposal.MemberMetadata.Add(metadata);
         }
 
@@ -956,6 +1004,39 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         proposal.MaxNodeId = nextNodeId;
 
         return proposal;
+    }
+
+    /// <summary>
+    /// Starts a consensus round for the given proposals.
+    /// Must NOT be called while holding _membershipUpdateLock.
+    /// </summary>
+    /// <param name="proposals">The list of endpoints to propose for addition/removal.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private void StartConsensusForProposals(List<Endpoint> proposals, CancellationToken cancellationToken)
+    {
+        lock (_membershipUpdateLock)
+        {
+            // Double-check that consensus is not already running
+            // (another thread could have started it between our check and acquiring the lock)
+            if (_announcedProposal)
+            {
+                // Re-defer these proposals
+                foreach (var proposal in proposals)
+                {
+                    _deferredProposals.Add(proposal);
+                }
+                return;
+            }
+
+            _announcedProposal = true;
+            DisarmUnstableModeTimeout();
+
+            _log.InitiatingConsensus(proposals);
+
+            // Create full membership proposal with NodeIds for all members
+            var membershipProposal = CreateMembershipProposal(proposals);
+            _consensusInstance.Propose(membershipProposal, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -1060,18 +1141,36 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // If we have a proposal for this stage, start an instance of consensus on it.
             lock (_membershipUpdateLock)
             {
-                if (proposals.Count > 0 && !_announcedProposal)
+                if (proposals.Count > 0)
                 {
-                    _announcedProposal = true;
-                    DisarmUnstableModeTimeout();
+                    if (!_announcedProposal)
+                    {
+                        // Include any deferred proposals from previous rounds
+                        foreach (var deferred in _deferredProposals)
+                        {
+                            proposals.Add(deferred);
+                        }
+                        _deferredProposals.Clear();
 
-                    var currentConfigurationId = _membershipView.ConfigurationId;
-                    var proposalList = proposals.ToList();
-                    _log.InitiatingConsensus(proposalList);
+                        _announcedProposal = true;
+                        DisarmUnstableModeTimeout();
 
-                    // Create full membership proposal with NodeIds for all members
-                    var membershipProposal = CreateMembershipProposal(proposalList);
-                    _consensusInstance.Propose(membershipProposal, cancellationToken);
+                        var currentConfigurationId = _membershipView.ConfigurationId;
+                        var proposalList = proposals.ToList();
+                        _log.InitiatingConsensus(proposalList);
+
+                        // Create full membership proposal with NodeIds for all members
+                        var membershipProposal = CreateMembershipProposal(proposalList);
+                        _consensusInstance.Propose(membershipProposal, cancellationToken);
+                    }
+                    else
+                    {
+                        // Consensus is already running - defer these proposals for the next round
+                        foreach (var proposal in proposals)
+                        {
+                            _deferredProposals.Add(proposal);
+                        }
+                    }
                 }
             }
 
@@ -1230,6 +1329,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _log.DecideViewChange(proposal.Members.Count);
 
         ConsensusCoordinator? previousConsensusInstance;
+        List<Endpoint>? deferredProposalsToProcess = null;
+
         lock (_membershipUpdateLock)
         {
             // Check if this decision is for the current configuration.
@@ -1296,13 +1397,17 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     continue;
                 }
 
-                var metadata = proposalMetadataLookup.GetValueOrDefault(node) ?? _joinerMetadata.GetValueOrDefault(node, new Metadata());
+                // Get metadata from proposal first, fall back to pending joiner metadata
+                var metadata = proposalMetadataLookup.GetValueOrDefault(node)
+                    ?? (_pendingJoiners.TryGetValue(node, out var joinerInfo) ? joinerInfo.Metadata : new Metadata());
 
                 _log.AddingNode(endpointWithNodeId);
                 builder.RingAdd(endpointWithNodeId, metadata);
 
-                // Clean up joiner data (use original node key without node ID)
-                _joinerMetadata.Remove(node);
+                // Note: _pendingJoiners cleanup happens in NotifyWaitingJoiners called by SetMembershipView
+
+                // Clear from deferred proposals - this node successfully joined
+                _deferredProposals.Remove(node);
 
                 addedCount++;
             }
@@ -1320,11 +1425,27 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             // Use SetMembershipView to apply all changes (including notifying waiting joiners)
             previousConsensusInstance = SetMembershipView(newView);
+
+            // Check if we have deferred proposals to process
+            // These are proposals that arrived while consensus was running
+            if (_deferredProposals.Count > 0)
+            {
+                deferredProposalsToProcess = [.. _deferredProposals];
+                _deferredProposals.Clear();
+            }
         }
 
         if (previousConsensusInstance != null)
         {
             await previousConsensusInstance.DisposeAsync();
+        }
+
+        // Process deferred proposals outside the lock
+        // This starts a new consensus round for proposals that arrived during the previous round
+        if (deferredProposalsToProcess != null)
+        {
+            _log.ProcessingDeferredProposals(deferredProposalsToProcess.Count);
+            StartConsensusForProposals(deferredProposalsToProcess, CancellationToken.None);
         }
     }
 
@@ -1444,8 +1565,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         if (alertMessage.EdgeStatus == EdgeStatus.Up)
         {
-            // Metadata is saved only after the node is done being added.
-            _joinerMetadata[alertMessage.EdgeDst] = alertMessage.Metadata;
+            // Update metadata for pending joiner, or create entry if not yet tracked
+            // This can happen when alerts arrive from other observers
+            ref var joinerInfo = ref CollectionsMarshal.GetValueRefOrAddDefault(_pendingJoiners, alertMessage.EdgeDst, out _);
+            joinerInfo ??= new JoinerInfo();
+            joinerInfo.Metadata = alertMessage.Metadata;
             _log.ExtractJoinerUuidAndMetadata(alertMessage.EdgeDst);
         }
         return alertMessage;
@@ -1567,8 +1691,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         lock (_membershipUpdateLock)
         {
             // Cancel pending join requests - joiners will retry with ConfigChanged response
+            // CancelAllPendingJoiners also clears all pending joiner state
             CancelAllPendingJoiners();
-            _joinerMetadata.Clear();
             _pendingConsensusMessages.Clear();
 
             // Build new membership view from response - build MemberInfo with metadata

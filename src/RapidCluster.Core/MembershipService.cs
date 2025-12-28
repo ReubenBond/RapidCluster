@@ -106,8 +106,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     {
         /// <summary>Join succeeded - response contains valid membership data.</summary>
         Success,
-        /// <summary>Join failed but should be retried (transient error like config change, network issue).</summary>
+        /// <summary>Join failed but should be retried (transient error like timeout, network issue).</summary>
         RetryNeeded,
+        /// <summary>Configuration changed during join - retry immediately without consuming an attempt.</summary>
+        ConfigChanged,
         /// <summary>Join failed permanently - should not retry.</summary>
         Failed
     }
@@ -123,6 +125,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         public static JoinAttemptResult Success(JoinResponse response) => new(JoinAttemptStatus.Success, response, null);
         public static JoinAttemptResult RetryNeeded(string reason) => new(JoinAttemptStatus.RetryNeeded, null, reason);
+        public static JoinAttemptResult ConfigChanged() => new(JoinAttemptStatus.ConfigChanged, null, null);
         public static JoinAttemptResult Failed(string reason) => new(JoinAttemptStatus.Failed, null, reason);
     }
 
@@ -356,8 +359,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         JoinResponse? successfulResponse = null;
         string? lastFailureReason = null;
         var seedIndex = 0;
+        var attempt = 0;
 
-        for (var attempt = 0; attempt <= maxRetries; attempt++)
+        do
         {
             // Check if we've already joined via the learner protocol (stale view detection).
             // This can happen when failure detection probes reveal we're behind and we learn
@@ -384,29 +388,35 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     successfulResponse = result.Response;
                     break;
 
-                case JoinAttemptStatus.RetryNeeded when attempt < maxRetries:
-                    _log.JoinRetry(attempt + 1, result.FailureReason!, retryDelay.TotalMilliseconds);
-                    await Task.Delay(retryDelay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
-                    retryDelay = TimeSpan.FromTicks((long)(retryDelay.Ticks * _options.JoinRetryBackoffMultiplier));
-
-                    // Cap at maximum delay
-                    if (retryDelay > _options.JoinRetryMaxDelay)
-                    {
-                        retryDelay = _options.JoinRetryMaxDelay;
-                    }
+                case JoinAttemptStatus.ConfigChanged:
+                    // Configuration changed during join - retry immediately without consuming an attempt.
+                    // This can happen indefinitely as the cluster membership changes.
+                    _log.JoinRetryingAfterConfigChange(attempt + 1);
                     continue;
 
                 case JoinAttemptStatus.RetryNeeded:
-                    // Last attempt failed with retryable error - treat as failure
                     lastFailureReason = result.FailureReason;
+                    attempt++;
+                    if (attempt <= maxRetries)
+                    {
+                        _log.JoinRetry(attempt, result.FailureReason!, retryDelay.TotalMilliseconds);
+                        await Task.Delay(retryDelay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
+                        retryDelay = TimeSpan.FromTicks((long)(retryDelay.Ticks * _options.JoinRetryBackoffMultiplier));
+                        if (retryDelay > _options.JoinRetryMaxDelay)
+                        {
+                            retryDelay = _options.JoinRetryMaxDelay;
+                        }
+                        continue;
+                    }
                     break;
 
                 case JoinAttemptStatus.Failed:
                     // Permanent failure from this seed - continue to next seed (treat as retry)
                     lastFailureReason = result.FailureReason;
-                    if (attempt < maxRetries)
+                    attempt++;
+                    if (attempt <= maxRetries)
                     {
-                        _log.JoinRetry(attempt + 1, result.FailureReason!, retryDelay.TotalMilliseconds);
+                        _log.JoinRetry(attempt, result.FailureReason!, retryDelay.TotalMilliseconds);
                         await Task.Delay(retryDelay, _sharedResources.TimeProvider, cancellationToken).ConfigureAwait(true);
                         retryDelay = TimeSpan.FromTicks((long)(retryDelay.Ticks * _options.JoinRetryBackoffMultiplier));
                         if (retryDelay > _options.JoinRetryMaxDelay)
@@ -421,12 +431,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             // Either succeeded or exhausted retries
             break;
         }
+        while (true);
 
         if (successfulResponse == null)
         {
-            _log.JoinFailed(maxRetries + 1);
+            _log.JoinFailed(attempt);
             _metrics.RecordJoinLatency(MetricNames.Results.Failed, joinStopwatch);
-            throw new JoinException(lastFailureReason ?? $"Failed to join cluster after {maxRetries + 1} attempts");
+            throw new JoinException(lastFailureReason ?? $"Failed to join cluster after {attempt} attempts");
         }
 
         // Initialize membership from response - build MemberInfo with metadata
@@ -533,10 +544,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         if (successfulResponse == null)
         {
-            // Check if we got a ConfigChanged response - configuration changed during join, retry
+            // Check if we got a ConfigChanged response - configuration changed during join, retry immediately
             if (responses.Any(r => r?.JoinResponse?.StatusCode == JoinStatusCode.ConfigChanged))
             {
-                return JoinAttemptResult.RetryNeeded("Configuration changed during join");
+                return JoinAttemptResult.ConfigChanged();
             }
 
             // No successful response from any observer - transient, should retry

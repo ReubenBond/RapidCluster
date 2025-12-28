@@ -307,4 +307,7 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Processing {Count} deferred proposals after consensus completed")]
     public partial void ProcessingDeferredProposals(int count);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Notifying {Count} stale pending joiners with ConfigChanged (they were not added in this view change)")]
+    public partial void NotifyingStaleJoiners(int count);
 }

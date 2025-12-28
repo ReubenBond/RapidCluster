@@ -644,6 +644,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <summary>
     /// Notifies joiners waiting for their join to complete.
     /// Computes added nodes by comparing old members with current membership.
+    /// Also notifies joiners who weren't added (with ConfigChanged) so they can retry.
     /// </summary>
     /// <param name="oldMembers">The set of members before the view change.</param>
     private void NotifyWaitingJoiners(HashSet<Endpoint> oldMembers)
@@ -688,6 +689,32 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
                 _log.NotifyingJoiners(waitingCount, node);
             }
+        }
+
+        // Any remaining pending joiners were not added in this view change.
+        // They need to be notified with ConfigChanged so they can retry with the new config.
+        // This prevents them from hanging until timeout.
+        if (_pendingJoiners.Count > 0)
+        {
+            var configChangedResponse = new JoinResponse
+            {
+                Sender = _myAddr,
+                StatusCode = JoinStatusCode.ConfigChanged,
+                ConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
+            }.ToRapidClusterResponse();
+
+            foreach (var joinerInfo in _pendingJoiners.Values)
+            {
+                joinerInfo.ResponseChannel.Writer.TryComplete();
+
+                while (joinerInfo.ResponseChannel.Reader.TryRead(out var tcs))
+                {
+                    tcs.TrySetResult(configChangedResponse);
+                }
+            }
+
+            _log.NotifyingStaleJoiners(_pendingJoiners.Count);
+            _pendingJoiners.Clear();
         }
     }
 

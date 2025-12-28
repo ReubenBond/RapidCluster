@@ -18,6 +18,16 @@ namespace RapidCluster;
 /// This coordinator is event-driven: inbound messages and timeouts are serialized
 /// through an internal event loop.
 /// </summary>
+/// <remarks>
+/// Conflicting proposals during the fast round are handled by the Classic Paxos
+/// fallback mechanism. When different nodes propose different values and no single proposal
+/// can achieve the required threshold (N-f where f = floor((N-1)/4)), the coordinator
+/// detects this and falls back to Classic Paxos (round 2+). The fast round votes are
+/// preserved in the acceptor state and reported during Phase1b, ensuring the ChooseValue
+/// algorithm can safely select a value following Fast Paxos correctness requirements.
+/// See ConsensusCoordinator.UpdateFastRoundOutcome() for early abandonment logic and
+/// ConsensusCoordinator.ChooseValue() for the value selection algorithm.
+/// </remarks>
 internal sealed class ConsensusCoordinator : IAsyncDisposable
 {
     private readonly ConsensusCoordinatorLogger _log;

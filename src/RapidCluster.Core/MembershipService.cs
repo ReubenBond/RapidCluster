@@ -1078,8 +1078,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     /// <summary>
     /// Receives proposal for the one-step consensus (essentially phase 2 of Fast Paxos).
-    ///
-    /// XXX: Implement recovery for the extremely rare possibility of conflicting proposals.
     /// </summary>
     private RapidClusterResponse HandleConsensusMessages(RapidClusterRequest request, CancellationToken cancellationToken)
     {

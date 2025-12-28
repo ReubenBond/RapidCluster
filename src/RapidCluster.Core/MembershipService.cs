@@ -22,8 +22,7 @@ namespace RapidCluster;
 internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDisposable
 {
     private readonly MembershipServiceLogger _log;
-    private readonly ILogger<CutDetector> _cutDetectorLogger;
-    private readonly CutDetector _cutDetection;
+    private readonly CutDetector _cutDetector;
     private readonly Endpoint _myAddr;
     private readonly IBroadcaster _broadcaster;
     private readonly Dictionary<Endpoint, Channel<TaskCompletionSource<RapidClusterResponse>>> _joinersToRespondTo = new(EndpointAddressComparer.Instance);
@@ -165,11 +164,9 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         _membershipView = MembershipView.Empty;
-        _cutDetectorLogger = cutDetectorLogger;
 
         // Create cut detector with empty view - it will be updated via UpdateView() during initialization
-        // Use default H/L values (0) for empty view since GetEffectiveParameters requires size >= 1
-        _cutDetection = new CutDetector(MembershipView.Empty, highWaterMark: 0, lowWaterMark: 0, cutDetectorLogger);
+        _cutDetector = new CutDetector(MembershipView.Empty, cutDetectorLogger);
 
         _sharedResources = sharedResources;
         _messagingClient = messagingClient;
@@ -590,7 +587,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         // Update cut detector for the new view, preserving valid pending state
         var (_, highWatermark, lowWatermark) = _options.GetEffectiveParameters(_membershipView.Size);
-        _cutDetection.UpdateView(_membershipView, highWatermark, lowWatermark);
+        _cutDetector.UpdateView(_membershipView, highWatermark, lowWatermark);
 
         // Reset unstable-mode timeout state (per-view)
         _unstableModeTimer.Dispose();
@@ -1023,7 +1020,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     // For valid UP alerts, extract the joiner details (metadata) which is going to be needed
                     // when the node is added to the rings
                     var extractedMessage = ExtractJoinerMetadata(msg);
-                    var cutProposals = _cutDetection.AggregateForProposalSingleRing(extractedMessage, ringNumber);
+                    var cutProposals = _cutDetector.AggregateForProposalSingleRing(extractedMessage, ringNumber);
                     _log.CutDetectionProposals(cutProposals.Count);
 
                     // Record cut detected if there are proposals
@@ -1040,7 +1037,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
 
             // Lastly, we apply implicit detections
-            var implicitProposals = _cutDetection.InvalidateFailingEdges();
+            var implicitProposals = _cutDetector.InvalidateFailingEdges();
             _log.ImplicitEdgeInvalidation(implicitProposals.Count);
 
             // If there are nodes in unstable mode, arm a timeout so they don't block indefinitely.
@@ -1997,7 +1994,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             return;
         }
 
-        if (!_cutDetection.HasNodesInUnstableMode())
+        if (!_cutDetector.HasNodesInUnstableMode())
         {
             DisarmUnstableModeTimeout();
             return;
@@ -2047,13 +2044,13 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 return;
             }
 
-            if (!_cutDetection.HasNodesInUnstableMode())
+            if (!_cutDetector.HasNodesInUnstableMode())
             {
                 DisarmUnstableModeTimeout();
                 return;
             }
 
-            var forcedProposals = _cutDetection.ForcePromoteUnstableNodes();
+            var forcedProposals = _cutDetector.ForcePromoteUnstableNodes();
             if (forcedProposals.Count == 0)
             {
                 DisarmUnstableModeTimeout();

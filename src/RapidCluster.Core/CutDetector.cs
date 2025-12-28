@@ -96,26 +96,29 @@ internal sealed partial class CutDetector
     /// Creates a CutDetector for the given membership view.
     /// </summary>
     /// <param name="membershipView">The current membership view</param>
-    /// <param name="highWaterMark">Optional high watermark (H). If null, uses K-1 for watermark mode.</param>
-    /// <param name="lowWaterMark">Optional low watermark (L). If null, uses reasonable default.</param>
     /// <param name="logger">Optional logger for diagnostic output</param>
-    public CutDetector(MembershipView membershipView, int? highWaterMark = null, int? lowWaterMark = null, ILogger<CutDetector>? logger = null)
+    /// <remarks>
+    /// The detector is initialized with default thresholds based on the membership view.
+    /// Use <see cref="UpdateView"/> to set specific H/L thresholds after construction.
+    /// </remarks>
+    public CutDetector(MembershipView membershipView, ILogger<CutDetector>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(membershipView);
 
         _membershipView = membershipView;
         _logger = logger ?? NullLogger<CutDetector>.Instance;
 
-        InitializeThresholds(highWaterMark, lowWaterMark);
+        InitializeDefaultThresholds();
 
         LogCreated(ObserversPerSubject, _highWaterMark, _lowWaterMark, membershipView.Size,
             IsSimpleMode ? "simple" : "watermark");
     }
 
     /// <summary>
-    /// Initializes or updates the H/L thresholds based on the current membership view.
+    /// Initializes the H/L thresholds with default values based on the current membership view.
+    /// Called during construction.
     /// </summary>
-    private void InitializeThresholds(int? highWaterMark, int? lowWaterMark)
+    private void InitializeDefaultThresholds()
     {
         var k = _membershipView.RingCount;
 
@@ -127,10 +130,32 @@ internal sealed partial class CutDetector
         }
         else
         {
-            // Watermark mode: use provided values or defaults
+            // Watermark mode: use defaults
             // Default: H = K-1, L = max(1, H/2)
-            _highWaterMark = highWaterMark ?? (k - 1);
-            _lowWaterMark = lowWaterMark ?? Math.Max(1, _highWaterMark / 2);
+            _highWaterMark = k - 1;
+            _lowWaterMark = Math.Max(1, _highWaterMark / 2);
+        }
+    }
+
+    /// <summary>
+    /// Sets the H/L thresholds to specific values.
+    /// Called during UpdateView with explicit thresholds.
+    /// </summary>
+    private void SetThresholds(int highWaterMark, int lowWaterMark)
+    {
+        var k = _membershipView.RingCount;
+
+        if (k < 3)
+        {
+            // Simple mode: require all K observers to agree (ignore provided values)
+            _highWaterMark = k;
+            _lowWaterMark = k;
+        }
+        else
+        {
+            // Watermark mode: use provided values
+            _highWaterMark = highWaterMark;
+            _lowWaterMark = lowWaterMark;
 
             // Validate constraints: K > H >= L >= 1
             if (_highWaterMark < 1 || _lowWaterMark < 1 ||
@@ -428,9 +453,9 @@ internal sealed partial class CutDetector
     /// Preserves pending join proposals for nodes not yet in the new membership.
     /// </summary>
     /// <param name="newView">The new membership view</param>
-    /// <param name="newHighWaterMark">Optional new high watermark</param>
-    /// <param name="newLowWaterMark">Optional new low watermark</param>
-    public void UpdateView(MembershipView newView, int? newHighWaterMark = null, int? newLowWaterMark = null)
+    /// <param name="newHighWaterMark">The new high watermark (H)</param>
+    /// <param name="newLowWaterMark">The new low watermark (L)</param>
+    public void UpdateView(MembershipView newView, int newHighWaterMark, int newLowWaterMark)
     {
         ArgumentNullException.ThrowIfNull(newView);
 
@@ -467,7 +492,7 @@ internal sealed partial class CutDetector
             _membershipView = newView;
             var oldH = _highWaterMark;
             var oldL = _lowWaterMark;
-            InitializeThresholds(newHighWaterMark, newLowWaterMark);
+            SetThresholds(newHighWaterMark, newLowWaterMark);
 
             // If K changed, the ring assignments have changed.
             // - When K decreases: Reports for ring numbers >= newK are invalid

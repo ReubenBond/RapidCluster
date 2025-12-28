@@ -14,6 +14,17 @@ public class CutDetectorWatermarkModeTests
     private const int L = 2;
     private static readonly ConfigurationId DefaultConfigId = new(new ClusterId(888), -1); // Should not affect the following tests
 
+    /// <summary>
+    /// Creates a CutDetector with specified H/L thresholds.
+    /// Since H/L parameters were removed from the constructor, we use UpdateView to set them.
+    /// </summary>
+    private static CutDetector CreateDetector(MembershipView view, int h, int l)
+    {
+        var detector = new CutDetector(view);
+        detector.UpdateView(view, h, l);
+        return detector;
+    }
+
     private static AlertMessage CreateAlertMessage(Endpoint src, Endpoint dst, EdgeStatus status,
         ConfigurationId configurationId, int ringNumber)
     {
@@ -49,7 +60,7 @@ public class CutDetectorWatermarkModeTests
     public void CutDetectionTest()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
         List<Endpoint> ret;
 
@@ -71,7 +82,7 @@ public class CutDetectorWatermarkModeTests
     public void CutDetectionTestBlockingOneBlocker()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 2);
         List<Endpoint> ret;
@@ -107,7 +118,7 @@ public class CutDetectorWatermarkModeTests
     public void CutDetectionTestBlockingThreeBlockers()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 2);
         var dst3 = Utils.HostFromParts("127.0.0.4", 2);
@@ -157,7 +168,7 @@ public class CutDetectorWatermarkModeTests
     public void CutDetectionTestBlockingMultipleBlockersPastH()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 2);
         var dst3 = Utils.HostFromParts("127.0.0.4", 2);
@@ -212,7 +223,7 @@ public class CutDetectorWatermarkModeTests
     public void CutDetectionTestBelowL()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 2);
         var dst3 = Utils.HostFromParts("127.0.0.4", 2);
@@ -258,7 +269,7 @@ public class CutDetectorWatermarkModeTests
     public void CutDetectionTestBatch()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         const int numNodes = 3;
         var endpoints = new List<Endpoint>();
 
@@ -296,7 +307,7 @@ public class CutDetectorWatermarkModeTests
         }
 
         var mView = builder.Build();
-        var detector = new CutDetector(mView, H, L);
+        var detector = CreateDetector(mView, H, L);
 
         var dst = endpoints[0];
         var observers = mView.GetObserversOf(dst);
@@ -344,7 +355,7 @@ public class CutDetectorWatermarkModeTests
     public void ConstructorValidParametersSucceeds()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
@@ -352,14 +363,14 @@ public class CutDetectorWatermarkModeTests
     public void ConstructorMinimumKSucceeds()
     {
         var view = CreateTestView(10, 3);
-        var detector = new CutDetector(view, 2, 1);
+        var detector = CreateDetector(view, 2, 1);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
     [Fact]
     public void ConstructorNullViewThrows()
     {
-        Assert.Throws<ArgumentNullException>(() => new CutDetector(null!, 8, 2));
+        Assert.Throws<ArgumentNullException>(() => new CutDetector(null!));
     }
 
     [Fact]
@@ -375,35 +386,35 @@ public class CutDetectorWatermarkModeTests
     public void ConstructorHGreaterThanKThrows()
     {
         var view = CreateTestView(10, 5); // K=5
-        Assert.Throws<ArgumentException>(() => new CutDetector(view, 6, 2)); // H=6 > K=5
+        Assert.Throws<ArgumentException>(() => CreateDetector(view, 6, 2)); // H=6 > K=5
     }
 
     [Fact]
     public void ConstructorLGreaterThanHThrows()
     {
         var view = CreateTestView();
-        Assert.Throws<ArgumentException>(() => new CutDetector(view, 5, 6)); // L=6 > H=5
+        Assert.Throws<ArgumentException>(() => CreateDetector(view, 5, 6)); // L=6 > H=5
     }
 
     [Fact]
     public void ConstructorLZeroThrows()
     {
         var view = CreateTestView();
-        Assert.Throws<ArgumentException>(() => new CutDetector(view, 8, 0));
+        Assert.Throws<ArgumentException>(() => CreateDetector(view, 8, 0));
     }
 
     [Fact]
     public void ConstructorHZeroThrows()
     {
         var view = CreateTestView();
-        Assert.Throws<ArgumentException>(() => new CutDetector(view, 0, 0));
+        Assert.Throws<ArgumentException>(() => CreateDetector(view, 0, 0));
     }
 
     [Fact]
     public void ConstructorHEqualsLSucceeds()
     {
         var view = CreateTestView(10, 5);
-        var detector = new CutDetector(view, 3, 3);
+        var detector = CreateDetector(view, 3, 3);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
@@ -411,14 +422,14 @@ public class CutDetectorWatermarkModeTests
     public void ConstructorHEqualsKThrows()
     {
         var view = CreateTestView(10, 5); // K=5
-        Assert.Throws<ArgumentException>(() => new CutDetector(view, 5, 2)); // H=5 = K
+        Assert.Throws<ArgumentException>(() => CreateDetector(view, 5, 2)); // H=5 = K
     }
 
     [Fact]
     public void NewDetector_ResetsProposalCount()
     {
         var view = CreateTestView();
-        var detector1 = new CutDetector(view, H, L);
+        var detector1 = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         for (var i = 0; i < K; i++)
@@ -430,7 +441,7 @@ public class CutDetectorWatermarkModeTests
         Assert.Equal(1, detector1.GetNumProposals());
 
         // Create new detector (simulating view change)
-        var detector2 = new CutDetector(view, H, L);
+        var detector2 = CreateDetector(view, H, L);
 
         Assert.Equal(0, detector2.GetNumProposals());
     }
@@ -439,7 +450,7 @@ public class CutDetectorWatermarkModeTests
     public void NewDetector_AllowsNewProposals()
     {
         var view = CreateTestView();
-        var detector1 = new CutDetector(view, H, L);
+        var detector1 = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 
@@ -452,7 +463,7 @@ public class CutDetectorWatermarkModeTests
         Assert.Equal(1, detector1.GetNumProposals());
 
         // Create new detector (simulating view change)
-        var detector2 = new CutDetector(view, H, L);
+        var detector2 = CreateDetector(view, H, L);
 
         for (var i = 0; i < K; i++)
         {
@@ -468,9 +479,9 @@ public class CutDetectorWatermarkModeTests
     {
         var view = CreateTestView();
         // Simulating multiple view changes - each creates a fresh detector
-        var detector1 = new CutDetector(view, H, L);
-        var detector2 = new CutDetector(view, H, L);
-        var detector3 = new CutDetector(view, H, L);
+        var detector1 = CreateDetector(view, H, L);
+        var detector2 = CreateDetector(view, H, L);
+        var detector3 = CreateDetector(view, H, L);
 
         Assert.Equal(0, detector1.GetNumProposals());
         Assert.Equal(0, detector2.GetNumProposals());
@@ -481,7 +492,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalDuplicateAlertIgnored()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -498,7 +509,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalDifferentRingNumbersNotDuplicate()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -513,7 +524,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalMultipleRingNumbersAllProcessed()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -538,7 +549,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalEdgeStatusUpWorksCorrectly()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         for (var i = 0; i < K; i++)
@@ -554,7 +565,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalEdgeStatusDownWorksCorrectly()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         for (var i = 0; i < K; i++)
@@ -570,7 +581,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalMixedEdgeStatusProcessedSeparately()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         for (var i = 0; i < H; i++)
@@ -588,7 +599,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalRingNumberExceedsKThrows()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -600,7 +611,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalRingNumberNegativeThrows()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -612,7 +623,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalRingNumberZeroValid()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -625,7 +636,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalRingNumberKMinusOneValid()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var src = Utils.HostFromParts("127.0.0.1", 1);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -638,7 +649,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalTwoNodesReachHSimultaneously()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 
@@ -667,7 +678,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalManyDestinationsAllProposed()
     {
         var view = CreateTestView(100);
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         const int numDestinations = 50;
         var proposalCount = 0;
 
@@ -694,7 +705,7 @@ public class CutDetectorWatermarkModeTests
     public void InvalidateFailingEdgesNoDownEventsReturnsEmpty()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var dst = Utils.HostFromParts("127.0.0.2", 2);
         for (var i = 0; i < H - 1; i++)
@@ -721,7 +732,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalNullMessageThrows()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         Assert.Throws<ArgumentNullException>(() => detector.AggregateForProposal(null!));
     }
@@ -730,7 +741,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalSingleRing_ProcessesSingleRing()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Create message with all K rings
@@ -766,7 +777,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalSingleRing_IgnoresRingNotInMessage()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Create message with only ring 0
@@ -787,7 +798,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalSingleRing_NullMessageThrows()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         Assert.Throws<ArgumentNullException>(() => detector.AggregateForProposalSingleRing(null!, 0));
     }
@@ -796,7 +807,7 @@ public class CutDetectorWatermarkModeTests
     public void AggregateForProposalSingleRing_InvalidRingNumberThrows()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var msg = CreateAlertMessage(
             Utils.HostFromParts("127.0.0.1", 1),
             Utils.HostFromParts("127.0.0.2", 2),
@@ -826,11 +837,11 @@ public class CutDetectorWatermarkModeTests
         }
 
         // Method 1: AggregateForProposal
-        var detector1 = new CutDetector(view, H, L);
+        var detector1 = CreateDetector(view, H, L);
         var result1 = detector1.AggregateForProposal(msg);
 
         // Method 2: AggregateForProposalSingleRing for each ring
-        var detector2 = new CutDetector(view, H, L);
+        var detector2 = CreateDetector(view, H, L);
         var result2 = new List<Endpoint>();
         foreach (var ringNumber in msg.RingNumber)
         {
@@ -849,7 +860,7 @@ public class CutDetectorWatermarkModeTests
     public void SequentialProcessing_ProducesIndividualProposals()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
@@ -884,7 +895,7 @@ public class CutDetectorWatermarkModeTests
     public void InterleavedProcessing_EnablesBatching()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
@@ -940,7 +951,7 @@ public class CutDetectorWatermarkModeTests
     public void BatchingScenario_MultipleJoinsAreBatched()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         // Simulate 10 nodes joining simultaneously
         var joiningNodes = Enumerable.Range(0, 10)
@@ -999,7 +1010,7 @@ public class CutDetectorWatermarkModeTests
     public void PreProposal_BlocksUntilAllReachH()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
@@ -1045,7 +1056,7 @@ public class CutDetectorWatermarkModeTests
     public void BelowL_DoesNotBlock()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
@@ -1078,7 +1089,7 @@ public class CutDetectorWatermarkModeTests
     public void MultipleBatches_CanOccurSequentially()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         // First batch: 3 nodes
         var batch1 = new[]
@@ -1175,7 +1186,7 @@ public class CutDetectorWatermarkModeTests
         }
 
         var mView = builder.Build();
-        var detector = new CutDetector(mView, H, L);
+        var detector = CreateDetector(mView, H, L);
 
         var dst = endpoints[0];
         var observers = mView.GetObserversOf(dst);
@@ -1223,7 +1234,7 @@ public class CutDetectorWatermarkModeTests
     public void InvalidateFailingEdges_NoEffect_WithOnlyUpEvents()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
@@ -1254,7 +1265,7 @@ public class CutDetectorWatermarkModeTests
         }
 
         var mView = builder.Build();
-        var detector = new CutDetector(mView, H, L);
+        var detector = CreateDetector(mView, H, L);
 
         // Add a DOWN event (failure detection)
         var failingNode = endpoints[0];
@@ -1324,7 +1335,7 @@ public class CutDetectorWatermarkModeTests
                 var h = actualK - 1;
                 var l = Math.Max(1, h / 2);
 
-                var detector = new CutDetector(view, h, l);
+                var detector = CreateDetector(view, h, l);
 
                 var subject = nodes[0];
 
@@ -1365,7 +1376,7 @@ public class CutDetectorWatermarkModeTests
                 if (actualK < 4) return true; // Skip if not enough rings
 
                 // Use actualK > H >= L (e.g., H=actualK-1, L=1)
-                var detector = new CutDetector(view, actualK - 1, 1);
+                var detector = CreateDetector(view, actualK - 1, 1);
 
                 var observer = nodes[1];
                 var subject = nodes[0];
@@ -1415,7 +1426,7 @@ public class CutDetectorWatermarkModeTests
                 var h = actualK - 1;
                 var l = 1;
 
-                var detector = new CutDetector(view, h, l);
+                var detector = CreateDetector(view, h, l);
                 var subject = nodes[0];
 
                 // Send exactly h reports on different rings
@@ -1462,7 +1473,7 @@ public class CutDetectorWatermarkModeTests
                 var h = actualK - 1;
                 var l = 2;
 
-                var detector = new CutDetector(view, h, l);
+                var detector = CreateDetector(view, h, l);
                 var subject1 = nodes[0];
                 var subject2 = nodes[1];
 
@@ -1529,7 +1540,7 @@ public class CutDetectorWatermarkModeTests
 
                 var h = actualK - 1;
 
-                var detector = new CutDetector(view, h);
+                var detector = CreateDetector(view, h, Math.Max(1, h / 2));
                 var subject1 = nodes[0];
                 var subject2 = nodes[1];
                 var subject3 = nodes[2];
@@ -1633,7 +1644,7 @@ public class CutDetectorWatermarkModeTests
                 }
 
                 // Method 1: Process all rings for each message (sequential, non-batching)
-                var detector1 = new CutDetector(view, h);
+                var detector1 = CreateDetector(view, h, Math.Max(1, h / 2));
                 var proposals1 = 0;
                 foreach (var msg in messages)
                 {
@@ -1643,7 +1654,7 @@ public class CutDetectorWatermarkModeTests
                 }
 
                 // Method 2: Process by ring number across all messages (interleaved, batching)
-                var detector2 = new CutDetector(view, h);
+                var detector2 = CreateDetector(view, h, Math.Max(1, h / 2));
                 var proposals2 = 0;
                 for (var ringNumber = 0; ringNumber < actualK; ringNumber++)
                 {
@@ -1698,11 +1709,11 @@ public class CutDetectorWatermarkModeTests
                 }
 
                 // Method 1: Use AggregateForProposal
-                var detector1 = new CutDetector(view, h);
+                var detector1 = CreateDetector(view, h, Math.Max(1, h / 2));
                 var result1 = detector1.AggregateForProposal(msg);
 
                 // Method 2: Use AggregateForProposalSingleRing for each ring
-                var detector2 = new CutDetector(view, h);
+                var detector2 = CreateDetector(view, h, Math.Max(1, h / 2));
                 var result2 = new List<Endpoint>();
                 foreach (var ringNumber in msg.RingNumber)
                 {
@@ -1739,7 +1750,7 @@ public class CutDetectorWatermarkModeTests
                 var l = 3; // Use L=3 so we have room below L
                 if (l > h - 1) l = h - 1; // Ensure L < H
 
-                var detector = new CutDetector(view, h, l);
+                var detector = CreateDetector(view, h, l);
                 var subject1 = nodes[0];
                 var subject2 = nodes[1];
 
@@ -1796,7 +1807,7 @@ public class CutDetectorWatermarkModeTests
 
                 var h = actualK - 1;
 
-                var detector = new CutDetector(view, h);
+                var detector = CreateDetector(view, h, Math.Max(1, h / 2));
 
                 // Generate proposals for 3 different subjects
                 var expectedProposals = 0;
@@ -1830,7 +1841,7 @@ public class CutDetectorWatermarkModeTests
     public void HasNodesInUnstableMode_ReturnsFalse_Initially()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         Assert.False(detector.HasNodesInUnstableMode());
     }
@@ -1839,7 +1850,7 @@ public class CutDetectorWatermarkModeTests
     public void HasNodesInUnstableMode_ReturnsTrue_WhenNodesBetweenLAndH()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Add L reports (node enters unstable mode)
@@ -1856,7 +1867,7 @@ public class CutDetectorWatermarkModeTests
     public void HasNodesInUnstableMode_ReturnsFalse_AfterReachingH()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst = Utils.HostFromParts("127.0.0.2", 2);
 
         // Add H reports (node leaves unstable mode)
@@ -1873,7 +1884,7 @@ public class CutDetectorWatermarkModeTests
     public void ForcePromoteUnstableNodes_ReturnsEmpty_WhenNoUnstableNodes()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
 
         var result = detector.ForcePromoteUnstableNodes();
 
@@ -1884,7 +1895,7 @@ public class CutDetectorWatermarkModeTests
     public void ForcePromoteUnstableNodes_PromotesUnstableNodes()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 
@@ -1920,7 +1931,7 @@ public class CutDetectorWatermarkModeTests
     public void ForcePromoteUnstableNodes_IncludesStableNodesWaiting()
     {
         var view = CreateTestView();
-        var detector = new CutDetector(view, H, L);
+        var detector = CreateDetector(view, H, L);
         var dst1 = Utils.HostFromParts("127.0.0.2", 2);
         var dst2 = Utils.HostFromParts("127.0.0.3", 3);
 

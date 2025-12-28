@@ -602,12 +602,25 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             }
 
             var responseConfigId = viewResponse.ConfigurationId.ToConfigurationId();
+            var currentConfigId = _membershipView.ConfigurationId;
 
-            // Only apply if the response is newer than our current (empty or stale) view
-            if (responseConfigId <= _membershipView.ConfigurationId)
+            // Only apply if the response is newer than our current view.
+            // When joining (ClusterId.None), any valid response is "newer" than our uninitialized state.
+            // When ClusterIds match, compare versions normally.
+            if (currentConfigId.ClusterId != ClusterId.None)
             {
-                _log.SkippingStaleViewRefresh(responseConfigId, _membershipView.ConfigurationId);
-                return false;
+                if (responseConfigId.ClusterId != currentConfigId.ClusterId)
+                {
+                    // Different cluster - ignore this response
+                    _log.MembershipViewRefreshFailed(seedAddress, $"ClusterId mismatch: expected {currentConfigId.ClusterId}, got {responseConfigId.ClusterId}");
+                    return false;
+                }
+
+                if (responseConfigId.Version <= currentConfigId.Version)
+                {
+                    _log.SkippingStaleViewRefresh(responseConfigId, currentConfigId);
+                    return false;
+                }
             }
 
             // Check if we're in the new membership using address comparison (ignoring node_id)

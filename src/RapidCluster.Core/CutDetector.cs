@@ -108,18 +108,6 @@ internal sealed partial class CutDetector
         _membershipView = membershipView;
         _logger = logger ?? NullLogger<CutDetector>.Instance;
 
-        InitializeDefaultThresholds();
-
-        LogCreated(ObserversPerSubject, _highWaterMark, _lowWaterMark, membershipView.Size,
-            IsSimpleMode ? "simple" : "watermark");
-    }
-
-    /// <summary>
-    /// Initializes the H/L thresholds with default values based on the current membership view.
-    /// Called during construction.
-    /// </summary>
-    private void InitializeDefaultThresholds()
-    {
         var k = _membershipView.RingCount;
 
         if (k < 3)
@@ -135,6 +123,9 @@ internal sealed partial class CutDetector
             _highWaterMark = k - 1;
             _lowWaterMark = Math.Max(1, _highWaterMark / 2);
         }
+
+        LogCreated(ObserversPerSubject, _highWaterMark, _lowWaterMark, membershipView.Size,
+            IsSimpleMode ? "simple" : "watermark");
     }
 
     /// <summary>
@@ -490,8 +481,6 @@ internal sealed partial class CutDetector
 
             // Update view and thresholds
             _membershipView = newView;
-            var oldH = _highWaterMark;
-            var oldL = _lowWaterMark;
             SetThresholds(newHighWaterMark, newLowWaterMark);
 
             // If K changed, the ring assignments have changed.

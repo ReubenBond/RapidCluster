@@ -238,7 +238,7 @@ public sealed class RapidClusterProtocolOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// When nodes have between L and H reports (unstable mode), the cut detector waits for
+/// When nodes have between L and H reports (unstable mode), the cut detector waits for
     /// them to reach the H threshold before proposing a view change. This timeout ensures
     /// that stuck nodes in unstable mode don't block proposals indefinitely.
     /// </para>
@@ -248,60 +248,4 @@ public sealed class RapidClusterProtocolOptions
     /// </para>
     /// </remarks>
     public TimeSpan UnstableModeTimeout { get; set; } = TimeSpan.FromSeconds(5);
-
-    /// <summary>
-    /// Computes effective protocol parameters based on the actual cluster size.
-    /// When the cluster is smaller than the configured ObserversPerSubject (K),
-    /// the effective values are scaled down proportionally.
-    /// </summary>
-    /// <param name="clusterSize">The current number of nodes in the cluster.</param>
-    /// <returns>The effective ObserversPerSubject, HighWatermark, and LowWatermark values for the given cluster size.</returns>
-    /// <remarks>
-    /// <para>
-    /// Effective ObserversPerSubject = min(K, clusterSize - 1) because a node cannot monitor itself.
-    /// </para>
-    /// <para>
-    /// When effective K is less than configured K, H and L are scaled proportionally:
-    /// <list type="bullet">
-    ///   <item><description>Effective HighWatermark = max(1, ceil(effectiveK * H / K))</description></item>
-    ///   <item><description>Effective LowWatermark = max(1, floor(effectiveK * L / K))</description></item>
-    /// </list>
-    /// The scaling ensures K > H >= L >= 1 to satisfy MultiNodeCutDetector constraints.
-    /// </para>
-    /// </remarks>
-    public (int ObserversPerSubject, int HighWatermark, int LowWatermark) GetEffectiveParameters(int clusterSize)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(clusterSize);
-
-        // For a single node cluster, monitoring is meaningless
-        if (clusterSize == 1)
-        {
-            return (0, 0, 0);
-        }
-
-        // Effective K cannot exceed (clusterSize - 1) since a node doesn't monitor itself
-        var observersPerSubject = Math.Min(ObserversPerSubject, clusterSize - 1);
-
-        // If effective K equals configured K, use configured values directly
-        if (observersPerSubject == ObserversPerSubject)
-        {
-            return (observersPerSubject, HighWatermark, LowWatermark);
-        }
-
-        // For small clusters, use simple scaling that maintains K > H >= L >= 1
-        // H should be close to K to require high agreement, but must be strictly less than K
-        // L should be at least 1
-        var highWatermark = Math.Max(1, (int)Math.Ceiling((double)observersPerSubject * HighWatermark / ObserversPerSubject));
-
-        // Ensure K > H (strict inequality required by MultiNodeCutDetector)
-        if (highWatermark >= observersPerSubject)
-        {
-            highWatermark = observersPerSubject - 1;
-        }
-
-        var lowWatermark = Math.Max(1, (int)Math.Floor((double)observersPerSubject * LowWatermark / ObserversPerSubject));
-        lowWatermark = Math.Min(lowWatermark, highWatermark); // L cannot exceed H
-
-        return (observersPerSubject, highWatermark, lowWatermark);
-    }
 }

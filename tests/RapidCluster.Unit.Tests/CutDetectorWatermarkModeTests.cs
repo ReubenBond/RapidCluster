@@ -16,12 +16,12 @@ public class CutDetectorWatermarkModeTests
 
     /// <summary>
     /// Creates a CutDetector with specified H/L thresholds.
-    /// Since H/L parameters were removed from the constructor, we use UpdateView to set them.
     /// </summary>
     private static CutDetector CreateDetector(MembershipView view, int h, int l)
     {
-        var detector = new CutDetector(view);
-        detector.UpdateView(view, h, l);
+        var k = view.RingCount;
+        var detector = new CutDetector(k, h, l);
+        detector.UpdateView(view);
         return detector;
     }
 
@@ -370,7 +370,11 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void ConstructorNullViewThrows()
     {
-        Assert.Throws<ArgumentNullException>(() => new CutDetector(null!));
+        Assert.Throws<ArgumentNullException>(() =>
+        {
+            var detector = new CutDetector(K, H, L);
+            detector.UpdateView(null!);
+        });
     }
 
     [Fact]
@@ -378,36 +382,41 @@ public class CutDetectorWatermarkModeTests
     {
         // K=2 uses simple mode (no exception, H=L=K=2)
         var view = CreateTestView(10, 2);
-        var detector = new CutDetector(view);
+        var detector = CreateDetector(view, 2, 2);
         Assert.Equal(0, detector.GetNumProposals());
     }
 
     [Fact]
-    public void ConstructorHGreaterThanKThrows()
+    public void ConstructorHGreaterThanK_AdjustsEffectiveH()
     {
+        // When configured H > K, the effective H is adjusted to K-1 during UpdateView
         var view = CreateTestView(10, 5); // K=5
-        Assert.Throws<ArgumentException>(() => CreateDetector(view, 6, 2)); // H=6 > K=5
+        var detector = CreateDetector(view, 6, 2); // Configured H=6 > K=5
+        // Should succeed - effective H will be clamped to K-1=4
+        Assert.Equal(0, detector.GetNumProposals());
     }
 
     [Fact]
-    public void ConstructorLGreaterThanHThrows()
+    public void ConstructorLGreaterThanH_AdjustsEffectiveL()
     {
         var view = CreateTestView();
-        Assert.Throws<ArgumentException>(() => CreateDetector(view, 5, 6)); // L=6 > H=5
+        // Configured L=6 > H=5, effective L will be adjusted to H
+        var detector = CreateDetector(view, 5, 6);
+        Assert.Equal(0, detector.GetNumProposals());
     }
 
     [Fact]
     public void ConstructorLZeroThrows()
     {
         var view = CreateTestView();
-        Assert.Throws<ArgumentException>(() => CreateDetector(view, 8, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CreateDetector(view, 8, 0));
     }
 
     [Fact]
     public void ConstructorHZeroThrows()
     {
         var view = CreateTestView();
-        Assert.Throws<ArgumentException>(() => CreateDetector(view, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CreateDetector(view, 0, 0));
     }
 
     [Fact]
@@ -419,10 +428,13 @@ public class CutDetectorWatermarkModeTests
     }
 
     [Fact]
-    public void ConstructorHEqualsKThrows()
+    public void ConstructorHEqualsK_AdjustsEffectiveH()
     {
+        // When configured H = K, the effective H is adjusted to K-1 during UpdateView
         var view = CreateTestView(10, 5); // K=5
-        Assert.Throws<ArgumentException>(() => CreateDetector(view, 5, 2)); // H=5 = K
+        var detector = CreateDetector(view, 5, 2); // H=5 = K
+        // Should succeed - effective H will be clamped to K-1=4
+        Assert.Equal(0, detector.GetNumProposals());
     }
 
     [Fact]
@@ -724,7 +736,7 @@ public class CutDetectorWatermarkModeTests
     {
         // Empty membership view has ring count clamped to 1, which uses simple mode
         var view = new MembershipViewBuilder(K).Build();
-        var detector = new CutDetector(view);
+        var detector = CreateDetector(view, K, K);
         Assert.Equal(0, detector.GetNumProposals());
     }
 

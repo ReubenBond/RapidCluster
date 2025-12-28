@@ -165,8 +165,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         _membershipView = MembershipView.Empty;
 
-        // Create cut detector with empty view - it will be updated via UpdateView() during initialization
-        _cutDetector = new CutDetector(MembershipView.Empty, cutDetectorLogger);
+        // Create cut detector with configured thresholds - it will compute effective values via UpdateView()
+        _cutDetector = new CutDetector(
+            _options.ObserversPerSubject,
+            _options.HighWatermark,
+            _options.LowWatermark,
+            cutDetectorLogger);
 
         _sharedResources = sharedResources;
         _messagingClient = messagingClient;
@@ -559,7 +563,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// Centralized method for updating the membership view. All view changes flow through here.
     /// This method handles:
     /// - Updating the membership view
-    /// - Recreating the cut detector
+    /// - Updating the cut detector
     /// - Updating the broadcaster
     /// - Disposing old and creating new failure detectors  
     /// - Creating new consensus instance
@@ -585,9 +589,8 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // Update the view (metadata is embedded in MemberInfo within the view)
         _membershipView = newView;
 
-        // Update cut detector for the new view, preserving valid pending state
-        var (_, highWatermark, lowWatermark) = _options.GetEffectiveParameters(_membershipView.Size);
-        _cutDetector.UpdateView(_membershipView, highWatermark, lowWatermark);
+        // Update cut detector for the new view.
+        _cutDetector.UpdateView(_membershipView);
 
         // Reset unstable-mode timeout state (per-view)
         _unstableModeTimer.Dispose();

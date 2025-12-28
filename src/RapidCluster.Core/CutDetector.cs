@@ -26,13 +26,19 @@ namespace RapidCluster;
 /// In simple mode (K &lt; 3):
 /// - No unstable region exists (H = L = K)
 /// - Proposals trigger immediately when a node reaches the threshold
+/// 
+/// The detector is initialized with an empty membership view. Call <see cref="UpdateView"/>
+/// to set the initial view and begin operation.
 /// </remarks>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed partial class CutDetector
 {
-    private MembershipView _membershipView;
+    private MembershipView _membershipView = MembershipView.Empty;
     private int _highWaterMark;
     private int _lowWaterMark;
+    private readonly int _configuredObserversPerSubject;
+    private readonly int _configuredHighWatermark;
+    private readonly int _configuredLowWatermark;
     private readonly ILogger<CutDetector> _logger;
     private readonly Lock _lock = new();
     private int _proposalCount;
@@ -93,69 +99,31 @@ internal sealed partial class CutDetector
     private partial void LogRemoveReports(LoggableEndpoint Node, string Reason);
 
     /// <summary>
-    /// Creates a CutDetector for the given membership view.
+    /// Creates a CutDetector with specified configuration options.
     /// </summary>
-    /// <param name="membershipView">The current membership view</param>
+    /// <param name="observersPerSubject">The configured number of observers per subject (K)</param>
+    /// <param name="highWatermark">The configured high watermark (H)</param>
+    /// <param name="lowWatermark">The configured low watermark (L)</param>
     /// <param name="logger">Optional logger for diagnostic output</param>
     /// <remarks>
-    /// The detector is initialized with default thresholds based on the membership view.
-    /// Use <see cref="UpdateView"/> to set specific H/L thresholds after construction.
+    /// The detector is initialized with an empty membership view and zero thresholds.
+    /// Call <see cref="UpdateView"/> with an actual membership view before use.
+    /// The effective H/L values are computed during UpdateView based on the actual cluster size.
     /// </remarks>
-    public CutDetector(MembershipView membershipView, ILogger<CutDetector>? logger = null)
+    public CutDetector(int observersPerSubject, int highWatermark, int lowWatermark, ILogger<CutDetector>? logger = null)
     {
-        ArgumentNullException.ThrowIfNull(membershipView);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(observersPerSubject);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(highWatermark);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(lowWatermark);
 
-        _membershipView = membershipView;
+        _configuredObserversPerSubject = observersPerSubject;
+        _configuredHighWatermark = highWatermark;
+        _configuredLowWatermark = lowWatermark;
         _logger = logger ?? NullLogger<CutDetector>.Instance;
 
-        var k = _membershipView.RingCount;
-
-        if (k < 3)
-        {
-            // Simple mode: require all K observers to agree
-            _highWaterMark = k;
-            _lowWaterMark = k;
-        }
-        else
-        {
-            // Watermark mode: use defaults
-            // Default: H = K-1, L = max(1, H/2)
-            _highWaterMark = k - 1;
-            _lowWaterMark = Math.Max(1, _highWaterMark / 2);
-        }
-
-        LogCreated(ObserversPerSubject, _highWaterMark, _lowWaterMark, membershipView.Size,
-            IsSimpleMode ? "simple" : "watermark");
-    }
-
-    /// <summary>
-    /// Sets the H/L thresholds to specific values.
-    /// Called during UpdateView with explicit thresholds.
-    /// </summary>
-    private void SetThresholds(int highWaterMark, int lowWaterMark)
-    {
-        var k = _membershipView.RingCount;
-
-        if (k < 3)
-        {
-            // Simple mode: require all K observers to agree (ignore provided values)
-            _highWaterMark = k;
-            _lowWaterMark = k;
-        }
-        else
-        {
-            // Watermark mode: use provided values
-            _highWaterMark = highWaterMark;
-            _lowWaterMark = lowWaterMark;
-
-            // Validate constraints: K > H >= L >= 1
-            if (_highWaterMark < 1 || _lowWaterMark < 1 ||
-                _highWaterMark >= k || _lowWaterMark > _highWaterMark)
-            {
-                throw new ArgumentException(
-                    $"Watermark constraints not satisfied: K > H >= L >= 1 required, got K={k}, H={_highWaterMark}, L={_lowWaterMark}");
-            }
-        }
+        // Initialize with empty/zero values - UpdateView will set actual values
+        _highWaterMark = 0;
+        _lowWaterMark = 0;
     }
 
     /// <summary>
@@ -444,9 +412,12 @@ internal sealed partial class CutDetector
     /// Preserves pending join proposals for nodes not yet in the new membership.
     /// </summary>
     /// <param name="newView">The new membership view</param>
-    /// <param name="newHighWaterMark">The new high watermark (H)</param>
-    /// <param name="newLowWaterMark">The new low watermark (L)</param>
-    public void UpdateView(MembershipView newView, int newHighWaterMark, int newLowWaterMark)
+    /// <remarks>
+    /// The effective H/L thresholds are computed from the configured values based on the
+    /// actual cluster size. This ensures the watermark constraints (K > H >= L >= 1) are
+    /// always satisfied regardless of cluster size.
+    /// </remarks>
+    public void UpdateView(MembershipView newView)
     {
         ArgumentNullException.ThrowIfNull(newView);
 
@@ -479,9 +450,12 @@ internal sealed partial class CutDetector
                 _alreadyProposed.Remove(node);
             }
 
-            // Update view and thresholds
+            // Update view and compute effective thresholds
             _membershipView = newView;
-            SetThresholds(newHighWaterMark, newLowWaterMark);
+            ComputeEffectiveThresholds(newView.Size);
+
+            LogCreated(ObserversPerSubject, _highWaterMark, _lowWaterMark, newView.Size,
+                IsSimpleMode ? "simple" : "watermark");
 
             // If K changed, the ring assignments have changed.
             // - When K decreases: Reports for ring numbers >= newK are invalid
@@ -533,6 +507,82 @@ internal sealed partial class CutDetector
             var preservedCount = _reportsPerHost.Count;
             LogUpdateView(oldConfig, newConfig, oldK, newK, preservedCount);
         }
+    }
+
+    /// <summary>
+    /// Computes effective H/L thresholds based on the configured values and actual cluster size.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Effective ObserversPerSubject = min(K, clusterSize - 1) because a node cannot monitor itself.
+    /// </para>
+    /// <para>
+    /// When effective K is less than configured K, H and L are scaled proportionally:
+    /// <list type="bullet">
+    ///   <item><description>Effective HighWatermark = max(1, ceil(effectiveK * H / K))</description></item>
+    ///   <item><description>Effective LowWatermark = max(1, floor(effectiveK * L / K))</description></item>
+    /// </list>
+    /// The scaling ensures K > H >= L >= 1 to satisfy watermark constraints.
+    /// </para>
+    /// <para>
+    /// For simple mode (K &lt; 3), H and L are both set to K (require all observers).
+    /// </para>
+    /// </remarks>
+    private void ComputeEffectiveThresholds(int clusterSize)
+    {
+        // For a single node cluster, monitoring is meaningless
+        if (clusterSize <= 1)
+        {
+            _highWaterMark = 0;
+            _lowWaterMark = 0;
+            return;
+        }
+
+        // Effective K cannot exceed (clusterSize - 1) since a node doesn't monitor itself
+        var effectiveK = Math.Min(_configuredObserversPerSubject, clusterSize - 1);
+
+        // For simple mode (K < 3), require all observers to agree
+        if (effectiveK < 3)
+        {
+            _highWaterMark = effectiveK;
+            _lowWaterMark = effectiveK;
+            return;
+        }
+
+        // Watermark mode: compute effective H/L from configured values
+        int effectiveH, effectiveL;
+
+        if (effectiveK == _configuredObserversPerSubject)
+        {
+            // Use configured values directly
+            effectiveH = _configuredHighWatermark;
+            effectiveL = _configuredLowWatermark;
+        }
+        else
+        {
+            // Scale configured values proportionally
+            effectiveH = Math.Max(1, (int)Math.Ceiling((double)effectiveK * _configuredHighWatermark / _configuredObserversPerSubject));
+            effectiveL = Math.Max(1, (int)Math.Floor((double)effectiveK * _configuredLowWatermark / _configuredObserversPerSubject));
+        }
+
+        // Ensure K > H (strict inequality required)
+        if (effectiveH >= effectiveK)
+        {
+            effectiveH = effectiveK - 1;
+        }
+
+        // Ensure L <= H
+        effectiveL = Math.Min(effectiveL, effectiveH);
+
+        // Validate constraints: K > H >= L >= 1
+        if (effectiveH < 1 || effectiveL < 1 || effectiveH >= effectiveK || effectiveL > effectiveH)
+        {
+            throw new InvalidOperationException(
+                $"Watermark constraints not satisfied: K > H >= L >= 1 required, got K={effectiveK}, H={effectiveH}, L={effectiveL}");
+        }
+
+        _highWaterMark = effectiveH;
+        _lowWaterMark = effectiveL;
     }
 
     private string DebuggerDisplay =>

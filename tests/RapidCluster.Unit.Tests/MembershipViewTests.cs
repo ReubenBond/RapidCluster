@@ -315,7 +315,6 @@ public class MembershipViewTests
         }
     }
 
-
     /// <summary>
     /// Verify configuration ID changes with membership changes
     /// </summary>

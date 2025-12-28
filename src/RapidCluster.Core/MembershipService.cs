@@ -88,9 +88,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Flag to track if a stale view refresh is in progress (to prevent concurrent refreshes)
     private bool _isRefreshingView;
 
-    // Last time a stale view refresh was completed (for rate limiting)
-    private long _lastStaleViewRefreshTicks;
-
     // Background task tracking for graceful shutdown
     private readonly List<Task> _backgroundTasks = [];
     private readonly Lock _backgroundTasksLock = new();
@@ -117,15 +114,16 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <summary>
     /// Result of a single join attempt.
     /// </summary>
-    private readonly struct JoinAttemptResult(JoinAttemptStatus status, JoinResponse? response, string? failureReason)
+    private readonly struct JoinAttemptResult(JoinAttemptStatus status, JoinResponse? response, string? failureReason, ConfigurationId? expectedConfigId = null)
     {
         public JoinAttemptStatus Status { get; } = status;
         public JoinResponse? Response { get; } = response;
         public string? FailureReason { get; } = failureReason;
+        public ConfigurationId? ExpectedConfigId { get; } = expectedConfigId;
 
         public static JoinAttemptResult Success(JoinResponse response) => new(JoinAttemptStatus.Success, response, null);
         public static JoinAttemptResult RetryNeeded(string reason) => new(JoinAttemptStatus.RetryNeeded, null, reason);
-        public static JoinAttemptResult ConfigChanged() => new(JoinAttemptStatus.ConfigChanged, null, null);
+        public static JoinAttemptResult ConfigChanged(ConfigurationId expectedConfigId) => new(JoinAttemptStatus.ConfigChanged, null, null, expectedConfigId);
         public static JoinAttemptResult Failed(string reason) => new(JoinAttemptStatus.Failed, null, reason);
     }
 
@@ -389,9 +387,24 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     break;
 
                 case JoinAttemptStatus.ConfigChanged:
-                    // Configuration changed during join - retry immediately without consuming an attempt.
-                    // This can happen indefinitely as the cluster membership changes.
-                    _log.JoinRetryingAfterConfigChange(attempt + 1);
+                    // Configuration changed during join - refresh the view from the seed to see if we were added.
+                    // This avoids unnecessary retries when we've actually been added but the consensus response
+                    // was stale (the ConfigChanged response indicates a new config exists).
+                    _log.JoinRetryingAfterConfigChange(attempt + 1, result.ExpectedConfigId!.Value);
+
+                    // Try to refresh the view from the current seed
+                    if (await TryRefreshViewFromSeedAsync(currentSeed, cancellationToken).ConfigureAwait(true))
+                    {
+                        // View refreshed and we're in the cluster - check if we completed the join
+                        if (_membershipView.IsHostPresent(_myAddr))
+                        {
+                            _log.JoinCompletedViaLearnerProtocol(_myAddr, _membershipView);
+                            _metrics.RecordJoinLatency(MetricNames.Results.Success, joinStopwatch);
+                            return;
+                        }
+                    }
+
+                    // Either refresh failed or we're not in the view - retry immediately without consuming an attempt
                     continue;
 
                 case JoinAttemptStatus.RetryNeeded:
@@ -544,10 +557,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
         if (successfulResponse == null)
         {
-            // Check if we got a ConfigChanged response - configuration changed during join, retry immediately
-            if (responses.Any(r => r?.JoinResponse?.StatusCode == JoinStatusCode.ConfigChanged))
+            // Check if we got a ConfigChanged response - configuration changed during join
+            var configChangedResponse = responses.FirstOrDefault(r => r?.JoinResponse?.StatusCode == JoinStatusCode.ConfigChanged)?.JoinResponse;
+            if (configChangedResponse != null)
             {
-                return JoinAttemptResult.ConfigChanged();
+                var expectedConfigId = ConfigurationId.FromProtobuf(configChangedResponse.ConfigurationId);
+                return JoinAttemptResult.ConfigChanged(expectedConfigId);
             }
 
             // No successful response from any observer - transient, should retry
@@ -555,6 +570,70 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         }
 
         return JoinAttemptResult.Success(successfulResponse);
+    }
+
+    /// <summary>
+    /// Requests a fresh membership view from a remote node during the join phase.
+    /// Used when we receive a ConfigChanged response to check if we were actually added to the cluster.
+    /// </summary>
+    /// <returns>True if the view was refreshed and shows we're in the cluster, false otherwise.</returns>
+    private async Task<bool> TryRefreshViewFromSeedAsync(Endpoint seedAddress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _log.RequestingMembershipView(seedAddress);
+
+            var request = new MembershipViewRequest
+            {
+                Sender = _myAddr,
+                CurrentConfigurationId = _membershipView.ConfigurationId.ToProtobuf()
+            };
+
+            var response = await _messagingClient.SendMessageAsync(
+                seedAddress,
+                request.ToRapidClusterRequest(),
+                cancellationToken).ConfigureAwait(true);
+
+            var viewResponse = response.MembershipViewResponse;
+            if (viewResponse == null)
+            {
+                _log.MembershipViewRefreshFailed(seedAddress, "No MembershipViewResponse in reply");
+                return false;
+            }
+
+            var responseConfigId = viewResponse.ConfigurationId.ToConfigurationId();
+
+            // Only apply if the response is newer than our current (empty or stale) view
+            if (responseConfigId <= _membershipView.ConfigurationId)
+            {
+                _log.SkippingStaleViewRefresh(responseConfigId, _membershipView.ConfigurationId);
+                return false;
+            }
+
+            // Check if we're in the new membership using address comparison (ignoring node_id)
+            var inMembership = viewResponse.Endpoints.Any(e => EndpointAddressComparer.Instance.Equals(e, _myAddr));
+            if (!inMembership)
+            {
+                // We're not in this view - the view changed but we weren't added
+                // The caller will retry the join
+                return false;
+            }
+
+            // We're in the new membership - apply the view
+            ApplyLearnedMembershipView(viewResponse);
+
+            _log.MembershipViewRefreshed(
+                seedAddress,
+                responseConfigId,
+                viewResponse.Endpoints.Count);
+
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.MembershipViewRefreshFailed(seedAddress, ex.Message);
+            return false;
+        }
     }
 
     /// <summary>
@@ -1314,7 +1393,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             MaxNodeId = _membershipView.MaxNodeId
         };
 
-
         // Add all endpoints (which already contain node_id)
         var members = _membershipView.Members;
         response.Endpoints.AddRange(members);
@@ -1354,7 +1432,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 _log.IgnoringStaleConsensusDecision(proposal.Members.Count);
                 return;
             }
-
 
             _announcedProposal = false;
 
@@ -1574,7 +1651,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             return msgConfig == currentConfigurationId;
         });
     }
-
 
     private AlertMessage ExtractJoinerMetadata(AlertMessage alertMessage)
     {
@@ -1851,16 +1927,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             return;
         }
 
-        // Rate limit refresh attempts
-        var now = _sharedResources.TimeProvider.GetTimestamp();
-        var lastRefresh = Interlocked.Read(ref _lastStaleViewRefreshTicks);
-        var elapsed = _sharedResources.TimeProvider.GetElapsedTime(lastRefresh, now);
-        if (elapsed < _options.StaleViewRefreshInterval)
-        {
-            _log.SkippingStaleViewRefresh(expectedConfigId, _membershipView.ConfigurationId);
-            return;
-        }
-
         // Double-check we still need to refresh (config may have been updated by another mechanism)
         if (expectedConfigId <= _membershipView.ConfigurationId)
         {
@@ -1902,9 +1968,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
             // Apply the learned view
             ApplyLearnedMembershipView(viewResponse);
-
-            // Update last refresh timestamp on success
-            Interlocked.Exchange(ref _lastStaleViewRefreshTicks, _sharedResources.TimeProvider.GetTimestamp());
 
             _log.MembershipViewRefreshed(
                 remoteEndpoint,

@@ -23,23 +23,6 @@ public class RapidClusterProtocolOptionsTests
     }
 
     [Fact]
-    public void StaleViewRefreshInterval_HasDefaultValue()
-    {
-        var options = new RapidClusterProtocolOptions();
-        Assert.Equal(TimeSpan.FromSeconds(1), options.StaleViewRefreshInterval);
-    }
-
-    [Fact]
-    public void StaleViewRefreshInterval_CanBeConfigured()
-    {
-        var options = new RapidClusterProtocolOptions
-        {
-            StaleViewRefreshInterval = TimeSpan.FromMilliseconds(2000)
-        };
-        Assert.Equal(TimeSpan.FromMilliseconds(2000), options.StaleViewRefreshInterval);
-    }
-
-    [Fact]
     public void UnstableModeTimeout_HasDefaultValue()
     {
         var options = new RapidClusterProtocolOptions();

@@ -277,7 +277,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             return;
         }
 
-
         if (_currentRank.Round < 2 || failedRank.Round != _currentRank.Round)
         {
             return;
@@ -434,7 +433,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
     }
 
-
     private void HandleInbound(
         RapidClusterRequest request,
         Stopwatch consensusStopwatch,
@@ -522,9 +520,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _fastLog.EarlyFallbackNeeded(failures, f, threshold);
         return true;
     }
-
-
-
 
     private void StartClassicRound(CancellationToken cancellationToken)
     {
@@ -726,7 +721,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
         _paxosLearner.HandlePhase2bMessage(phase2bMessage);
     }
-
 
     private void HandlePhase1bMessage(Phase1bMessage phase1bMessage, CancellationToken cancellationToken)
     {

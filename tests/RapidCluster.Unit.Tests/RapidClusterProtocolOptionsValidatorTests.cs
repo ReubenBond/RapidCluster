@@ -478,7 +478,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var result = _validator.Validate("TestOptions", options);
 
         Assert.True(result.Succeeded);
-}
+    }
 
     private static RapidClusterProtocolOptions CreateValidOptions() => new();
 }

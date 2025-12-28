@@ -249,8 +249,9 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(Level = LogLevel.Warning, Message = "Join attempt {Attempt} failed: {Message}. Retrying in {DelayMs}ms")]
     public partial void JoinRetry(int attempt, string message, double delayMs);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Join attempt {Attempt}: configuration changed during join, retrying immediately")]
-    public partial void JoinRetryingAfterConfigChange(int attempt);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Join attempt {Attempt}: configuration changed (expected config {ExpectedConfigId}), refreshing view and retrying")]
+    private partial void JoinRetryingAfterConfigChangeCore(int attempt, LoggableConfigurationId expectedConfigId);
+    public void JoinRetryingAfterConfigChange(int attempt, ConfigurationId expectedConfigId) => JoinRetryingAfterConfigChangeCore(attempt, new(expectedConfigId));
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Failed to join cluster after {Attempts} attempts")]
     public partial void JoinFailed(int attempts);

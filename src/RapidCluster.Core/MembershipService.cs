@@ -943,7 +943,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // 1. The alert has already been sent - consensus may complete even if client disconnects
         // 2. If the client retries, they'll get JoinerAlreadyInRing response if consensus succeeded
         // 3. We only want to cancel on server shutdown, not on client timeout
-        return await resultTask.WaitAsync(TimeSpan.FromSeconds(30), _sharedResources.TimeProvider, _stoppingCts.Token).ConfigureAwait(true);
+        return await resultTask.WaitAsync(cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>

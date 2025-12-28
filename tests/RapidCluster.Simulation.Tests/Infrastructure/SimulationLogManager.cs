@@ -44,6 +44,11 @@ internal sealed class SimulationLogManager : IDisposable
     public ILoggerFactory LoggerFactory { get; }
 
     /// <summary>
+    /// Gets the in-memory log buffer for inspecting log entries.
+    /// </summary>
+    public InMemoryLogBuffer LogBuffer => _inMemoryLoggerProvider.Buffer;
+
+    /// <summary>
     /// Attaches buffered logs to the test context.
     /// If the full log exceeds the size limit, a warning is added and only Information level and above are attached.
     /// </summary>

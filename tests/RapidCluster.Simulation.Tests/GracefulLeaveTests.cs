@@ -104,6 +104,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Assert: Remaining nodes converge to size 2
         Assert.All(remainingNodes, n => Assert.Equal(2, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -121,6 +122,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Leaving node is removed from harness
         Assert.DoesNotContain(leavingNode, _harness.Nodes);
         Assert.Equal(2, _harness.Nodes.Count);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -139,6 +141,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Remaining nodes converge
         _harness.WaitForConvergence();
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -157,6 +160,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Remaining nodes converge
         _harness.WaitForConvergence();
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -175,6 +179,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Remaining nodes converge
         _harness.WaitForConvergence();
         Assert.All(remainingNodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -194,6 +199,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Three nodes remain
         Assert.Equal(3, _harness.Nodes.Count);
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -216,6 +222,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Three nodes remain
         Assert.Equal(3, _harness.Nodes.Count);
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -240,6 +247,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Contains(nodes[2], _harness.Nodes);
         Assert.Contains(nodes[4], _harness.Nodes);
         Assert.Equal(3, _harness.Nodes.Count);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -259,6 +267,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: One node remains (it's still "in the cluster" from its own perspective)
         Assert.Single(_harness.Nodes);
         Assert.Contains(keepNode, _harness.Nodes);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -280,6 +289,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Contains(nodes[1], _harness.Nodes);
         Assert.Contains(nodes[2], _harness.Nodes);
         Assert.Contains(nodes[3], _harness.Nodes);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -298,6 +308,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: View changes were emitted
         var viewChangeCount = CountViewChanges(collector);
         Assert.True(viewChangeCount >= 1, "Membership changed callback should be invoked");
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -321,6 +332,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: All remaining nodes received notification
         var viewChangeCounts = collectors.Select(CountViewChanges).ToArray();
         Assert.All(viewChangeCounts, count => Assert.True(count >= 1));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -343,6 +355,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         var observedSizes = CollectViewChangeMembershipSizes(collector);
         Assert.Contains(3, observedSizes);
         Assert.Contains(2, observedSizes);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -363,6 +376,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.NotEqual(initialConfigId, newConfigId);
         Assert.True(newConfigId.Version > initialConfigId.Version,
             $"Version should increase after leave. Initial: {initialConfigId.Version}, Current: {newConfigId.Version}");
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -389,6 +403,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
             Assert.True(configIds[i].Version > configIds[i - 1].Version,
                 $"Version at index {i} ({configIds[i].Version}) should be greater than at {i - 1} ({configIds[i - 1].Version})");
         }
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -482,6 +497,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Equal(4, _harness.Nodes.Count);
         Assert.Contains(newNode, _harness.Nodes);
         Assert.DoesNotContain(nodes[3], _harness.Nodes);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -502,6 +518,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Equal(3, _harness.Nodes.Count);
         Assert.Contains(newNode, _harness.Nodes);
         Assert.DoesNotContain(nodes[2], _harness.Nodes);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -530,6 +547,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Contains(newNode2, _harness.Nodes);
         Assert.DoesNotContain(nodes[3], _harness.Nodes);
         Assert.DoesNotContain(nodes[4], _harness.Nodes);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -582,6 +600,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Assert: Cluster still functional with 2 nodes
         Assert.Equal(2, _harness.Nodes.Count);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -601,6 +620,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Leaving node's address no longer in membership
         var remainingAddresses = nodes[0].CurrentView.Members;
         Assert.DoesNotContain(leavingAddress, remainingAddresses);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -621,6 +641,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Assert: Final state correct
         Assert.Equal(3, _harness.Nodes.Count);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -644,6 +665,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
             Assert.True(membershipSets[0].SetEquals(membershipSets[i]),
                 "All nodes should have identical membership view");
         }
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -660,6 +682,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: All remaining nodes have same configuration ID
         var configIds = _harness.Nodes.Select(n => n.CurrentView.ConfigurationId).Distinct().ToList();
         Assert.Single(configIds);
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -681,6 +704,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Cluster restructures and remains healthy
         Assert.Equal(3, _harness.Nodes.Count);
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -701,6 +725,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Remaining nodes are still monitored (cluster stable)
         Assert.Equal(4, _harness.Nodes.Count);
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]
@@ -723,6 +748,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // Assert: Remaining nodes are healthy
         Assert.Equal(3, _harness.Nodes.Count);
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
+        _harness.AssertNoWarningsOrErrors();
     }
 
     [Fact]

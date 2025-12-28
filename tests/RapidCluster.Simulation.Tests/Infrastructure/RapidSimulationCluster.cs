@@ -54,6 +54,11 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     public ILoggerFactory LoggerFactory { get; }
 
     /// <summary>
+    /// Gets the in-memory log buffer for inspecting log entries during tests.
+    /// </summary>
+    public InMemoryLogBuffer LogBuffer => _logManager.LogBuffer;
+
+    /// <summary>
     /// Gets the simulation network.
     /// </summary>
     public SimulationNetwork Network { get; }
@@ -547,6 +552,22 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     /// Logs the seed to the test output for reproduction.
     /// </summary>
     public void LogSeedForReproduction() => _logger.LogInformation("[SEED FOR REPRODUCTION] {Seed}", Seed);
+
+    /// <summary>
+    /// Asserts that no log entries at Warning level or above were recorded.
+    /// Throws an exception with details of any warning/error logs found.
+    /// </summary>
+    public void AssertNoWarningsOrErrors()
+    {
+        var warningsAndErrors = LogBuffer.GetEntries(LogLevel.Warning).ToList();
+        if (warningsAndErrors.Count > 0)
+        {
+            var formattedEntries = string.Join(Environment.NewLine,
+                warningsAndErrors.Select(e => $"  [{e.LogLevel}] {e.Category}: {e.Message}"));
+            throw new Xunit.Sdk.XunitException(
+                $"Expected no warnings or errors, but found {warningsAndErrors.Count}:{Environment.NewLine}{formattedEntries}");
+        }
+    }
 
     #region Override logging hooks from base class
 

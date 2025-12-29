@@ -696,3 +696,42 @@ dotnet_diagnostic.MA0055.severity = suggestion
 # MA0158: Use System.Threading.Lock - .NET 10 feature, will adopt later
 dotnet_diagnostic.MA0158.severity = suggestion
 
+# ============================================================================
+# Critical Rules - Upgraded to Warning
+# ============================================================================
+# These rules catch important issues and should be addressed
+
+# CA2016: Forward the 'CancellationToken' parameter to methods that take one
+dotnet_diagnostic.CA2016.severity = warning
+
+# CA1852: Seal internal types - improves performance and intent clarity
+dotnet_diagnostic.CA1852.severity = warning
+
+# IDE0044: Make field readonly - catches mutability issues
+dotnet_diagnostic.IDE0044.severity = warning
+
+# CA2012: Use ValueTask correctly - prevents subtle async bugs
+dotnet_diagnostic.CA2012.severity = warning
+
+# CA1822: Make member static - performance and clarity
+dotnet_diagnostic.CA1822.severity = warning
+
+# CA2000: Dispose objects before losing scope
+dotnet_diagnostic.CA2000.severity = warning
+
+# CA2213: Disposable fields should be disposed
+dotnet_diagnostic.CA2213.severity = warning
+
+# ============================================================================
+# Security Rules - Error Severity
+# ============================================================================
+
+# CA3075: Insecure XML processing
+dotnet_diagnostic.CA3075.severity = error
+
+# CA5350: Do not use weak cryptographic algorithms
+dotnet_diagnostic.CA5350.severity = error
+
+# CA5351: Do not use broken cryptographic algorithms
+dotnet_diagnostic.CA5351.severity = error
+

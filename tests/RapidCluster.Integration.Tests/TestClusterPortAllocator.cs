@@ -111,7 +111,7 @@ internal sealed class TestClusterPortAllocator : IDisposable
         throw new InvalidOperationException("Cannot find a free port");
     }
 
-    private class MutexManager
+    private sealed class MutexManager
     {
         private readonly Dictionary<string, Mutex> _mutexes = [];
         private readonly BlockingCollection<Action> _workItems = [];

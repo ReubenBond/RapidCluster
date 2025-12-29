@@ -735,3 +735,50 @@ dotnet_diagnostic.CA5350.severity = error
 # CA5351: Do not use broken cryptographic algorithms
 dotnet_diagnostic.CA5351.severity = error
 
+# ============================================================================
+# ErrorProne.NET Rules
+# ============================================================================
+
+# EPC20: Default ToString implementation - valid but too strict for logging
+dotnet_diagnostic.EPC20.severity = suggestion
+
+# ERP022: Swallowed exceptions - valid concern but intentional in some cases
+dotnet_diagnostic.ERP022.severity = suggestion
+
+# EPC12: Suspicious exception handling - valid but sometimes we only need message for logging
+dotnet_diagnostic.EPC12.severity = suggestion
+
+# EPC13: Task result should be observed - valid but sometimes fire-and-forget is intentional
+dotnet_diagnostic.EPC13.severity = suggestion
+
+# ============================================================================
+# Roslynator Rules
+# ============================================================================
+
+# RCS1021: Convert lambda expression body to expression-body - style preference
+dotnet_diagnostic.RCS1021.severity = suggestion
+
+# RCS1036: Remove unnecessary blank line - too noisy
+dotnet_diagnostic.RCS1036.severity = suggestion
+
+# RCS1037: Remove trailing white-space - handled by editorconfig
+dotnet_diagnostic.RCS1037.severity = none
+
+# RCS1090: Add call to 'ConfigureAwait' - disabled as we rely on SynchronizationContext
+dotnet_diagnostic.RCS1090.severity = none
+
+# RCS1118: Mark local variable as const - good practice
+dotnet_diagnostic.RCS1118.severity = suggestion
+
+# RCS1139: Add summary element to documentation comment - too noisy
+dotnet_diagnostic.RCS1139.severity = none
+
+# RCS1181: Convert comment to documentation comment - too noisy
+dotnet_diagnostic.RCS1181.severity = none
+
+# RCS1194: Implement exception constructors - not always needed
+dotnet_diagnostic.RCS1194.severity = suggestion
+
+# RCS1238: Avoid nested ?: operators - valid but sometimes clearer
+dotnet_diagnostic.RCS1238.severity = suggestion
+

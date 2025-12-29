@@ -56,8 +56,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     private readonly Lock _lock = new();
     private readonly CancellationTokenSource _disposeCts = new();
-    private Task? _consensusLoopTask;
-    private int _disposed;
 
     private readonly TaskCompletionSource<MembershipProposal> _onDecidedTcs = new();
 
@@ -70,6 +68,11 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
     private readonly OneShotTimer _timer = new();
     private readonly OneShotTimer _classicRestartTimer = new();
+    private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
+    private readonly HashSet<Endpoint> _votesReceived = new(EndpointAddressComparer.Instance);
+    private readonly HashSet<Endpoint> _deliveryFailureEndpoints = new(EndpointAddressComparer.Instance);
+    private readonly List<Phase1bMessage> _phase1bResponses = [];
+    private readonly HashSet<Endpoint> _negativeVoters = new(EndpointAddressComparer.Instance);
 
     private Rank _currentRank = new() { Round = 1, NodeIndex = 0 };
     private int _highestRoundSeen;
@@ -77,31 +80,32 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     private int? _scheduledClassicRoundStart;
     private TimeSpan? _scheduledClassicRoundDelay;
 
-    private readonly Dictionary<MembershipProposal, int> _votesPerProposal = new(MembershipProposalComparer.Instance);
-    private readonly HashSet<Endpoint> _votesReceived = new(EndpointAddressComparer.Instance);
-    private readonly HashSet<Endpoint> _deliveryFailureEndpoints = new(EndpointAddressComparer.Instance);
     private int _fallbackSignaled;
-
-    private readonly List<Phase1bMessage> _phase1bResponses = [];
     private MembershipProposal? _candidateValue;
-
-    private readonly HashSet<Endpoint> _negativeVoters = new(EndpointAddressComparer.Instance);
+    private Task? _consensusLoopTask;
+    private int _disposed;
 
     public Task<MembershipProposal> Decided => _onDecidedTcs.Task;
 
     private readonly record struct ProtocolMetrics(string ProtocolName)
     {
         public void RecordProposal(RapidClusterMetrics metrics) => metrics.RecordConsensusProposal(ProtocolName);
+
         public void RecordRoundStarted(RapidClusterMetrics metrics) => metrics.RecordConsensusRoundStarted(ProtocolName);
+
         public void RecordRoundCompleted(RapidClusterMetrics metrics, string result) => metrics.RecordConsensusRoundCompleted(ProtocolName, result);
+
         public void RecordLatency(RapidClusterMetrics metrics, string result, Stopwatch stopwatch) => metrics.RecordConsensusLatency(ProtocolName, result, stopwatch);
     }
 
     private abstract record ConsensusEvent
     {
         public sealed record Inbound(RapidClusterRequest Request, CancellationToken CancellationToken) : ConsensusEvent;
+
         public sealed record Timeout(int Round, TimeSpan Delay) : ConsensusEvent;
+
         public sealed record ClassicRestart(int ExpectedRound, TimeSpan Delay) : ConsensusEvent;
+
         public sealed record DeliveryFailure(Endpoint FailedEndpoint, Rank Rank) : ConsensusEvent;
     }
 

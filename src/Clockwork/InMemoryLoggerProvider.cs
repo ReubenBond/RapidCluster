@@ -7,17 +7,6 @@ using Microsoft.Extensions.Logging;
 namespace Clockwork;
 
 /// <summary>
-/// Represents a single log entry with its associated metadata.
-/// </summary>
-public readonly record struct LogEntry(
-    DateTimeOffset Timestamp,
-    LogLevel LogLevel,
-    string Category,
-    EventId EventId,
-    string Message,
-    Exception? Exception);
-
-/// <summary>
 /// The in-memory log buffer which all <see cref="InMemoryLogger"/> instances share.
 /// Useful for simulation testing where logs need to be captured and inspected.
 /// </summary>
@@ -97,6 +86,7 @@ public sealed class InMemoryLogBuffer(TimeProvider? timeProvider = null)
                     size += 500; // Rough estimate for exception text
                 }
             }
+
             return size;
         }
     }
@@ -128,6 +118,7 @@ public sealed class InMemoryLogBuffer(TimeProvider? timeProvider = null)
         {
             sb.AppendLine(FormatEntry(entry));
         }
+
         return sb.ToString();
     }
 
@@ -144,8 +135,8 @@ public sealed class InMemoryLogBuffer(TimeProvider? timeProvider = null)
             _ => "NONE",
         };
 
-        var prefix = entry.LogLevel == LogLevel.Error ? "!!!!!!!!!! " : string.Empty;
-        var exc = entry.Exception != null ? $"\n{PrintException(entry.Exception)}" : string.Empty;
+        var prefix = entry.LogLevel == LogLevel.Error ? "!!!!!!!!!! " : "";
+        var exc = entry.Exception != null ? $"\n{PrintException(entry.Exception)}" : "";
 
         return string.Create(CultureInfo.InvariantCulture, $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Environment.CurrentManagedThreadId}\t{levelStr}\t{entry.EventId}\t{entry.Category}]\t{prefix}{entry.Message}{exc}");
     }
@@ -153,7 +144,7 @@ public sealed class InMemoryLogBuffer(TimeProvider? timeProvider = null)
     private static string PrintException(Exception? exception)
     {
         if (exception == null)
-            return string.Empty;
+            return "";
 
         var sb = new StringBuilder();
         PrintException(sb, exception, 0);
@@ -231,6 +222,7 @@ public sealed class InMemoryLoggerProvider(TimeProvider? timeProvider = null) : 
     {
         if (_disposed) return;
         _disposed = true;
+
         // No resources to dispose, but clear the buffer to release memory
         Buffer.Clear();
     }
@@ -242,7 +234,9 @@ public sealed class InMemoryLoggerProvider(TimeProvider? timeProvider = null) : 
 public sealed class InMemoryLogger(string categoryName, InMemoryLogBuffer buffer) : ILogger
 {
     /// <inheritdoc />
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull
+        => NullScope.Instance;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
@@ -272,3 +266,14 @@ public sealed class InMemoryLogger(string categoryName, InMemoryLogBuffer buffer
         }
     }
 }
+
+/// <summary>
+/// Represents a single log entry with its associated metadata.
+/// </summary>
+public readonly record struct LogEntry(
+    DateTimeOffset Timestamp,
+    LogLevel LogLevel,
+    string Category,
+    EventId EventId,
+    string Message,
+    Exception? Exception);

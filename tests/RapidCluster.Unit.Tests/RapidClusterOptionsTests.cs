@@ -76,8 +76,7 @@ public class RapidClusterOptionsTests
     [Fact]
     public void MetadataCanBeSetDirectly()
     {
-        var metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+        var metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             ["key"] = Encoding.UTF8.GetBytes("value"),
         };
@@ -93,8 +92,7 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+            Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
                 ["role"] = Encoding.UTF8.GetBytes("leader"),
                 ["datacenter"] = Encoding.UTF8.GetBytes("us-west"),
@@ -111,8 +109,7 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+            Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
                 ["initial"] = Encoding.UTF8.GetBytes("value"),
             },
@@ -128,15 +125,13 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+            Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
                 ["old"] = Encoding.UTF8.GetBytes("value"),
             },
         };
 
-        options.Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+        options.Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             ["new"] = Encoding.UTF8.GetBytes("value"),
         };
@@ -162,8 +157,7 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+            Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
                 ["a"] = Encoding.UTF8.GetBytes("1"),
                 ["b"] = Encoding.UTF8.GetBytes("2"),
@@ -182,8 +176,7 @@ public class RapidClusterOptionsTests
         var binaryData = new byte[] { 0x00, 0x01, 0x02, 0xFF, 0xFE };
         var options = new RapidClusterOptions
         {
-            Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+            Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
                 ["binary"] = binaryData,
             },
@@ -203,8 +196,7 @@ public class RapidClusterOptionsTests
         {
             ListenAddress = listenAddr,
             SeedAddresses = [seedAddr],
-            Metadata = new Dictionary<string, byte[]>
-(StringComparer.Ordinal)
+            Metadata = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
                 ["role"] = Encoding.UTF8.GetBytes("worker"),
                 ["version"] = Encoding.UTF8.GetBytes("1.0.0"),
@@ -215,8 +207,6 @@ public class RapidClusterOptionsTests
         Assert.Equal(seedAddr, options.SeedAddresses![0]);
         Assert.Equal(2, options.Metadata.Count);
     }
-
-    #region BootstrapExpect Tests
 
     [Fact]
     public void BootstrapExpectDefaultIsZero()
@@ -249,10 +239,6 @@ public class RapidClusterOptionsTests
 
         Assert.Equal(1, options.BootstrapExpect);
     }
-
-    #endregion
-
-    #region BootstrapTimeout Tests
 
     [Fact]
     public void BootstrapTimeoutDefaultIsFiveMinutes()
@@ -293,7 +279,4 @@ public class RapidClusterOptionsTests
 
         Assert.Equal(Timeout.InfiniteTimeSpan, options.BootstrapTimeout);
     }
-
-    #endregion
-
 }

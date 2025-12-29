@@ -317,8 +317,6 @@ public class RankTests
         Assert.Equal(1, ranks[2].NodeIndex);
     }
 
-    #region Property-Based Tests
-
     [Fact]
     public void Property_CompareTo_Is_Transitive()
     {
@@ -335,6 +333,7 @@ public class RankTests
                 {
                     return rank1.CompareTo(rank3) <= 0;
                 }
+
                 return true;
             });
     }
@@ -372,6 +371,4 @@ public class RankTests
                 return rank1.CompareTo(rank2) < 0;
             });
     }
-
-    #endregion
 }

@@ -4,12 +4,12 @@ using RapidCluster.Pb;
 namespace RapidCluster.Unit.Tests;
 
 /// <summary>
-/// Tests for Paxos and FastPaxos protocols
+/// Tests for Paxos and FastPaxos protocols.
 /// </summary>
 public class PaxosTests
 {
     /// <summary>
-    /// Test rank comparison - higher round wins
+    /// Test rank comparison - higher round wins.
     /// </summary>
     [Fact]
     public void RankComparisonHigherRoundWins()
@@ -23,7 +23,7 @@ public class PaxosTests
     }
 
     /// <summary>
-    /// Test rank comparison - same round, higher node index wins
+    /// Test rank comparison - same round, higher node index wins.
     /// </summary>
     [Fact]
     public void RankComparisonSameRoundHigherNodeIndexWins()
@@ -37,7 +37,7 @@ public class PaxosTests
     }
 
     /// <summary>
-    /// Test rank comparison - equal ranks
+    /// Test rank comparison - equal ranks.
     /// </summary>
     [Fact]
     public void RankComparisonEqualRanks()
@@ -49,7 +49,7 @@ public class PaxosTests
     }
 
     /// <summary>
-    /// Test that Phase1bMessage can be created correctly
+    /// Test that Phase1bMessage can be created correctly.
     /// </summary>
     [Fact]
     public void Phase1bMessageCreation()
@@ -73,7 +73,7 @@ public class PaxosTests
     }
 
     /// <summary>
-    /// Test that Phase2aMessage can be created correctly
+    /// Test that Phase2aMessage can be created correctly.
     /// </summary>
     [Fact]
     public void Phase2aMessageCreation()
@@ -493,7 +493,7 @@ public class PaxosTests
     }
 
     /// <summary>
-    /// Helper to create a MembershipProposal with specified endpoints
+    /// Helper to create a MembershipProposal with specified endpoints.
     /// </summary>
     private static MembershipProposal CreateProposal(params Endpoint[] endpoints)
     {
@@ -505,13 +505,15 @@ public class PaxosTests
             {
                 endpoint.NodeId = Utils.GetNextNodeId();
             }
+
             proposal.Members.Add(endpoint);
         }
+
         return proposal;
     }
 
     /// <summary>
-    /// Helper to create a Phase1bMessage with specific vrnd and proposal
+    /// Helper to create a Phase1bMessage with specific vrnd and proposal.
     /// </summary>
     private static Phase1bMessage CreatePhase1bMessage(int vrndRound, int vrndNodeIndex, params Endpoint[] endpoints)
     {
@@ -681,6 +683,7 @@ public class PaxosTests
         // No value exceeds N/4, should fall back to smallest proposal (deterministic)
         Assert.NotNull(result);
         Assert.Single(result.Members);
+
         // Falls back to smallest proposal by lexicographic order: node1 < node2
         Assert.Equal(node1.Hostname, result.Members[0].Hostname);
         Assert.Equal(node1.Port, result.Members[0].Port);

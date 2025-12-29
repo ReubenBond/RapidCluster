@@ -15,7 +15,7 @@ namespace RapidCluster;
 /// <para>
 /// This unified implementation handles all cluster sizes:
 /// - For K &lt; 3: Simple threshold mode (require K votes from K observers)
-/// - For K >= 3: Watermark mode with H/L thresholds for batching
+/// - For K >= 3: Watermark mode with H/L thresholds for batching.
 /// </para>
 /// <para>
 /// The detector supports updating the view while preserving valid pending state,
@@ -27,12 +27,12 @@ namespace RapidCluster;
 /// In watermark mode (K >= 3):
 /// - H (high watermark): Reports needed to consider a node "stable" for proposal
 /// - L (low watermark): Reports needed to enter "unstable mode" (blocks other proposals)
-/// - A proposal is output only when all nodes with L+ reports have reached H
+/// - A proposal is output only when all nodes with L+ reports have reached H.
 /// </para>
 /// <para>
 /// In simple mode (K &lt; 3):
 /// - No unstable region exists (H = L = K)
-/// - Proposals trigger immediately when a node reaches the threshold
+/// - Proposals trigger immediately when a node reaches the threshold.
 /// </para>
 /// <para>
 /// The detector is initialized with an empty membership view. Call <see cref="UpdateView"/>
@@ -42,28 +42,28 @@ namespace RapidCluster;
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed partial class CutDetector
 {
-    private MembershipView _membershipView = MembershipView.Empty;
-    private int _highWaterMark;
-    private int _lowWaterMark;
     private readonly int _configuredObserversPerSubject;
     private readonly int _configuredHighWatermark;
     private readonly int _configuredLowWatermark;
     private readonly ILogger<CutDetector> _logger;
     private readonly Lock _lock = new();
-    private int _proposalCount;
-    private int _updatesInProgress;
     private readonly Dictionary<Endpoint, Dictionary<int, Endpoint>> _reportsPerHost = new(EndpointAddressComparer.Instance);
     private readonly SortedSet<Endpoint> _proposal = new(ProtobufEndpointComparer.Instance);
     private readonly SortedSet<Endpoint> _preProposal = new(ProtobufEndpointComparer.Instance);
+    private MembershipView _membershipView = MembershipView.Empty;
+    private int _highWaterMark;
+    private int _lowWaterMark;
+    private int _proposalCount;
+    private int _updatesInProgress;
     private bool _seenLinkDownEvents;
 
     /// <summary>
-    /// Whether the detector is in simple mode (K &lt; 3) or watermark mode (K >= 3).
+    /// Gets a value indicating whether whether the detector is in simple mode (K &lt; 3) or watermark mode (K >= 3).
     /// </summary>
     private bool IsSimpleMode => _membershipView.RingCount < 3;
 
     /// <summary>
-    /// Number of observers per subject, derived from the membership view's ring count.
+    /// Gets number of observers per subject, derived from the membership view's ring count.
     /// </summary>
     private int ObserversPerSubject => _membershipView.RingCount;
 
@@ -104,12 +104,13 @@ internal sealed partial class CutDetector
     private partial void LogRemoveReports(LoggableEndpoint Node, string Reason);
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="CutDetector"/> class.
     /// Creates a CutDetector with specified configuration options.
     /// </summary>
-    /// <param name="observersPerSubject">The configured number of observers per subject (K)</param>
-    /// <param name="highWatermark">The configured high watermark (H)</param>
-    /// <param name="lowWatermark">The configured low watermark (L)</param>
-    /// <param name="logger">Optional logger for diagnostic output</param>
+    /// <param name="observersPerSubject">The configured number of observers per subject (K).</param>
+    /// <param name="highWatermark">The configured high watermark (H).</param>
+    /// <param name="lowWatermark">The configured low watermark (L).</param>
+    /// <param name="logger">Optional logger for diagnostic output.</param>
     /// <remarks>
     /// The detector is initialized with an empty membership view and zero thresholds.
     /// Call <see cref="UpdateView"/> with an actual membership view before use.
@@ -146,7 +147,7 @@ internal sealed partial class CutDetector
     /// Apply an AlertMessage against the cut detector. When sufficient reports
     /// have been received about a node, the method returns a view change proposal.
     /// </summary>
-    /// <param name="msg">An AlertMessage to apply against the detector</param>
+    /// <param name="msg">An AlertMessage to apply against the detector.</param>
     /// <returns>A list of endpoints about which a view change has been recorded. Empty if no proposal.</returns>
     public List<Endpoint> AggregateForProposal(AlertMessage msg)
     {
@@ -157,6 +158,7 @@ internal sealed partial class CutDetector
         {
             proposals.AddRange(AggregateForProposalSingleRing(msg, ringNumber));
         }
+
         return proposals;
     }
 
@@ -289,7 +291,7 @@ internal sealed partial class CutDetector
             foreach (var nodeInFlux in preProposalCopy)
             {
                 var observers = _membershipView.IsHostPresent(nodeInFlux)
-                    ? _membershipView.GetObserversOf(nodeInFlux)          // For failing nodes
+                    ? _membershipView.GetObserversOf(nodeInFlux) // For failing nodes
                     : _membershipView.GetExpectedObserversOf(nodeInFlux); // For joining nodes
 
                 var ringNumber = 0;
@@ -306,6 +308,7 @@ internal sealed partial class CutDetector
                         LogImplicitEdge(new LoggableEndpoint(observer), new LoggableEndpoint(nodeInFlux), edgeStatus);
                         proposalsToReturn.AddRange(AggregateForProposalCore(observer, nodeInFlux, edgeStatus, ringNumber));
                     }
+
                     ringNumber++;
                 }
             }
@@ -371,6 +374,7 @@ internal sealed partial class CutDetector
         {
             _proposal.Add(node);
         }
+
         _preProposal.Clear();
         _updatesInProgress = 0;
 
@@ -390,7 +394,7 @@ internal sealed partial class CutDetector
     /// Updates the cut detector for a new membership view.
     /// Preserves pending join proposals for nodes not yet in the new membership.
     /// </summary>
-    /// <param name="newView">The new membership view</param>
+    /// <param name="newView">The new membership view.</param>
     /// <remarks>
     /// The effective H/L thresholds are computed from the configured values based on the
     /// actual cluster size. This ensures the watermark constraints (K > H >= L >= 1) are
@@ -417,6 +421,7 @@ internal sealed partial class CutDetector
                     nodesToRemove.Add(node);
                     LogRemoveReports(new LoggableEndpoint(node), "now in membership");
                 }
+
                 // Note: We keep reports for nodes not in membership (still joining)
                 // DOWN reports are kept as they may still be relevant for failure detection
             }

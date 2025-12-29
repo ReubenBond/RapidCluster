@@ -7,7 +7,9 @@ namespace RapidCluster.Logging;
 /// <summary>
 /// Wrapper for logging a single Endpoint.
 /// </summary>
+#pragma warning disable SA1649 // File name should match first type name
 internal readonly struct LoggableEndpoint
+#pragma warning restore SA1649 // File name should match first type name
 {
     private readonly string _display;
 
@@ -35,6 +37,7 @@ internal readonly struct LoggableEndpoint
 internal readonly struct LoggableEndpoints(IEnumerable<Endpoint> endpoints)
 {
     private readonly IEnumerable<Endpoint> _endpoints = endpoints;
+
     public override readonly string ToString() =>
         $"[{string.Join(", ", _endpoints.Select(e => e.GetNetworkAddressString()))}]";
 }
@@ -45,6 +48,7 @@ internal readonly struct LoggableEndpoints(IEnumerable<Endpoint> endpoints)
 internal readonly struct LoggableMembershipProposal(MembershipProposal? proposal)
 {
     private readonly MembershipProposal? _proposal = proposal;
+
     public override readonly string ToString() =>
         _proposal is null
             ? "[]"
@@ -57,6 +61,7 @@ internal readonly struct LoggableMembershipProposal(MembershipProposal? proposal
 internal readonly struct LoggableConfigurationId(ConfigurationId configId)
 {
     private readonly ConfigurationId _configId = configId;
+
     public override readonly string ToString() => _configId.ToString();
 }
 
@@ -66,6 +71,7 @@ internal readonly struct LoggableConfigurationId(ConfigurationId configId)
 internal readonly struct LoggableMembershipViewConfigurationId(MembershipView view)
 {
     private readonly MembershipView _view = view;
+
     public override readonly string ToString() => _view.ConfigurationId.ToString();
 }
 
@@ -75,6 +81,7 @@ internal readonly struct LoggableMembershipViewConfigurationId(MembershipView vi
 internal readonly struct LoggableMembershipSize(MembershipView view)
 {
     private readonly MembershipView _view = view;
+
     public override readonly string ToString() => _view.Size.ToString(CultureInfo.InvariantCulture);
 }
 
@@ -84,6 +91,7 @@ internal readonly struct LoggableMembershipSize(MembershipView view)
 internal readonly struct LoggableRingNumbers(IEnumerable<int> ringNumbers)
 {
     private readonly IEnumerable<int> _ringNumbers = ringNumbers;
+
     public override readonly string ToString() => string.Join(',', _ringNumbers);
 }
 
@@ -93,5 +101,6 @@ internal readonly struct LoggableRingNumbers(IEnumerable<int> ringNumbers)
 internal readonly struct LoggableClusterId(ClusterId clusterId)
 {
     private readonly ClusterId _clusterId = clusterId;
+
     public override readonly string ToString() => _clusterId.ToString();
 }

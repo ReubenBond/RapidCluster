@@ -13,8 +13,10 @@ public enum DeliveryStatus
 {
     /// <summary>Message can be delivered normally.</summary>
     Success,
+
     /// <summary>Message was randomly dropped (transient failure, should retry).</summary>
     Dropped,
+
     /// <summary>Message blocked by network partition (persistent failure).</summary>
     Partitioned,
 }
@@ -48,11 +50,12 @@ public class SimulationNetwork
     public double MessageDropRate { get; set; }
 
     /// <summary>
-    /// Gets or sets whether to simulate message delays.
+    /// Gets or sets a value indicating whether gets or sets whether to simulate message delays.
     /// </summary>
     public bool EnableDelays { get; set; }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SimulationNetwork"/> class.
     /// Creates a new simulation network.
     /// </summary>
     /// <param name="getNodes">Function to get the list of nodes in the simulation.</param>
@@ -82,6 +85,7 @@ public class SimulationNetwork
             var blocked = _partitions.GetOrAdd(sourceAddress, _ => []);
             blocked.Add(targetAddress);
         }
+
         OnPartitionCreated(sourceAddress, targetAddress);
     }
 
@@ -107,6 +111,7 @@ public class SimulationNetwork
                 blocked.Remove(targetAddress);
             }
         }
+
         OnPartitionHealed(sourceAddress, targetAddress);
     }
 
@@ -131,6 +136,7 @@ public class SimulationNetwork
             count = _partitions.Count;
             _partitions.Clear();
         }
+
         OnAllPartitionsHealed(count);
     }
 
@@ -245,8 +251,6 @@ public class SimulationNetwork
         return BaseMessageDelay + jitter;
     }
 
-    #region Logging hooks for derived classes
-
 #pragma warning disable CA1848 // Use the LoggerMessage delegates - these are virtual hooks, override for high-performance logging
 #pragma warning disable CA1873 // Logging message template - these are virtual hooks, override for high-performance logging
 
@@ -278,8 +282,6 @@ public class SimulationNetwork
     protected virtual void OnMessageDroppedRandom(string source, string target) => _logger.LogTrace("Message randomly dropped: {Source} -> {Target}", source, target);
 
 #pragma warning restore CA1873, CA1848
-
-    #endregion
 
     private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"SimulationNetwork(Partitions={_partitions.Count}, DropRate={MessageDropRate:P0})");
 }

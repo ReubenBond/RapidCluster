@@ -98,7 +98,7 @@ internal sealed class FileLoggingOutput : IDisposable
         if (logLevel == LogLevel.Error)
             message = "!!!!!!!!!! " + message;
 
-        var exc = exception != null ? PrintException(exception) : string.Empty;
+        var exc = exception != null ? PrintException(exception) : "";
         var msg = string.Create(CultureInfo.InvariantCulture, $"[{timestamp:yyyy-MM-dd HH:mm:ss.fff} {Environment.CurrentManagedThreadId}\t{logLevel}\t{errorCode}\t{caller}]\t{message}\t{exc}");
 
         return msg;
@@ -107,7 +107,7 @@ internal sealed class FileLoggingOutput : IDisposable
     private static string PrintException(Exception? exception)
     {
         if (exception == null)
-            return string.Empty;
+            return "";
 
         var sb = new StringBuilder();
         PrintException(sb, exception, 0);
@@ -214,7 +214,9 @@ internal sealed class FileLoggerProvider(string filePath, TimeProvider? timeProv
 /// </summary>
 internal sealed class FileLogger(string categoryName, FileLoggingOutput output) : ILogger
 {
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull
+        => NullScope.Instance;
 
     public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
 

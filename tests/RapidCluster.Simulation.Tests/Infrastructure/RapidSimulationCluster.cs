@@ -20,7 +20,7 @@ namespace RapidCluster.Simulation.Tests.Infrastructure;
 /// - Simulated network with partition injection via <see cref="SimulationNetwork"/>
 /// - Node lifecycle management (create, join, crash, leave)
 /// - Per-node execution control (suspend, resume, step)
-/// - Simulation driving APIs (Step, RunUntil, Run)
+/// - Simulation driving APIs (Step, RunUntil, Run).
 /// </para>
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
@@ -32,6 +32,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     private bool _disposed;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="RapidSimulationCluster"/> class.
     /// Creates a new simulation harness with the specified seed.
     /// Logs are written to a unique file per simulation and attached to the test context.
     /// </summary>
@@ -576,8 +577,6 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         }
     }
 
-    #region Override logging hooks from base class
-
     /// <inheritdoc />
     protected override void OnConditionMet(int iterations) => _log.ConditionMet(iterations);
 
@@ -649,8 +648,6 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
 
     /// <inheritdoc />
     protected override void OnTimeAdvancing(TimeSpan delta) => _log.TimeAdvancing($"{delta}");
-
-    #endregion
 
     /// <inheritdoc />
     protected override async ValueTask DisposeAsyncCore()

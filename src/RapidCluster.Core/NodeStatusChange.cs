@@ -11,7 +11,9 @@ namespace RapidCluster;
 public sealed class NodeStatusChange
 {
     public Endpoint Endpoint { get; }
+
     public EdgeStatus Status { get; }
+
     public Metadata Metadata { get; }
 
     internal NodeStatusChange(Endpoint endpoint, EdgeStatus status, Metadata metadata)

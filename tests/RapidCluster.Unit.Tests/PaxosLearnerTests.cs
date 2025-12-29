@@ -8,6 +8,7 @@ namespace RapidCluster.Unit.Tests;
 public sealed class PaxosLearnerTests
 {
     private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
+
     private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
     [Fact]
@@ -150,6 +151,7 @@ public sealed class PaxosLearnerTests
             {
                 meter.Dispose();
             }
+
             _meters.Clear();
         }
     }

@@ -28,6 +28,7 @@ public sealed class MemberInfo : IEquatable<MemberInfo>
     public Metadata Metadata { get; }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MemberInfo"/> class.
     /// Creates a new MemberInfo instance.
     /// </summary>
     /// <param name="endpoint">The endpoint of the member.</param>
@@ -41,6 +42,7 @@ public sealed class MemberInfo : IEquatable<MemberInfo>
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MemberInfo"/> class.
     /// Creates a new MemberInfo instance with empty metadata.
     /// </summary>
     /// <param name="endpoint">The endpoint of the member.</param>

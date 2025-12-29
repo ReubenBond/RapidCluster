@@ -29,8 +29,9 @@ internal abstract record ConsensusResult
     /// </summary>
     public sealed record VoteSplit : ConsensusResult
     {
-        /// <summary>Singleton instance.</summary>
+        /// <summary>Gets singleton instance.</summary>
         public static VoteSplit Instance { get; } = new();
+
         private VoteSplit() { }
     }
 
@@ -47,8 +48,9 @@ internal abstract record ConsensusResult
     /// </summary>
     public sealed record Timeout : ConsensusResult
     {
-        /// <summary>Singleton instance.</summary>
+        /// <summary>Gets singleton instance.</summary>
         public static Timeout Instance { get; } = new();
+
         private Timeout() { }
     }
 
@@ -57,8 +59,9 @@ internal abstract record ConsensusResult
     /// </summary>
     public sealed record Cancelled : ConsensusResult
     {
-        /// <summary>Singleton instance.</summary>
+        /// <summary>Gets singleton instance.</summary>
         public static Cancelled Instance { get; } = new();
+
         private Cancelled() { }
     }
 }

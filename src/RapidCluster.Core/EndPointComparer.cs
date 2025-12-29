@@ -32,6 +32,7 @@ public sealed class EndPointComparer : IEqualityComparer<EndPoint>
         {
             (IPEndPoint ipX, IPEndPoint ipY) => ipX.Address.Equals(ipY.Address) && ipX.Port == ipY.Port,
             (DnsEndPoint dnsX, DnsEndPoint dnsY) => string.Equals(dnsX.Host, dnsY.Host, StringComparison.OrdinalIgnoreCase) && dnsX.Port == dnsY.Port,
+
             // Cross-type comparison: try to match IP strings
             (IPEndPoint ip, DnsEndPoint dns) => string.Equals(ip.Address.ToString(), dns.Host, StringComparison.OrdinalIgnoreCase) && ip.Port == dns.Port,
             (DnsEndPoint dns, IPEndPoint ip) => string.Equals(dns.Host, ip.Address.ToString(), StringComparison.OrdinalIgnoreCase) && dns.Port == ip.Port,

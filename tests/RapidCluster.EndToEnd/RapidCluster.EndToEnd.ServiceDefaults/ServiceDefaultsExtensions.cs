@@ -72,18 +72,6 @@ public static class ServiceDefaultsExtensions
         return builder;
     }
 
-    private static IHostApplicationBuilder AddOpenTelemetryExporters(this IHostApplicationBuilder builder)
-    {
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-
-        if (useOtlpExporter)
-        {
-            builder.Services.AddOpenTelemetry().UseOtlpExporter();
-        }
-
-        return builder;
-    }
-
     /// <summary>
     /// Adds default health checks for the application.
     /// </summary>
@@ -93,9 +81,8 @@ public static class ServiceDefaultsExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddHealthChecks()
-            // Add a default liveness check to ensure app is responsive
-            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
+        // Add a default liveness check to ensure app is responsive
+        builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
 
         return builder;
     }
@@ -124,5 +111,17 @@ public static class ServiceDefaultsExtensions
         }
 
         return app;
+    }
+
+    private static IHostApplicationBuilder AddOpenTelemetryExporters(this IHostApplicationBuilder builder)
+    {
+        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+
+        if (useOtlpExporter)
+        {
+            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+        }
+
+        return builder;
     }
 }

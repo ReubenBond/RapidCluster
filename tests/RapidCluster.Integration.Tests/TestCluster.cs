@@ -211,6 +211,7 @@ internal sealed class TestCluster : IAsyncDisposable
                 return;
             await Task.Delay(10);
         }
+
         throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"Cluster did not reach expected size {expectedSize} within {timeout}"));
     }
 
@@ -226,6 +227,7 @@ internal sealed class TestCluster : IAsyncDisposable
                 return;
             await Task.Delay(10);
         }
+
         throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.CurrentView.Members.Length}"));
     }
 
@@ -245,6 +247,7 @@ internal sealed class TestCluster : IAsyncDisposable
             }
 #pragma warning restore CA1031
         }
+
         _apps.Clear();
         _loggerFactory.Dispose();
         _portAllocator.Dispose();
@@ -286,6 +289,7 @@ internal sealed class TestCluster : IAsyncDisposable
         {
             sanitized.Append(invalidChars.Contains(c) ? '_' : c);
         }
+
         var result = sanitized.ToString();
         return result.Length > 100 ? result[..100] : result;
     }

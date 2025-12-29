@@ -432,8 +432,8 @@ public class RapidClusterProtocolOptionsValidatorTests
     public void ValidateFailureDetectorConsecutiveFailuresDefaultSucceeds()
     {
         var options = CreateValidOptions();
-        // Default is 3
 
+        // Default is 3
         var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);

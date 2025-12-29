@@ -13,6 +13,7 @@ namespace RapidCluster.Unit.Tests;
 public sealed class ClassicProposerConsensusCoordinatorTests
 {
     private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
+
     private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
     [Fact]
@@ -241,6 +242,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             endpoint.NodeId = Utils.GetNextNodeId();
             proposal.Members.Add(endpoint);
         }
+
         return proposal;
     }
 
@@ -306,6 +308,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
     private sealed class TestMembershipViewAccessor(int membershipSize) : IMembershipViewAccessor
     {
         public MembershipView CurrentView { get; } = Utils.CreateMembershipView(membershipSize);
+
         public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
 
@@ -326,6 +329,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             {
                 meter.Dispose();
             }
+
             _meters.Clear();
         }
     }

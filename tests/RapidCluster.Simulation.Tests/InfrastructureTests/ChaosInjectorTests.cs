@@ -69,6 +69,7 @@ public sealed class ChaosInjectorTests : IAsyncLifetime
     public void SchedulePartitionDoesNotPartitionImmediately()
     {
         var node1 = _harness.CreateSeedNode(0);
+
         // Can't easily create a second node synchronously, so test with single node
         _chaos.ScheduleIsolation(node1, TimeSpan.FromSeconds(10));
 

@@ -31,6 +31,7 @@ public partial class Endpoint : IComparable<Endpoint>
             var cmp = x[i].CompareTo(y[i]);
             if (cmp != 0) return cmp;
         }
+
         return x.Length.CompareTo(y.Length);
     }
 

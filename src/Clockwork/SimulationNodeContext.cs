@@ -40,6 +40,7 @@ public sealed partial class SimulationNodeContext
     private readonly ILogger _logger;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SimulationNodeContext"/> class.
     /// Creates a new simulation node context using the specified shared clock and random generator.
     /// </summary>
     /// <param name="clock">The shared simulation clock for time coordination.</param>
@@ -109,12 +110,12 @@ public sealed partial class SimulationNodeContext
     public SimulationNodeState State { get; private set; } = SimulationNodeState.Running;
 
     /// <summary>
-    /// Gets whether this node is currently suspended.
+    /// Gets a value indicating whether gets whether this node is currently suspended.
     /// </summary>
     public bool IsSuspended => State == SimulationNodeState.Suspended;
 
     /// <summary>
-    /// Gets whether this node has any tasks ready to execute at the current time.
+    /// Gets a value indicating whether gets whether this node has any tasks ready to execute at the current time.
     /// </summary>
     public bool HasReadyTasks
     {

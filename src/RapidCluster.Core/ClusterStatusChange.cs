@@ -14,7 +14,9 @@ public sealed class ClusterStatusChange(
     IReadOnlyList<NodeStatusChange> delta)
 {
     public long ConfigurationId { get; } = configurationId;
+
     public IReadOnlyList<Endpoint> Membership { get; } = membership;
+
     public IReadOnlyList<NodeStatusChange> Delta { get; } = delta;
 
     public override string ToString()

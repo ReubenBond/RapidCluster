@@ -13,6 +13,7 @@ public sealed class NodePrefixedLoggerFactory : ILoggerFactory
     private readonly string _nodeName;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="NodePrefixedLoggerFactory"/> class.
     /// Creates a new node-prefixed logger factory.
     /// </summary>
     /// <param name="innerFactory">The underlying logger factory.</param>
@@ -57,7 +58,8 @@ public sealed class NodePrefixedLogger(ILogger innerLogger, string nodeName) : I
     private readonly string _nodeName = nodeName;
 
     /// <inheritdoc />
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull
         => _innerLogger.BeginScope(state);
 
     /// <inheritdoc />

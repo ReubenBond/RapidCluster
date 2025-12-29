@@ -51,11 +51,12 @@ public class CutDetectorWatermarkModeTests
             var node = Utils.HostFromParts("127.0.0." + (i + 1).ToString(CultureInfo.InvariantCulture), 1000 + i, Utils.GetNextNodeId());
             builder.RingAdd(node);
         }
+
         return builder.Build();
     }
 
     /// <summary>
-    /// A series of updates with the right ring indexes
+    /// A series of updates with the right ring indexes.
     /// </summary>
     [Fact]
     public void CutDetectionTest()
@@ -340,7 +341,7 @@ public class CutDetectorWatermarkModeTests
             }
         }
 
-        // At this point, (K - H - 1) observers of dst will be past H, and dst will be in H - 1. 
+        // At this point, (K - H - 1) observers of dst will be past H, and dst will be in H - 1.
         // Link invalidation should bring the failed observers and dst to the stable region.
         ret = detector.InvalidateFailingEdges();
         Assert.Equal(4, ret.Count);
@@ -393,6 +394,7 @@ public class CutDetectorWatermarkModeTests
         // When configured H > K, the effective H is adjusted to K-1 during UpdateView
         var view = CreateTestView(10, 5); // K=5
         var detector = CreateDetector(view, 6, 2); // Configured H=6 > K=5
+
         // Should succeed - effective H will be clamped to K-1=4
         Assert.Equal(0, detector.GetNumProposals());
     }
@@ -401,6 +403,7 @@ public class CutDetectorWatermarkModeTests
     public void ConstructorLGreaterThanH_AdjustsEffectiveL()
     {
         var view = CreateTestView();
+
         // Configured L=6 > H=5, effective L will be adjusted to H
         var detector = CreateDetector(view, 5, 6);
         Assert.Equal(0, detector.GetNumProposals());
@@ -434,6 +437,7 @@ public class CutDetectorWatermarkModeTests
         // When configured H = K, the effective H is adjusted to K-1 during UpdateView
         var view = CreateTestView(10, 5); // K=5
         var detector = CreateDetector(view, 5, 2); // H=5 = K
+
         // Should succeed - effective H will be clamped to K-1=4
         Assert.Equal(0, detector.GetNumProposals());
     }
@@ -491,6 +495,7 @@ public class CutDetectorWatermarkModeTests
     public void MultipleNewDetectors_Safe()
     {
         var view = CreateTestView();
+
         // Simulating multiple view changes - each creates a fresh detector
         var detector1 = CreateDetector(view, H, L);
         var detector2 = CreateDetector(view, H, L);
@@ -929,6 +934,7 @@ public class CutDetectorWatermarkModeTests
             {
                 msg.RingNumber.Add(r);
             }
+
             return msg;
         }).ToList();
 
@@ -951,6 +957,7 @@ public class CutDetectorWatermarkModeTests
 
         // All 3 nodes should be proposed
         Assert.Equal(3, totalNodesProposed);
+
         // With interleaved processing, all nodes should be batched into 1 proposal
         Assert.Equal(1, proposalCount);
         Assert.Equal(1, detector.GetNumProposals());
@@ -986,6 +993,7 @@ public class CutDetectorWatermarkModeTests
             {
                 msg.RingNumber.Add(r);
             }
+
             return msg;
         });
 
@@ -1011,6 +1019,7 @@ public class CutDetectorWatermarkModeTests
 
         // All 10 nodes should be proposed
         Assert.Equal(10, nodesProposed.Count);
+
         // All nodes should be batched into a single proposal event
         Assert.Equal(1, proposalEvents);
         Assert.Equal(1, detector.GetNumProposals());
@@ -1125,6 +1134,7 @@ public class CutDetectorWatermarkModeTests
             {
                 msg.RingNumber.Add(r);
             }
+
             return msg;
         }).ToList();
 
@@ -1162,6 +1172,7 @@ public class CutDetectorWatermarkModeTests
             {
                 msg.RingNumber.Add(r);
             }
+
             return msg;
         }).ToList();
 
@@ -1293,8 +1304,6 @@ public class CutDetectorWatermarkModeTests
         Assert.NotNull(result);
     }
 
-    #region Property-Based Tests
-
     /// <summary>
     /// Generator for a list of unique endpoints with their NodeIds.
     /// </summary>
@@ -1303,8 +1312,7 @@ public class CutDetectorWatermarkModeTests
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
-            ).Select((octets, ports, nodeIds) =>
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)).Select((octets, ports, nodeIds) =>
             {
                 var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
@@ -1317,6 +1325,7 @@ public class CutDetectorWatermarkModeTests
                     };
                     result.Add(endpoint);
                 }
+
                 return result;
             }));
     }
@@ -1338,6 +1347,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Derive H and L from actual ring count to ensure K > H >= L >= 1
@@ -1382,6 +1392,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1430,6 +1441,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1476,6 +1488,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1545,6 +1558,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1630,6 +1644,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1652,6 +1667,7 @@ public class CutDetectorWatermarkModeTests
                     {
                         msg.RingNumber.Add(r);
                     }
+
                     messages.Add(msg);
                 }
 
@@ -1699,6 +1715,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1753,6 +1770,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1812,6 +1830,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var actualK = view.RingCount;
@@ -1844,10 +1863,6 @@ public class CutDetectorWatermarkModeTests
                 return detector.GetNumProposals() == expectedProposals;
             });
     }
-
-    #endregion
-
-    #region Unstable Mode Detection
 
     [Fact]
     public void HasNodesInUnstableMode_ReturnsFalse_Initially()
@@ -1973,7 +1988,4 @@ public class CutDetectorWatermarkModeTests
         Assert.Contains(dst1, result);
         Assert.Contains(dst2, result);
     }
-
-    #endregion
-
 }

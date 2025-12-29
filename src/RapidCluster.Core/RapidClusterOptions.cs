@@ -9,13 +9,13 @@ namespace RapidCluster;
 public sealed class RapidClusterOptions
 {
     /// <summary>
-    /// The endpoint this node listens on.
+    /// Gets or sets the endpoint this node listens on.
     /// Use <see cref="IPEndPoint"/> for IP addresses or <see cref="DnsEndPoint"/> for hostnames.
     /// </summary>
     public EndPoint ListenAddress { get; set; } = null!;
 
     /// <summary>
-    /// The seed node endpoints to join. If null/empty or all entries equal ListenAddress, starts a new cluster.
+    /// Gets or sets the seed node endpoints to join. If null/empty or all entries equal ListenAddress, starts a new cluster.
     /// Nodes are tried in round-robin order until join succeeds.
     /// </summary>
     /// <remarks>
@@ -25,13 +25,13 @@ public sealed class RapidClusterOptions
     public IReadOnlyList<EndPoint>? SeedAddresses { get; set; }
 
     /// <summary>
-    /// Metadata for this node.
+    /// Gets or sets metadata for this node.
     /// </summary>
     [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Options class needs settable properties for configuration binding")]
     public Dictionary<string, byte[]> Metadata { get; set; } = [];
 
     /// <summary>
-    /// Number of nodes expected to form the initial cluster.
+    /// Gets or sets number of nodes expected to form the initial cluster.
     /// When set to a value greater than 0, seed nodes will wait until this many nodes
     /// have contacted them before starting consensus. This ensures the initial cluster
     /// forms atomically with the expected size.
@@ -45,7 +45,7 @@ public sealed class RapidClusterOptions
     public int BootstrapExpect { get; set; }
 
     /// <summary>
-    /// Timeout for waiting for <see cref="BootstrapExpect"/> nodes to contact the seed.
+    /// Gets or sets timeout for waiting for <see cref="BootstrapExpect"/> nodes to contact the seed.
     /// If the timeout expires before the expected number of nodes join, the seed will
     /// start the cluster with whatever nodes have contacted it.
     /// Default: 5 minutes.

@@ -13,9 +13,8 @@ namespace RapidCluster.Unit.Tests;
 public sealed class PingPongFailureDetectorTests
 {
     private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
-    private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
-    #region Constructor Tests
+    private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
     [Fact]
     public void Constructor_WithDefaults_CreatesInstance()
@@ -55,10 +54,6 @@ public sealed class PingPongFailureDetectorTests
 
         Assert.NotNull(detector);
     }
-
-    #endregion
-
-    #region Consecutive Failures Tests
 
     [Fact]
     public async Task ConsecutiveFailures_AtThreshold_NotifiesFailure()
@@ -137,10 +132,6 @@ public sealed class PingPongFailureDetectorTests
         Assert.False(failureNotified);
     }
 
-    #endregion
-
-    #region Probe Success Tests
-
     [Fact]
     public async Task ProbeSuccess_ResetsConsecutiveFailures()
     {
@@ -161,6 +152,7 @@ public sealed class PingPongFailureDetectorTests
                 // Second probe succeeds
                 return new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse();
             }
+
             throw new InvalidOperationException("Probe failed");
         };
 
@@ -192,10 +184,6 @@ public sealed class PingPongFailureDetectorTests
         // Should NOT have notified because success reset the counter
         Assert.False(failureNotified);
     }
-
-    #endregion
-
-    #region Dispose Tests
 
     [Fact]
     public void Dispose_CanBeCalledMultipleTimes()
@@ -245,10 +233,6 @@ public sealed class PingPongFailureDetectorTests
 
         Assert.Throws<ObjectDisposedException>(detector.Start);
     }
-
-    #endregion
-
-    #region Stale View Detection Tests
 
     [Fact]
     public async Task StaleViewDetected_WhenRemoteHasHigherConfigId()
@@ -321,10 +305,6 @@ public sealed class PingPongFailureDetectorTests
         Assert.False(staleViewDetected);
     }
 
-    #endregion
-
-    #region Exception Handling Tests
-
     [Fact]
     public async Task TimeoutException_CountsAsFailure()
     {
@@ -358,10 +338,6 @@ public sealed class PingPongFailureDetectorTests
         Assert.True(failureNotified);
     }
 
-    #endregion
-
-    #region Factory Tests
-
     [Fact]
     public void Factory_CreatesDetectorWithCorrectConfiguration()
     {
@@ -391,18 +367,16 @@ public sealed class PingPongFailureDetectorTests
         Assert.IsType<PingPongFailureDetector>(detector);
     }
 
-    #endregion
-
-    #region Test Doubles
-
     /// <summary>
     /// Test messaging client that allows customizing responses.
     /// </summary>
     private sealed class TestMembershipViewAccessor(MembershipView view) : IMembershipViewAccessor
     {
         public MembershipView CurrentView => view;
+
         public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
+
     private sealed class TestMessagingClient : IMessagingClient, IDisposable
     {
         public Func<RapidClusterRequest, RapidClusterResponse>? ResponseGenerator { get; set; }
@@ -441,9 +415,8 @@ public sealed class PingPongFailureDetectorTests
             {
                 meter.Dispose();
             }
+
             _meters.Clear();
         }
     }
-
-    #endregion
 }

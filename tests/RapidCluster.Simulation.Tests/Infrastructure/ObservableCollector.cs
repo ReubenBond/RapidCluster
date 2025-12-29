@@ -10,10 +10,10 @@ namespace RapidCluster.Simulation.Tests.Infrastructure;
 /// Usage pattern:
 /// <code>
 /// using var collector = new ObservableCollector&lt;MembershipView&gt;(node.ViewAccessor.Updates);
-/// 
+///
 /// // Run simulation or perform operations...
 /// harness.WaitForConvergence();
-/// 
+///
 /// // Inspect collected items
 /// var viewsWithSize3 = collector.Items.Where(v => v.Size == 3).ToList();
 /// </code>
@@ -26,6 +26,7 @@ public sealed class ObservableCollector<T> : IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ObservableCollector{T}"/> class.
     /// Creates a new collector that subscribes to the given observable stream.
     /// </summary>
     /// <param name="source">The observable stream to collect from.</param>
@@ -65,7 +66,7 @@ public sealed class ObservableCollector<T> : IDisposable
     }
 
     /// <summary>
-    /// Gets whether the observable has completed.
+    /// Gets a value indicating whether gets whether the observable has completed.
     /// </summary>
     public bool IsCompleted { get; private set; }
 

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Builder;
 namespace RapidCluster.Integration.Tests;
 
 /// <summary>
-/// Integration tests for Rapid cluster using the new hosting API
+/// Integration tests for Rapid cluster using the new hosting API.
 /// </summary>
 public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IAsyncDisposable
 {
@@ -21,6 +21,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
             cts.SafeCancel();
             cts.Dispose();
         }
+
         _subscriptionCts.Clear();
 
         await _cluster.DisposeAsync();
@@ -57,7 +58,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     }
 
     /// <summary>
-    /// Test that a single seed node can start successfully
+    /// Test that a single seed node can start successfully.
     /// </summary>
     [Fact]
     public async Task SingleSeedNodeStarts()
@@ -72,7 +73,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     }
 
     /// <summary>
-    /// Test with a single node joining through a seed
+    /// Test with a single node joining through a seed.
     /// </summary>
     [Fact]
     public async Task SingleNodeJoinsThroughSeed()
@@ -93,7 +94,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     }
 
     /// <summary>
-    /// Test with three nodes forming a cluster
+    /// Test with three nodes forming a cluster.
     /// </summary>
     [Fact]
     public async Task ThreeNodesFormCluster()
@@ -116,7 +117,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     }
 
     /// <summary>
-    /// Test that view updates are received when nodes join
+    /// Test that view updates are received when nodes join.
     /// </summary>
     [Fact]
     public async Task ViewUpdatesReceivedOnJoin()
@@ -142,7 +143,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     }
 
     /// <summary>
-    /// Test that metadata is propagated correctly
+    /// Test that metadata is propagated correctly.
     /// </summary>
     [Fact]
     public async Task MetadataIsPropagated()
@@ -182,7 +183,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
     /// <summary>
     /// Test that multiple nodes can join concurrently
-    /// Reduced from 5 to 3 concurrent joins to avoid consensus timeout issues
+    /// Reduced from 5 to 3 concurrent joins to avoid consensus timeout issues.
     /// </summary>
     [Fact]
     public async Task MultipleNodesConcurrentJoin()

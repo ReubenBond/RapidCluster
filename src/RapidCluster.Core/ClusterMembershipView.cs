@@ -11,7 +11,7 @@ namespace RapidCluster;
 public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, IComparable<ClusterMembershipView>
 {
     /// <summary>
-    /// An empty membership view with no members.
+    /// Gets an empty membership view with no members.
     /// </summary>
     public static ClusterMembershipView Empty { get; } = new(ConfigurationId.Empty, []);
 
@@ -26,6 +26,7 @@ public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, I
     public ConfigurationId ConfigurationId { get; }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ClusterMembershipView"/> class.
     /// Creates a new ClusterMembershipView instance.
     /// </summary>
     /// <param name="configurationId">The configuration identifier.</param>

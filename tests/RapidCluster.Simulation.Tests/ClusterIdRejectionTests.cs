@@ -188,6 +188,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var seed1 = _harness.CreateSeedNode(nodeId: 0);
         var joiner1a = _harness.CreateJoinerNode(seed1, nodeId: 1);
         var joiner1b = _harness.CreateJoinerNode(seed1, nodeId: 2);
+
         // Wait for the first cluster to converge to 3 nodes
         _harness.WaitForNodeSize(seed1, expectedSize: 3);
         _harness.WaitForNodeSize(joiner1a, expectedSize: 3);
@@ -197,6 +198,7 @@ public sealed class ClusterIdRejectionTests : IAsyncLifetime
         var seed2 = _harness.CreateSeedNode(nodeId: 100);
         var joiner2a = _harness.CreateJoinerNode(seed2, nodeId: 101);
         var joiner2b = _harness.CreateJoinerNode(seed2, nodeId: 102);
+
         // Wait for the second cluster to converge to 3 nodes
         _harness.WaitForNodeSize(seed2, expectedSize: 3);
         _harness.WaitForNodeSize(joiner2a, expectedSize: 3);

@@ -65,7 +65,6 @@ public static class RapidClusterServiceCollectionExtensions
         AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
 
         // No hosted service registration - caller must manage lifecycle manually via IRapidClusterLifecycle
-
         return services;
     }
 

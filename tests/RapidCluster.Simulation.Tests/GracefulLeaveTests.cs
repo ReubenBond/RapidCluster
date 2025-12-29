@@ -60,6 +60,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         {
             collector.Dispose();
         }
+
         _collectors.Clear();
 
         await _harness.DisposeAsync();
@@ -404,6 +405,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
             Assert.True(configIds[i].Version > configIds[i - 1].Version,
                 string.Create(CultureInfo.InvariantCulture, $"Version at index {i} ({configIds[i].Version}) should be greater than at {i - 1} ({configIds[i - 1].Version})"));
         }
+
         _harness.AssertNoWarningsOrErrors();
     }
 
@@ -633,6 +635,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // Act: Rapid successive leaves with minimal delay between
         _harness.RemoveNodeGracefully(nodes[5]);
+
         // Don't wait for full convergence - immediately start next leave
         _harness.RemoveNodeGracefully(nodes[4]);
         _harness.RemoveNodeGracefully(nodes[3]);
@@ -666,6 +669,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
             Assert.True(membershipSets[0].SetEquals(membershipSets[i]),
                 "All nodes should have identical membership view");
         }
+
         _harness.AssertNoWarningsOrErrors();
     }
 
@@ -695,7 +699,6 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
 
         // In the K=3 model, each node is observed by K other nodes
         // When a node leaves, its observers should update their monitoring
-
         var leavingNode = nodes[2];
 
         // Act: Node that's being observed leaves

@@ -24,6 +24,7 @@ public sealed class BroadcastChannel<T> : IDisposable
     private ImmutableList<IObserver<T>> _observers = [];
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="BroadcastChannel{T}"/> class.
     /// Creates a new broadcast channel.
     /// </summary>
     public BroadcastChannel()
@@ -45,7 +46,7 @@ public sealed class BroadcastChannel<T> : IDisposable
     public BroadcastChannelWriter<T> Writer { get; }
 
     /// <summary>
-    /// Gets whether the channel has been completed.
+    /// Gets a value indicating whether gets whether the channel has been completed.
     /// </summary>
     internal bool IsCompleted { get; private set; }
 
@@ -71,6 +72,7 @@ public sealed class BroadcastChannel<T> : IDisposable
                 {
                     observer.OnNext(Current.Value);
                 }
+
                 observer.OnCompleted();
                 return EmptyDisposable.Instance;
             }
@@ -255,7 +257,9 @@ public sealed class BroadcastChannel<T> : IDisposable
     private sealed class EmptyDisposable : IDisposable
     {
         public static readonly EmptyDisposable Instance = new();
+
         private EmptyDisposable() { }
+
         public void Dispose() { }
     }
 
@@ -308,7 +312,9 @@ public sealed class BroadcastChannel<T> : IDisposable
         }
 
         public bool IsValid => !IsInitial && !IsDisposed;
+
         public bool IsInitial => ReferenceEquals(_value, BroadcastChannel.InitialValue);
+
         public bool IsDisposed => ReferenceEquals(_value, BroadcastChannel.DisposedValue);
 
         public T Value

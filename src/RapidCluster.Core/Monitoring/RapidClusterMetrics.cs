@@ -14,7 +14,6 @@ public sealed class RapidClusterMetrics
     // ========================================
     // Counters (Event Metrics)
     // ========================================
-
     private readonly Counter<long> _messagesSent;
     private readonly Counter<long> _messagesReceived;
     private readonly Counter<long> _messagesDropped;
@@ -47,7 +46,6 @@ public sealed class RapidClusterMetrics
     // ========================================
     // Histograms (Latency/Duration Metrics)
     // ========================================
-
     private readonly Histogram<double> _consensusLatency;
     private readonly Histogram<double> _joinLatency;
     private readonly Histogram<double> _probeLatency;
@@ -56,31 +54,31 @@ public sealed class RapidClusterMetrics
     // ========================================
     // State for Observable Gauges
     // ========================================
-
     private readonly IRapidCluster? _cluster;
 
     /// <summary>
     /// Histogram bucket boundaries for fast operations (sub-millisecond to tens of milliseconds).
-    /// Used for: probe.latency, message.send_duration, message.processing_time
+    /// Used for: probe.latency, message.send_duration, message.processing_time.
     /// </summary>
     private static readonly double[] FastOperationBuckets =
         [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1];
 
     /// <summary>
     /// Histogram bucket boundaries for medium operations (milliseconds to seconds).
-    /// Used for: consensus.latency, consensus.round_duration, message.roundtrip_time
+    /// Used for: consensus.latency, consensus.round_duration, message.roundtrip_time.
     /// </summary>
     private static readonly double[] MediumOperationBuckets =
         [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
     /// <summary>
     /// Histogram bucket boundaries for slow operations (seconds to tens of seconds).
-    /// Used for: join.latency, leave.latency, view_change.duration
+    /// Used for: join.latency, leave.latency, view_change.duration.
     /// </summary>
     private static readonly double[] SlowOperationBuckets =
         [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120];
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="RapidClusterMetrics"/> class.
     /// Creates a new RapidClusterMetrics instance using an IMeterFactory.
     /// </summary>
     /// <param name="meterFactory">The meter factory for DI-aware meter creation.</param>
@@ -95,7 +93,6 @@ public sealed class RapidClusterMetrics
         // ========================================
         // Initialize Counters
         // ========================================
-
         _messagesSent = _meter.CreateCounter<long>(
             name: MetricNames.MessagesSent,
             unit: "{messages}",
@@ -214,7 +211,6 @@ public sealed class RapidClusterMetrics
         // ========================================
         // Initialize Histograms
         // ========================================
-
         _consensusLatency = _meter.CreateHistogram(
             name: MetricNames.ConsensusLatency,
             unit: "s",
@@ -254,7 +250,6 @@ public sealed class RapidClusterMetrics
         // ========================================
         // Initialize Observable Gauges
         // ========================================
-
         if (_cluster != null)
         {
             _meter.CreateObservableGauge(

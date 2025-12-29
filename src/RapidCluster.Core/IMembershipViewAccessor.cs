@@ -12,7 +12,7 @@ internal interface IMembershipViewAccessor
     MembershipView CurrentView { get; }
 
     /// <summary>
-    /// Subscribes to view changes, returning an async enumerable of subsequently decided views.
+    /// Gets subscribes to view changes, returning an async enumerable of subsequently decided views.
     /// The enumerable will yield a new MembershipView each time consensus is reached on a view change.
     /// </summary>
     /// <returns>An async enumerable of MembershipView instances.</returns>

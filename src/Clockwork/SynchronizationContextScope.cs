@@ -18,6 +18,7 @@ public readonly struct SynchronizationContextScope : IDisposable
     public static SynchronizationContextScope Empty => default;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SynchronizationContextScope"/> struct.
     /// Creates a new scope that will restore the specified context when disposed.
     /// </summary>
     /// <param name="previous">The synchronization context to restore.</param>

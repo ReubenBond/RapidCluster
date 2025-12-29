@@ -90,8 +90,10 @@ internal sealed partial class ServiceDiscoverySeedProvider(
         {
             // UriEndPoint is returned by Aspire's ServiceEndpointResolver
             UriEndPoint uriEndPoint => ConvertUriEndPoint(uriEndPoint),
+
             // Already a standard endpoint type
             IPEndPoint or DnsEndPoint => endpoint,
+
             // Unknown type - skip it
             _ => null,
         };

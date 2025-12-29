@@ -19,6 +19,7 @@ public static class RapidClusterUtils
         {
             throw new ArgumentException($"Invalid host:port string: {hostString}", nameof(hostString));
         }
+
         return HostFromParts(parts[0], port);
     }
 

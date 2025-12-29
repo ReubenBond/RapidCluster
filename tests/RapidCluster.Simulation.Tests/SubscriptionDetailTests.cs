@@ -29,6 +29,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         {
             collector.Dispose();
         }
+
         _collectors.Clear();
 
         await _harness.DisposeAsync();
@@ -67,6 +68,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var callbackLog = new ConcurrentBag<MembershipView>();
 
         var seedNode = _harness.CreateSeedNode();
+
         // Collector is started after node is created, so initial event may be missed
         var collector = CreateViewCollector(seedNode);
 
@@ -98,6 +100,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
 
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+
         // Collector is started AFTER join, so joiner1's own join event may be missed
         var joinerCallbackLog = new ConcurrentBag<MembershipView>();
         var collector = CreateViewCollector(joiner1);

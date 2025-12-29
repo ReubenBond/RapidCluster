@@ -192,7 +192,6 @@ public static class MetricNames
     // ========================================
     // Tag Names
     // ========================================
-
     internal static class Tags
     {
         public const string MessageType = "message.type";
@@ -211,7 +210,6 @@ public static class MetricNames
     // ========================================
     // Tag Values
     // ========================================
-
     internal static class MessageTypes
     {
         public const string JoinRequest = "join_request";

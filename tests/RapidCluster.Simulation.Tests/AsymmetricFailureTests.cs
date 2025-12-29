@@ -401,7 +401,6 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
 
         // Create two groups: [0,1,2] and [3,4,5]
         // Group 1 cannot reach Group 2, but Group 2 can reach Group 1
-
         var group1 = nodes.Take(3).ToList();
         var group2 = nodes.Skip(3).ToList();
 

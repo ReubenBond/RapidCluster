@@ -140,6 +140,7 @@ public class ExceptionTests
         {
             thrown = true;
         }
+
         Assert.True(thrown);
     }
 
@@ -155,6 +156,7 @@ public class ExceptionTests
         {
             thrown = true;
         }
+
         Assert.True(thrown);
     }
 
@@ -170,6 +172,7 @@ public class ExceptionTests
         {
             thrown = true;
         }
+
         Assert.True(thrown);
     }
 }

@@ -25,8 +25,6 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
 
     public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
-    #region Single Seed Discovery
-
     /// <summary>
     /// Tests that a node can discover and join through a single seed.
     /// </summary>
@@ -55,10 +53,6 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         Assert.True(seedNode.IsInitialized);
         Assert.Equal(1, seedNode.MembershipSize);
     }
-
-    #endregion
-
-    #region Multiple Seeds - Preference and Failover
 
     /// <summary>
     /// Tests that when multiple seeds are available, the node can join successfully.
@@ -129,10 +123,6 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         Assert.True(joiner4.IsInitialized);
         Assert.Equal(4, joiner4.MembershipSize);
     }
-
-    #endregion
-
-    #region Edge Cases
 
     /// <summary>
     /// Tests that empty seed list for a joiner node throws an exception.
@@ -256,10 +246,6 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         Assert.Equal(6, joiner.MembershipSize);
     }
 
-    #endregion
-
-    #region ConfigurationSeedProvider Contract Verification
-
     /// <summary>
     /// Tests that ConfigurationSeedProvider returns the same seeds on every call.
     /// </summary>
@@ -306,13 +292,11 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
     private sealed class TestOptionsMonitor<T>(T value) : Microsoft.Extensions.Options.IOptionsMonitor<T>
     {
         public T CurrentValue => value;
+
         public T Get(string? name) => value;
+
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
-
-    #endregion
-
-    #region Cluster Recovery with Seeds
 
     /// <summary>
     /// Tests that nodes can rejoin after a network partition using seed discovery.
@@ -336,6 +320,4 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         // needed to reconnect after partitions heal
         // This test verifies the basic cluster formation with seed discovery
     }
-
-    #endregion
 }

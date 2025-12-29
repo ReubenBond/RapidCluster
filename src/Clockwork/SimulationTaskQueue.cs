@@ -37,6 +37,7 @@ public sealed class SimulationTaskQueue
     public IReadOnlySet<ScheduledItem> ScheduledItems { get; }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SimulationTaskQueue"/> class.
     /// Creates a new simulation task queue that uses the specified clock for time.
     /// Multiple queues can share the same clock for unified time coordination.
     /// </summary>
@@ -63,7 +64,7 @@ public sealed class SimulationTaskQueue
     public SimulationSynchronizationContext SynchronizationContext { get; }
 
     /// <summary>
-    /// Gets whether there are any items in the queue.
+    /// Gets a value indicating whether gets whether there are any items in the queue.
     /// This is called from the simulation thread only.
     /// </summary>
     public bool HasItems
@@ -89,6 +90,7 @@ public sealed class SimulationTaskQueue
                 if (item.DueTime > UtcNow)
                     return item.DueTime;
             }
+
             return null;
         }
     }
@@ -128,7 +130,8 @@ public sealed class SimulationTaskQueue
     /// </summary>
     /// <param name="item">The item to execute.</param>
     /// <param name="delay">The delay from the current time.</param>
-    public TItem EnqueueAfter<TItem>(TItem item, TimeSpan delay) where TItem : ScheduledItem
+    public TItem EnqueueAfter<TItem>(TItem item, TimeSpan delay)
+        where TItem : ScheduledItem
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);

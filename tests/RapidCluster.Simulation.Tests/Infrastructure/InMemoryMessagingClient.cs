@@ -129,7 +129,9 @@ internal sealed class InMemoryMessagingClient(
     private sealed class SimulatedNetworkException : Exception
     {
         public SimulatedNetworkException() { }
+
         public SimulatedNetworkException(string message) : base(message) { }
+
         public SimulatedNetworkException(string message, Exception innerException) : base(message, innerException) { }
     }
 }

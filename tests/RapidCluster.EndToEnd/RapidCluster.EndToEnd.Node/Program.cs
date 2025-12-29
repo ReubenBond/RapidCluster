@@ -37,10 +37,9 @@ builder.Services.AddSingleton<IConfigureOptions<RapidClusterOptions>>(sp =>
 
 // Add RapidCluster services with manual lifecycle management
 // We use AddRapidClusterManual because the listen address is only known after the server starts
-builder.Services.AddRapidCluster(options =>
-    // ListenAddress will be set by DeferredRapidClusterOptionsConfigurator after server starts
-    // Disable BootstrapExpect since we're using file-based coordination instead
-    options.BootstrapExpect = 0);
+// ListenAddress will be set by DeferredRapidClusterOptionsConfigurator after server starts
+// Disable BootstrapExpect since we're using file-based coordination instead
+builder.Services.AddRapidCluster(options => options.BootstrapExpect = 0);
 
 // Add gRPC transport with HTTPS enabled (required for Http1AndHttp2 with TLS)
 builder.Services.AddRapidClusterGrpc(options => options.UseHttps = true);

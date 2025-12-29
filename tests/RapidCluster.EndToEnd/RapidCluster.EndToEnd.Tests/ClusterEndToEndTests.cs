@@ -14,11 +14,11 @@ namespace RapidCluster.EndToEnd.Tests;
 public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyncLifetime
 {
     private const int ClusterSize = 5;
-    private DistributedApplication? _app;
-    private CancellationTokenSource? _logWatchCts;
-    private readonly List<Task> _logWatchTasks = [];
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
     private static readonly Uri HealthUri = new("/health", UriKind.Relative);
+    private readonly List<Task> _logWatchTasks = [];
+    private DistributedApplication? _app;
+    private CancellationTokenSource? _logWatchCts;
 
     public async ValueTask InitializeAsync()
     {
@@ -187,6 +187,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
                 resourceName,
                 cts.Token);
         }
+
         await Task.WhenAll(waitTasks);
 
         outputHelper.WriteLine("All nodes healthy. Verifying health endpoints...");
@@ -250,6 +251,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
                 resourceName,
                 cts.Token);
         }
+
         await Task.WhenAll(waitTasks);
 
         var elapsed = DateTime.UtcNow - startTime;
@@ -275,6 +277,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
                 resourceName,
                 cts.Token);
         }
+
         await Task.WhenAll(waitTasks);
 
         // Check that the health endpoint returns "Healthy" status text
@@ -339,6 +342,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
                 resourceName,
                 cts.Token);
         }
+
         await Task.WhenAll(waitTasks);
 
         // Make concurrent health check requests to all nodes
@@ -387,6 +391,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
                     resourceName,
                     cts.Token);
             }
+
             await Task.WhenAll(waitTasks);
 
             var elapsed = DateTime.UtcNow - startTime;

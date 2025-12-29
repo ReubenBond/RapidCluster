@@ -88,12 +88,12 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     /// The paper achieved 2000 nodes with only 8 configuration changes, implying
     /// ~250 nodes per view change. For our test sizes:
     /// - 200 nodes: expect ~10-15 changes (at least 13-20 nodes per change)
-    /// - 500 nodes: expect ~12-20 changes (at least 25-40 nodes per change)
+    /// - 500 nodes: expect ~12-20 changes (at least 25-40 nodes per change).
     /// </para>
     /// </summary>
     [Theory]
-    [InlineData(200, 30)]  // 200 nodes should have at most 30 config changes
-    [InlineData(500, 50)]  // 500 nodes should have at most 50 config changes
+    [InlineData(200, 30)] // 200 nodes should have at most 30 config changes
+    [InlineData(500, 50)] // 500 nodes should have at most 50 config changes
     public void VeryLargeClusterFormation_Parallel(int clusterSize, int maxExpectedChanges)
     {
         var nodes = _harness.CreateClusterParallel(size: clusterSize);
@@ -137,8 +137,8 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     /// </para>
     /// </summary>
     [Theory]
-    [InlineData(50, 10)]  // 50 nodes in batches of 10
-    [InlineData(80, 20)]  // 80 nodes in batches of 20
+    [InlineData(50, 10)] // 50 nodes in batches of 10
+    [InlineData(80, 20)] // 80 nodes in batches of 20
     [InlineData(100, 25)] // 100 nodes in batches of 25
     [InlineData(200, 25)] // 200 nodes in batches of 25
     public void LargeClusterFormation_BatchedParallel(int clusterSize, int batchSize)
@@ -166,20 +166,20 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     /// For batching to work correctly:
     /// - Multiple alerts should be batched into single BatchedAlertMessage broadcasts
     /// - Multiple nodes should be added in a single view change (configuration change)
-    /// - The total number of configuration changes should be significantly less than N-1
+    /// - The total number of configuration changes should be significantly less than N-1.
     /// </para>
     /// <para>
     /// Expected behavior per the paper:
     /// - 2000 nodes bootstrapped with 8 configuration changes
     /// - This implies ~250 nodes per view change on average
     /// - For 50 nodes, we should see ~6-10 changes (allowing for smaller batches)
-    /// - For 80 nodes, we should see ~8-12 changes
+    /// - For 80 nodes, we should see ~8-12 changes.
     /// </para>
     /// </summary>
     [Theory]
-    [InlineData(20, 10)]   // 20 nodes should have at most 10 config changes (at least 2 nodes per change on average)
-    [InlineData(50, 15)]   // 50 nodes should have at most 15 config changes (at least 3-4 nodes per change on average)
-    [InlineData(80, 20)]   // 80 nodes should have at most 20 config changes (at least 4 nodes per change on average)
+    [InlineData(20, 10)] // 20 nodes should have at most 10 config changes (at least 2 nodes per change on average)
+    [InlineData(50, 15)] // 50 nodes should have at most 15 config changes (at least 3-4 nodes per change on average)
+    [InlineData(80, 20)] // 80 nodes should have at most 20 config changes (at least 4 nodes per change on average)
     public void ParallelJoins_BatchMultipleNodesPerViewChange(int clusterSize, int maxExpectedChanges)
     {
         var nodes = _harness.CreateClusterParallel(size: clusterSize);
@@ -545,8 +545,8 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
     /// into fewer configuration changes than sequential leaves.
     /// </summary>
     [Theory]
-    [InlineData(20, 5, 4)]    // Remove 5 from 20 nodes, expect at most 4 config changes
-    [InlineData(30, 10, 6)]   // Remove 10 from 30 nodes, expect at most 6 config changes
+    [InlineData(20, 5, 4)] // Remove 5 from 20 nodes, expect at most 4 config changes
+    [InlineData(30, 10, 6)] // Remove 10 from 30 nodes, expect at most 6 config changes
     public void ParallelLeaves_BatchMultipleNodesPerViewChange(int clusterSize, int nodesToRemove, int maxExpectedChanges)
     {
         // Create the cluster using parallel joins for speed (larger clusters need more iterations)
@@ -654,6 +654,7 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"  {suffix}");
         }
+
         sb.AppendLine("================================");
 
         TestContext.Current.TestOutputHelper?.WriteLine(sb.ToString());
@@ -688,6 +689,7 @@ public sealed class LargeScaleClusterTests : IAsyncLifetime
                 var moreAddedText = t.MembersAdded > 5 ? string.Create(CultureInfo.InvariantCulture, $"... (+{t.MembersAdded - 5} more)") : "";
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    + Added ({t.MembersAdded}): {string.Join(", ", t.AddedMembers.Take(5))}{moreAddedText}");
             }
+
             if (t.MembersRemoved > 0)
             {
                 var moreRemovedText = t.MembersRemoved > 5 ? string.Create(CultureInfo.InvariantCulture, $"... (+{t.MembersRemoved - 5} more)") : "";

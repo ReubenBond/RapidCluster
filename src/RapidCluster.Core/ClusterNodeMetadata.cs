@@ -16,13 +16,14 @@ public sealed class ClusterNodeMetadata : IReadOnlyDictionary<string, ReadOnlyMe
     private static readonly Dictionary<string, ReadOnlyMemory<byte>> EmptyData = [];
 
     /// <summary>
-    /// An empty metadata instance with no entries.
+    /// Gets an empty metadata instance with no entries.
     /// </summary>
     public static ClusterNodeMetadata Empty { get; } = new(EmptyData);
 
     private readonly Dictionary<string, ReadOnlyMemory<byte>> _data;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ClusterNodeMetadata"/> class.
     /// Creates a new ClusterMetadata instance with the specified data.
     /// </summary>
     /// <param name="data">The metadata dictionary.</param>
@@ -67,6 +68,7 @@ public sealed class ClusterNodeMetadata : IReadOnlyDictionary<string, ReadOnlyMe
         {
             return null;
         }
+
         return Encoding.UTF8.GetString(value.Span);
     }
 

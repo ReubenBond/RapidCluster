@@ -66,7 +66,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     public IMembershipViewAccessor ViewAccessor => _viewAccessor;
 
     /// <summary>
-    /// Gets whether this node is initialized and part of a cluster.
+    /// Gets a value indicating whether gets whether this node is initialized and part of a cluster.
     /// </summary>
     public override bool IsInitialized => _isInitialized;
 
@@ -86,6 +86,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     internal CancellationToken TeardownCancellationToken => _disposeCts.Token;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="RapidSimulationNode"/> class.
     /// Creates a new simulation node with a single seed address.
     /// </summary>
     internal RapidSimulationNode(
@@ -100,6 +101,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="RapidSimulationNode"/> class.
     /// Creates a new simulation node with multiple seed addresses for testing seed failover.
     /// </summary>
     internal RapidSimulationNode(
@@ -287,6 +289,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             {
                 meter.Dispose();
             }
+
             _meters.Clear();
         }
     }
@@ -297,7 +300,9 @@ internal sealed class RapidSimulationNode : SimulationNode
     private sealed class TestOptionsMonitor<T>(T value) : IOptionsMonitor<T>
     {
         public T CurrentValue => value;
+
         public T Get(string? name) => value;
+
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 }

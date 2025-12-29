@@ -11,9 +11,9 @@ namespace RapidCluster.Integration.Tests;
 /// </summary>
 internal sealed class TestClusterPortAllocator : IDisposable
 {
-    private bool _disposed;
     private readonly Lock _lockObj = new();
     private readonly Dictionary<int, string> _allocatedPorts = [];
+    private bool _disposed;
 
     /// <summary>
     /// Allocates a single available port.

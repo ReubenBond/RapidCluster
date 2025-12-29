@@ -17,8 +17,6 @@ public sealed class SimulationTaskScheduler(SimulationTaskQueue taskQueue) : Tas
     /// <inheritdoc />
     protected override void QueueTask(Task task) => taskQueue.Enqueue(new ScheduledTaskItem(task, this));
 
-    // For deterministic testing, we don't execute inline
-    // All tasks go through the queue
     /// <inheritdoc />
     protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
 

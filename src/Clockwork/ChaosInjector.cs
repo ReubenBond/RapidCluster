@@ -1,33 +1,6 @@
 namespace Clockwork;
 
 /// <summary>
-/// Specifies the type of fault to inject during chaos testing.
-/// </summary>
-public enum FaultType
-{
-    /// <summary>Crash a node (sudden failure).</summary>
-    NodeCrash,
-    /// <summary>Create a network partition between two nodes.</summary>
-    Partition,
-    /// <summary>Heal a network partition between two nodes.</summary>
-    PartitionHeal,
-    /// <summary>Isolate a node from all other nodes.</summary>
-    Isolation,
-    /// <summary>Reconnect an isolated node.</summary>
-    Reconnect,
-}
-
-/// <summary>
-/// Represents a fault scheduled to occur at a future time.
-/// </summary>
-/// <typeparam name="TNode">The concrete simulation node type.</typeparam>
-public readonly record struct ScheduledFault<TNode>(
-    FaultType Type,
-    DateTimeOffset ExecuteAt,
-    TNode? Node1,
-    TNode? Node2) where TNode : class;
-
-/// <summary>
 /// Generic chaos injector for injecting random faults into simulations.
 /// Provides rate-based random fault injection and scheduled fault execution.
 /// </summary>
@@ -41,7 +14,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
     where TNode : SimulationNode
     where TCluster : SimulationCluster<TNode>
 {
-    private readonly List<ScheduledFault<TNode>> _scheduledFaults = [];
+    private readonly List<ScheduledFault> _scheduledFaults = [];
     private readonly Lock _lock = new();
 
     /// <summary>
@@ -121,7 +94,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
 
         lock (_lock)
         {
-            _scheduledFaults.Add(new ScheduledFault<TNode>(FaultType.NodeCrash, executeAt, node, default));
+            _scheduledFaults.Add(new ScheduledFault(FaultType.NodeCrash, executeAt, node, default));
         }
     }
 
@@ -136,7 +109,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
 
         lock (_lock)
         {
-            _scheduledFaults.Add(new ScheduledFault<TNode>(FaultType.Partition, executeAt, node1, node2));
+            _scheduledFaults.Add(new ScheduledFault(FaultType.Partition, executeAt, node1, node2));
         }
     }
 
@@ -151,7 +124,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
 
         lock (_lock)
         {
-            _scheduledFaults.Add(new ScheduledFault<TNode>(FaultType.PartitionHeal, executeAt, node1, node2));
+            _scheduledFaults.Add(new ScheduledFault(FaultType.PartitionHeal, executeAt, node1, node2));
         }
     }
 
@@ -165,7 +138,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
 
         lock (_lock)
         {
-            _scheduledFaults.Add(new ScheduledFault<TNode>(FaultType.Isolation, executeAt, node, default));
+            _scheduledFaults.Add(new ScheduledFault(FaultType.Isolation, executeAt, node, default));
         }
     }
 
@@ -179,7 +152,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
 
         lock (_lock)
         {
-            _scheduledFaults.Add(new ScheduledFault<TNode>(FaultType.Reconnect, executeAt, node, default));
+            _scheduledFaults.Add(new ScheduledFault(FaultType.Reconnect, executeAt, node, default));
         }
     }
 
@@ -226,7 +199,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
     private void ProcessScheduledFaults()
     {
         var now = Cluster.TimeProvider.GetUtcNow();
-        List<ScheduledFault<TNode>>? toExecute = null;
+        List<ScheduledFault>? toExecute = null;
 
         lock (_lock)
         {
@@ -243,7 +216,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
         }
     }
 
-    private void ExecuteFault(ScheduledFault<TNode> fault)
+    private void ExecuteFault(ScheduledFault fault)
     {
         switch (fault.Type)
         {
@@ -252,6 +225,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
                 {
                     CrashNode(fault.Node1);
                 }
+
                 break;
 
             case FaultType.Partition:
@@ -259,6 +233,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
                 {
                     PartitionNodes(fault.Node1, fault.Node2);
                 }
+
                 break;
 
             case FaultType.PartitionHeal:
@@ -266,6 +241,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
                 {
                     HealPartition(fault.Node1, fault.Node2);
                 }
+
                 break;
 
             case FaultType.Isolation:
@@ -273,6 +249,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
                 {
                     IsolateNode(fault.Node1);
                 }
+
                 break;
 
             case FaultType.Reconnect:
@@ -280,6 +257,7 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
                 {
                     ReconnectNode(fault.Node1);
                 }
+
                 break;
         }
     }
@@ -343,4 +321,34 @@ public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
     /// Heals all partitions. Override in derived classes to implement heal-all behavior.
     /// </summary>
     protected abstract void HealAllPartitions();
+
+    /// <summary>
+    /// Specifies the type of fault to inject during chaos testing.
+    /// </summary>
+    public enum FaultType
+    {
+        /// <summary>Crash a node (sudden failure).</summary>
+        NodeCrash,
+
+        /// <summary>Create a network partition between two nodes.</summary>
+        Partition,
+
+        /// <summary>Heal a network partition between two nodes.</summary>
+        PartitionHeal,
+
+        /// <summary>Isolate a node from all other nodes.</summary>
+        Isolation,
+
+        /// <summary>Reconnect an isolated node.</summary>
+        Reconnect,
+    }
+
+    /// <summary>
+    /// Represents a fault scheduled to occur at a future time.
+    /// </summary>
+    internal readonly record struct ScheduledFault(
+        FaultType Type,
+        DateTimeOffset ExecuteAt,
+        TNode? Node1,
+        TNode? Node2);
 }

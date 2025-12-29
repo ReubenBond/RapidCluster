@@ -23,6 +23,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         {
             subscription.Dispose();
         }
+
         _observableSubscriptions.Clear();
 
         // Cancel all async enumerable subscriptions
@@ -31,6 +32,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
             cts.SafeCancel();
             cts.Dispose();
         }
+
         _subscriptionCts.Clear();
 
         await _cluster.DisposeAsync();
@@ -116,6 +118,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         StartViewUpdateConsumer(seed, seedCb);
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+
         // Note: Joiner's consumer is started AFTER join completes, so it may miss the initial view update
         var joinCb = new ViewCallback();
         StartViewUpdateConsumer(joiner, joinCb);
@@ -150,6 +153,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         StartViewUpdateConsumer(seed, seedCb1);
         StartViewUpdateConsumer(seed, seedCb2);
         var (_, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+
         // Note: Joiner's consumers are started AFTER join completes
         var joinCb1 = new ViewCallback();
         var joinCb2 = new ViewCallback();
@@ -164,6 +168,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         // Both seed callbacks should receive the same number of views (consumer started before join)
         Assert.True(seedCb1.NumTimesCalled() >= 1, string.Create(CultureInfo.InvariantCulture, $"Expected seedCb1 to receive at least 1 view update, got {seedCb1.NumTimesCalled()}"));
         Assert.True(seedCb2.NumTimesCalled() >= 1, string.Create(CultureInfo.InvariantCulture, $"Expected seedCb2 to receive at least 1 view update, got {seedCb2.NumTimesCalled()}"));
+
         // Both should receive the same views since they subscribed at the same time
         Assert.Equal(seedCb1.NumTimesCalled(), seedCb2.NumTimesCalled());
     }
@@ -216,6 +221,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         // Final view should include both nodes with metadata
         var lastView = viewUpdates.OrderByDescending(v => v.ConfigurationId).First();
         Assert.Equal(2, lastView.Members.Length);
+
         // Verify both members have metadata
         Assert.All(lastView.Members, m => Assert.True(m.Metadata.ContainsKey("role")));
     }
@@ -237,6 +243,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         StartViewUpdateConsumer(seed, seedCb);
 
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
+
         // Joiner1's consumer is started AFTER join, but BEFORE joiner2 joins
         var joiner1Cb = new ViewCallback();
         StartViewUpdateConsumer(joiner1, joiner1Cb);
@@ -244,6 +251,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
+
         // Joiner2's consumer is started AFTER join
         var joiner2Cb = new ViewCallback();
         StartViewUpdateConsumer(joiner2, joiner2Cb);
@@ -344,6 +352,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         // Both seed callbacks should receive the same number of views
         Assert.True(seedCb1.NumTimesCalled() >= 1, string.Create(CultureInfo.InvariantCulture, $"Expected seedCb1 to receive at least 1 view, got {seedCb1.NumTimesCalled()}"));
         Assert.True(seedCb2.NumTimesCalled() >= 1, string.Create(CultureInfo.InvariantCulture, $"Expected seedCb2 to receive at least 1 view, got {seedCb2.NumTimesCalled()}"));
+
         // Both should receive the same views since they subscribed at the same time
         Assert.Equal(seedCb1.NumTimesCalled(), seedCb2.NumTimesCalled());
 
@@ -378,6 +387,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
 
         // Should have received at least one membership count
         Assert.False(membershipCounts.IsEmpty, "Expected at least one membership count");
+
         // The max membership count should be 2 (seed + joiner)
         Assert.True(membershipCounts.Max() >= 2, string.Create(CultureInfo.InvariantCulture, $"Expected max membership count >= 2, got {membershipCounts.Max()}"));
     }
@@ -398,6 +408,7 @@ public sealed class SubscriptionsTests(ITestOutputHelper outputHelper) : IAsyncD
         StartObservableConsumer(seed, seedCb);
 
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
+
         // Subscribe to joiner1 after it joins
         var joiner1Cb = new ViewCallback();
         StartObservableConsumer(joiner1, joiner1Cb);

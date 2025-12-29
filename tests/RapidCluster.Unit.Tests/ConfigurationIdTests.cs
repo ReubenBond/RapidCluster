@@ -7,8 +7,6 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class ConfigurationIdTests
 {
-    #region ClusterId Tests
-
     [Fact]
     public void ClusterId_Empty_Has_Value_Zero() => Assert.Equal(0, ClusterId.None.Value);
 
@@ -45,10 +43,6 @@ public class ConfigurationIdTests
         var clusterId = new ClusterId(255);
         Assert.Contains("00000000000000FF", clusterId.ToString(), StringComparison.Ordinal);
     }
-
-    #endregion
-
-    #region ConfigurationId Basic Tests
 
     [Fact]
     public void Empty_Has_Version_Zero() => Assert.Equal(0, ConfigurationId.Empty.Version);
@@ -98,10 +92,6 @@ public class ConfigurationIdTests
         Assert.Equal(11, next.Version);
     }
 
-    #endregion
-
-    #region Equality Tests
-
     [Fact]
     public void Equality_Same_Version_Returns_True()
     {
@@ -140,10 +130,6 @@ public class ConfigurationIdTests
         Assert.False(config1 == config2);
         Assert.False(config1.Equals(config2));
     }
-
-    #endregion
-
-    #region Comparison Tests
 
     [Fact]
     public void Comparison_LessThan()
@@ -249,10 +235,6 @@ public class ConfigurationIdTests
         Assert.Throws<InvalidOperationException>(() => _ = config1 > config2);
     }
 
-    #endregion
-
-    #region HashCode Tests
-
     [Fact]
     public void GetHashCode_Same_Version_Same_HashCode()
     {
@@ -269,10 +251,6 @@ public class ConfigurationIdTests
         var config2 = new ConfigurationId(clusterId, 42);
         Assert.Equal(config1.GetHashCode(), config2.GetHashCode());
     }
-
-    #endregion
-
-    #region Protobuf Conversion Tests
 
     [Fact]
     public void ToProtobuf_Converts_Correctly()
@@ -322,10 +300,6 @@ public class ConfigurationIdTests
         Assert.Equal(original, restored);
     }
 
-    #endregion
-
-    #region Property-Based Tests
-
     [Fact]
     public void Property_Comparison_With_Empty_ClusterId_Works_Correctly()
     {
@@ -356,6 +330,4 @@ public class ConfigurationIdTests
                 return config1 == config2;
             });
     }
-
-    #endregion
 }

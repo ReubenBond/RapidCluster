@@ -9,8 +9,6 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class SeedProviderTests
 {
-    #region ConfigurationSeedProvider Tests
-
     [Fact]
     public async Task ConfigurationSeedProvider_WithSeeds_ReturnsSeeds()
     {
@@ -164,17 +162,15 @@ public class SeedProviderTests
         Assert.Equal("node-2.cluster.local", dns1.Host);
     }
 
-    #endregion
-
-    #region Test Helpers
-
     /// <summary>
     /// Simple options monitor for tests that returns a fixed value.
     /// </summary>
     private sealed class TestOptionsMonitor<T>(T value) : IOptionsMonitor<T>
     {
         public T CurrentValue => value;
+
         public T Get(string? name) => value;
+
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
@@ -184,9 +180,9 @@ public class SeedProviderTests
     private sealed class MutableTestOptionsMonitor<T>(T initialValue) : IOptionsMonitor<T>
     {
         public T CurrentValue { get; set; } = initialValue;
+
         public T Get(string? name) => CurrentValue;
+
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
-
-    #endregion
 }

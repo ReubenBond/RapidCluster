@@ -43,7 +43,8 @@ public static class SimulationTaskQueueExtensions
         /// </summary>
         /// <typeparam name="T">The type of scheduled item to count.</typeparam>
         /// <returns>The count of ready items of the specified type.</returns>
-        public int GetReadyCount<T>() where T : ScheduledItem
+        public int GetReadyCount<T>()
+            where T : ScheduledItem
         {
             var count = 0;
             foreach (var item in queue.ScheduledItems)
@@ -55,6 +56,7 @@ public static class SimulationTaskQueueExtensions
                     count++;
                 }
             }
+
             return count;
         }
 
@@ -63,7 +65,8 @@ public static class SimulationTaskQueueExtensions
         /// </summary>
         /// <typeparam name="T">The type of scheduled item to count.</typeparam>
         /// <returns>The count of waiting items of the specified type.</returns>
-        public int GetWaitingCount<T>() where T : ScheduledItem
+        public int GetWaitingCount<T>()
+            where T : ScheduledItem
         {
             var count = 0;
             foreach (var item in queue.ScheduledItems)
@@ -73,6 +76,7 @@ public static class SimulationTaskQueueExtensions
                     count++;
                 }
             }
+
             return count;
         }
 
@@ -81,7 +85,8 @@ public static class SimulationTaskQueueExtensions
         /// </summary>
         /// <typeparam name="T">The type of scheduled item to find.</typeparam>
         /// <returns>A list of waiting items of the specified type.</returns>
-        public IReadOnlyList<T> GetWaitingItems<T>() where T : ScheduledItem
+        public IReadOnlyList<T> GetWaitingItems<T>()
+            where T : ScheduledItem
         {
             var results = new List<T>();
 

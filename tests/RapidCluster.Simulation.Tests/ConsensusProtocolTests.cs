@@ -181,6 +181,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
             _harness.WaitForNodeSize(seedNode, expectedSize: i + 1);
 
             var newConfigId = seedNode.CurrentView.ConfigurationId;
+
             // Each membership change should produce a unique configuration ID
             Assert.DoesNotContain(newConfigId, configIds);
             configIds.Add(newConfigId);
@@ -361,7 +362,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // - After 1 crash: 3 remaining, need majority of 4 (3) - achievable with 3 nodes
         // - After removing crashed node: N=3, majority = 2
         // - After 2nd crash: 2 remaining, need majority of 3 (2) - achievable with 2 nodes
-
         var nodes = _harness.CreateCluster(size: 4);
         _harness.WaitForConvergence();
 

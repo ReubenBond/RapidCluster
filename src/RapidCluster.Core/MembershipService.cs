@@ -24,57 +24,24 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     private readonly Endpoint _myAddr;
     private readonly IBroadcaster _broadcaster;
 
-    /// <summary>
-    /// Tracks all pending joiners - nodes that have sent JoinMessages and are waiting to be added.
-    /// Key: joiner endpoint, Value: JoinerInfo containing response channel, metadata, and alert-sent flag.
-    /// </summary>
+    // Tracks all pending joiners - nodes that have sent JoinMessages and are waiting to be added.
     private readonly Dictionary<Endpoint, JoinerInfo> _pendingJoiners = new(EndpointAddressComparer.Instance);
 
     private readonly IMessagingClient _messagingClient;
     private readonly IConsensusCoordinatorFactory _consensusCoordinatorFactory;
-    private MembershipView _membershipView = MembershipView.Empty;
-
-    // Fields used by batching logic.
-    private readonly Channel<AlertMessage> _sendQueue;
-    private readonly SharedResources _sharedResources;
-    private readonly List<IDisposable> _failureDetectors = [];
-    private int _disposed;
-
-    // Failure detector
-    private readonly IEdgeFailureDetectorFactory _fdFactory;
-
-    // Fields used by consensus protocol
+    private readonly Channel<AlertMessage> _alertSendQueue;
+    private readonly IEdgeFailureDetectorFactory _failureDetectorFactory;
     private readonly Lock _membershipUpdateLock = new();
     private readonly RapidClusterProtocolOptions _options;
-    private bool _announcedProposal;
-    private ConsensusCoordinator _consensusInstance;
+    private readonly SharedResources _sharedResources;
+    private readonly List<IDisposable> _failureDetectors = [];
     private readonly SortedSet<Endpoint> _deferredProposals = new(ProtobufEndpointComparer.Instance); // Proposals deferred while consensus is running
-
-    // Unstable mode timeout handling (cut detection)
     private readonly OneShotTimer _unstableModeTimer = new();
-    private ConfigurationId _unstableModeTimerConfigId;
-    private bool _unstableModeTimerArmed;
-
-    // Initialization state
-    private bool _initialized;
-
-    // Configuration for join - stored from RapidClusterOptions
-    private List<Endpoint> _seedAddresses;
     private readonly Metadata _nodeMetadata;
     private readonly ISeedProvider _seedProvider;
-
-    // The established ClusterId. Initialized during bootstrap or learned during join.
-    private ClusterId _clusterId = ClusterId.None;
-
-    // Bootstrap configuration
     private readonly int _bootstrapExpect;
 
-    // Tracks whether this node was at the first position in the seed list
-    // (before filtering self). Used to determine the bootstrap coordinator.
-    private bool _wasFirstSeed;
-
     // Buffer for consensus messages from future configurations
-    // Key: configurationId, Value: list of messages waiting for that config
     private readonly Dictionary<ConfigurationId, List<RapidClusterRequest>> _pendingConsensusMessages = [];
 
     // View change accessor for publishing updates
@@ -82,12 +49,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 
     // Metrics
     private readonly RapidClusterMetrics _metrics;
-
-    // Flag to track if a rejoin is in progress
-    private bool _isRejoining;
-
-    // Flag to track if a stale view refresh is in progress (to prevent concurrent refreshes)
-    private bool _isRefreshingView;
 
     // Background task tracking for graceful shutdown
     private readonly List<Task> _backgroundTasks = [];
@@ -97,38 +58,38 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Cancelled by StopAsync or when SharedResources signals shutdown
     private readonly CancellationTokenSource _stoppingCts;
 
-    /// <summary>
-    /// Result of a single join attempt. Used to avoid exception-based control flow for retryable conditions.
-    /// </summary>
-    private enum JoinAttemptStatus
-    {
-        /// <summary>Join succeeded - response contains valid membership data.</summary>
-        Success,
-        /// <summary>Join failed but should be retried (transient error like timeout, network issue).</summary>
-        RetryNeeded,
-        /// <summary>Configuration changed during join - retry immediately without consuming an attempt.</summary>
-        ConfigChanged,
-        /// <summary>Join failed permanently - should not retry.</summary>
-        Failed,
-    }
+    private MembershipView _membershipView = MembershipView.Empty;
+    private int _disposed;
+
+    // Fields used by consensus protocol
+    private bool _announcedProposal;
+    private ConsensusCoordinator _consensusInstance;
+
+    // Unstable mode timeout handling (cut detection)
+    private ConfigurationId _unstableModeTimerConfigId;
+    private bool _unstableModeTimerArmed;
+
+    // Initialization state
+    private bool _initialized;
+
+    // Configuration for join - stored from RapidClusterOptions
+    private List<Endpoint> _seedAddresses;
+
+    // The established ClusterId. Initialized during bootstrap or learned during join.
+    private ClusterId _clusterId = ClusterId.None;
+
+    // Tracks whether this node was at the first position in the seed list
+    // (before filtering self). Used to determine the bootstrap coordinator.
+    private bool _wasFirstSeed;
+
+    // Flag to track if a rejoin is in progress
+    private bool _isRejoining;
+
+    // Flag to track if a stale view refresh is in progress (to prevent concurrent refreshes)
+    private bool _isRefreshingView;
 
     /// <summary>
-    /// Result of a single join attempt.
-    /// </summary>
-    private readonly struct JoinAttemptResult(JoinAttemptStatus status, JoinResponse? response, string? failureReason, ConfigurationId? expectedConfigId = null)
-    {
-        public JoinAttemptStatus Status { get; } = status;
-        public JoinResponse? Response { get; } = response;
-        public string? FailureReason { get; } = failureReason;
-        public ConfigurationId? ExpectedConfigId { get; } = expectedConfigId;
-
-        public static JoinAttemptResult Success(JoinResponse response) => new(JoinAttemptStatus.Success, response, failureReason: null);
-        public static JoinAttemptResult RetryNeeded(string reason) => new(JoinAttemptStatus.RetryNeeded, response: null, reason);
-        public static JoinAttemptResult ConfigChanged(ConfigurationId expectedConfigId) => new(JoinAttemptStatus.ConfigChanged, response: null, failureReason: null, expectedConfigId);
-        public static JoinAttemptResult Failed(string reason) => new(JoinAttemptStatus.Failed, response: null, reason);
-    }
-
-    /// <summary>
+    /// Initializes a new instance of the <see cref="MembershipService"/> class.
     /// Creates a new MembershipService instance.
     /// Call <see cref="InitializeAsync"/> after construction to start or join a cluster.
     /// </summary>
@@ -177,12 +138,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _sharedResources = sharedResources;
         _messagingClient = messagingClient;
         _broadcaster = broadcasterFactory.Create();
-        _fdFactory = edgeFailureDetector;
+        _failureDetectorFactory = edgeFailureDetector;
         _consensusCoordinatorFactory = consensusCoordinatorFactory;
         _viewAccessor = viewAccessor;
         _metrics = metrics;
         _log = new MembershipServiceLogger(logger);
-        _sendQueue = Channel.CreateUnbounded<AlertMessage>();
+        _alertSendQueue = Channel.CreateUnbounded<AlertMessage>();
         _consensusInstance = _consensusCoordinatorFactory.Create(_myAddr, _membershipView.ConfigurationId, _membershipView.Size, _broadcaster);
 
         // Create linked CTS so background tasks stop on either StopAsync or SharedResources shutdown
@@ -340,6 +301,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             hasher.Append(seed.Hostname.Span);
             hasher.Append(BitConverter.GetBytes(seed.Port));
         }
+
         return (long)hasher.GetCurrentHashAsUInt64();
     }
 
@@ -419,8 +381,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                         {
                             retryDelay = _options.JoinRetryMaxDelay;
                         }
+
                         continue;
                     }
+
                     break;
 
                 case JoinAttemptStatus.Failed:
@@ -436,8 +400,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                         {
                             retryDelay = _options.JoinRetryMaxDelay;
                         }
+
                         continue;
                     }
+
                     break;
             }
 
@@ -532,6 +498,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             {
                 ringNumbersPerObserver[observer] = value = [];
             }
+
             ringNumbersPerObserver[observer].Add(ringNumber);
         }
 
@@ -669,11 +636,11 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// - Updating the membership view
     /// - Updating the cut detector
     /// - Updating the broadcaster
-    /// - Disposing old and creating new failure detectors  
+    /// - Disposing old and creating new failure detectors
     /// - Creating new consensus instance
     /// - Publishing the view to the accessor
     /// - Publishing VIEW_CHANGE event
-    /// - Notifying waiting joiners for any nodes that were added
+    /// - Notifying waiting joiners for any nodes that were added.
     /// </summary>
     /// <param name="newView">The new membership view to apply (metadata is embedded in MemberInfo).</param>
     /// <returns>The previous consensus instance that should be disposed by the caller.</returns>
@@ -709,6 +676,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             fd.Dispose();
         }
+
         _failureDetectors.Clear();
 
         // Create new consensus instance
@@ -844,6 +812,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 tcs.TrySetResult(configChangedResponse);
             }
         }
+
         _pendingJoiners.Clear();
     }
 
@@ -1129,6 +1098,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                 {
                     _deferredProposals.Add(proposal);
                 }
+
                 return;
             }
 
@@ -1257,6 +1227,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                         {
                             proposals.Add(deferred);
                         }
+
                         _deferredProposals.Clear();
 
                         _announcedProposal = true;
@@ -1315,6 +1286,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     pendingList = [];
                     _pendingConsensusMessages[messageConfigId] = pendingList;
                 }
+
                 pendingList.Add(request);
 
                 return new ConsensusResponse().ToRapidClusterResponse();
@@ -1344,7 +1316,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     }
 
     /// <summary>
-    /// Propagates the intent of a node to leave the group
+    /// Propagates the intent of a node to leave the group.
     /// </summary>
     private RapidClusterResponse HandleLeaveMessage(RapidClusterRequest request)
     {
@@ -1369,6 +1341,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         // nodes that have advanced past us (e.g., we missed a consensus round).
         var senderConfigId = probeMessage.ConfigurationId.ToConfigurationId();
         var localConfigId = _membershipView.ConfigurationId;
+
         // Only compare if ClusterIds match - a node with empty ClusterId hasn't joined yet
         if (senderConfigId.ClusterId == localConfigId.ClusterId
             && senderConfigId > localConfigId
@@ -1556,29 +1529,29 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// <summary>
     /// Gets the list of endpoints currently in the membership view.
     /// </summary>
-    /// <returns>list of endpoints in the membership view</returns>
+    /// <returns>list of endpoints in the membership view.</returns>
     public List<Endpoint> GetMembershipView() => [.. _membershipView.Members];
 
     /// <summary>
     /// Gets the list of endpoints currently in the membership view.
     /// </summary>
-    /// <returns>list of endpoints in the membership view</returns>
+    /// <returns>list of endpoints in the membership view.</returns>
     public int GetMembershipSize() => _membershipView.Size;
 
     /// <summary>
     /// Gets the list of endpoints currently in the membership view.
     /// </summary>
-    /// <returns>list of endpoints in the membership view</returns>
+    /// <returns>list of endpoints in the membership view.</returns>
     public Dictionary<Endpoint, Metadata> GetMetadata() => new(_membershipView.GetAllMetadata(), EndpointAddressComparer.Instance);
 
     /// <summary>
     /// Queues a AlertMessage to be broadcasted after potentially being batched.
     /// </summary>
-    /// <param name="msg">the AlertMessage to be broadcasted</param>
+    /// <param name="msg">the AlertMessage to be broadcasted.</param>
     private void EnqueueAlertMessage(AlertMessage msg)
     {
         _log.EnqueueAlertMessage(msg.EdgeSrc, msg.EdgeDst, msg.EdgeStatus);
-        _sendQueue.Writer.TryWrite(msg);
+        _alertSendQueue.Writer.TryWrite(msg);
     }
 
     /// <summary>
@@ -1589,7 +1562,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// The batching strategy is:
     /// 1. Wait for the first item to arrive (blocking wait)
     /// 2. Once an item arrives, wait for the batching window to collect more items
-    /// 3. Read all available items and broadcast
+    /// 3. Read all available items and broadcast.
     /// </para>
     /// <para>This ensures low latency for the first item while still allowing batching.</para>
     /// </remarks>
@@ -1604,10 +1577,10 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             try
             {
                 // Wait for at least one item to be available (no timeout, just wait for work)
-                await _sendQueue.Reader.WaitToReadAsync(stoppingToken);
+                await _alertSendQueue.Reader.WaitToReadAsync(stoppingToken);
 
                 // Read the first item that triggered the wait
-                while (_sendQueue.Reader.TryRead(out var msg))
+                while (_alertSendQueue.Reader.TryRead(out var msg))
                 {
                     buffer.Add(msg);
                 }
@@ -1618,7 +1591,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                     await Task.Delay(_options.BatchingWindow, _sharedResources.TimeProvider, stoppingToken);
 
                     // Read any additional items that arrived during the batching window
-                    while (_sendQueue.Reader.TryRead(out var msg))
+                    while (_alertSendQueue.Reader.TryRead(out var msg))
                     {
                         buffer.Add(msg);
                     }
@@ -1676,6 +1649,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             joinerInfo.Metadata = alertMessage.Metadata;
             _log.ExtractJoinerUuidAndMetadata(alertMessage.EdgeDst);
         }
+
         return alertMessage;
     }
 
@@ -1692,6 +1666,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             _log.RejoinSkipped(_myAddr);
             return;
         }
+
         _isRejoining = true;
 
         try
@@ -1781,6 +1756,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _log.RejoinFailedThroughSeed(_myAddr, seed, ex.Message);
+
                 // Try next seed
             }
         }
@@ -1883,6 +1859,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             {
                 ringNumbersPerObserver[observer] = value = [];
             }
+
             value.Add(ringNumber);
         }
 
@@ -2063,6 +2040,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
                         responseConfigId,
                         _membershipView.ConfigurationId);
                 }
+
                 oldConsensus = null;
             }
             else
@@ -2115,7 +2093,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             var subject = subjects[i];
             var ringNumber = i;
-            var fd = _fdFactory.CreateInstance(subject, () => EdgeFailureNotification(subject, configurationId));
+            var fd = _failureDetectorFactory.CreateInstance(subject, () => EdgeFailureNotification(subject, configurationId));
 
             _log.CreatedFailureDetector(subject, ringNumber);
 
@@ -2129,7 +2107,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     /// the status of the edge between the observer and the subject to DOWN.
     /// </summary>
     /// <param name="subject">The subject that has failed.</param>
-    /// <param name="configurationId">Configuration ID when the failure was detected</param>
+    /// <param name="configurationId">Configuration ID when the failure was detected.</param>
     private void EdgeFailureNotification(Endpoint subject, ConfigurationId configurationId)
     {
         _log.EdgeFailureNotificationScheduled(subject, configurationId);
@@ -2183,6 +2161,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
             if (decision.IsFaulted)
             {
                 _log.ConsensusDecidedFaulted(decision.Exception);
+
                 // Consensus failed (e.g., exhausted all rounds during a partition).
                 // Reset state to allow new proposals when alerts arrive.
                 await ResetConsensusStateAfterFailure(consensusInstance);
@@ -2372,6 +2351,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             fd.Dispose();
         }
+
         _failureDetectors.Clear();
 
         // Send leave messages to observers
@@ -2453,6 +2433,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             fd.Dispose();
         }
+
         _failureDetectors.Clear();
 
         _unstableModeTimer.Dispose();
@@ -2462,5 +2443,45 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             await _consensusInstance.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// Result of a single join attempt. Used to avoid exception-based control flow for retryable conditions.
+    /// </summary>
+    private enum JoinAttemptStatus
+    {
+        /// <summary>Join succeeded - response contains valid membership data.</summary>
+        Success,
+
+        /// <summary>Join failed but should be retried (transient error like timeout, network issue).</summary>
+        RetryNeeded,
+
+        /// <summary>Configuration changed during join - retry immediately without consuming an attempt.</summary>
+        ConfigChanged,
+
+        /// <summary>Join failed permanently - should not retry.</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// Result of a single join attempt.
+    /// </summary>
+    private readonly struct JoinAttemptResult(JoinAttemptStatus status, JoinResponse? response, string? failureReason, ConfigurationId? expectedConfigId = null)
+    {
+        public JoinAttemptStatus Status { get; } = status;
+
+        public JoinResponse? Response { get; } = response;
+
+        public string? FailureReason { get; } = failureReason;
+
+        public ConfigurationId? ExpectedConfigId { get; } = expectedConfigId;
+
+        public static JoinAttemptResult Success(JoinResponse response) => new(JoinAttemptStatus.Success, response, failureReason: null);
+
+        public static JoinAttemptResult RetryNeeded(string reason) => new(JoinAttemptStatus.RetryNeeded, response: null, reason);
+
+        public static JoinAttemptResult ConfigChanged(ConfigurationId expectedConfigId) => new(JoinAttemptStatus.ConfigChanged, response: null, failureReason: null, expectedConfigId);
+
+        public static JoinAttemptResult Failed(string reason) => new(JoinAttemptStatus.Failed, response: null, reason);
     }
 }

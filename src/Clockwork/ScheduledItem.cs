@@ -19,13 +19,13 @@ public abstract class ScheduledItem : IDisposable
     public static IComparer<ScheduledItem> Comparer { get; } = ScheduledItemComparer.Instance;
 
     /// <summary>
-    /// The absolute time when this item is due.
+    /// Gets the absolute time when this item is due.
     /// Set internally by <see cref="SimulationTaskQueue"/> when the item is scheduled.
     /// </summary>
     public DateTimeOffset DueTime { get; private set; }
 
     /// <summary>
-    /// The sequence number for ordering items with the same due time.
+    /// Gets the sequence number for ordering items with the same due time.
     /// Set internally by <see cref="SimulationTaskQueue"/> when the item is scheduled.
     /// </summary>
     public long SequenceNumber { get; private set; }

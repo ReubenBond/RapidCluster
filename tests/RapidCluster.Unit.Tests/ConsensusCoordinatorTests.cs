@@ -17,6 +17,7 @@ namespace RapidCluster.Unit.Tests;
 public class ConsensusCoordinatorTests : IAsyncLifetime
 {
     private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
+
     private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
     private readonly FakeTimeProvider _timeProvider = new();
@@ -31,14 +32,14 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         {
             await coordinator.DisposeAsync();
         }
+
         foreach (var client in _clients)
         {
             await client.DisposeAsync();
         }
+
         GC.SuppressFinalize(this);
     }
-
-    #region Construction Tests
 
     [Fact]
     public void Constructor_CreatesValidInstance()
@@ -62,10 +63,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             Assert.False(coordinator.Decided.IsCompleted);
         }
     }
-
-    #endregion
-
-    #region Propose Tests
 
     [Fact]
     public void Propose_StartsConsensusLoop()
@@ -101,10 +98,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         Assert.True(coordinator.Decided.IsCompleted);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => coordinator.Decided);
     }
-
-    #endregion
-
-    #region HandleMessages Tests
 
     [Fact]
     public void HandleMessages_FastRoundPhase2B_DoesNotThrow()
@@ -221,10 +214,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         Assert.Throws<ArgumentException>(() => coordinator.HandleMessages(request, TestContext.Current.CancellationToken));
     }
 
-    #endregion
-
-    #region Fast Round Decision Tests
-
     [Fact]
     public void FastRound_VotesAreAccepted()
     {
@@ -284,10 +273,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         Assert.False(coordinator.Decided.IsCompleted);
     }
 
-    #endregion
-
-    #region Dispose Tests
-
     [Fact]
     public async Task DisposeAsync_CancelsOngoingConsensus()
     {
@@ -331,10 +316,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => coordinator.Decided);
     }
 
-    #endregion
-
-    #region Concurrent Message Handling Tests
-
     [Fact]
     public async Task HandleMessages_ThreadSafe_DoesNotThrow()
     {
@@ -363,10 +344,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         // Should not throw
         await Task.WhenAll(tasks);
     }
-
-    #endregion
-
-    #region Classic Round Event-Driven Tests
 
     [Fact]
     public async Task ClassicRound_DecidesWithoutWaitingForTimeout()
@@ -517,21 +494,17 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         }
     }
 
-    #endregion
-
-    #region Fast Round Early Abandonment Tests
-
     /// <summary>
     /// Verifies the fast round threshold calculation for various cluster sizes.
-    /// Fast Paxos threshold = N - floor((N-1)/4)
+    /// Fast Paxos threshold = N - floor((N-1)/4).
     /// </summary>
     [Theory]
-    [InlineData(3, 3)]   // f=0, threshold=3 (all must agree)
-    [InlineData(4, 4)]   // f=0, threshold=4 (all must agree)
-    [InlineData(5, 4)]   // f=1, threshold=4
-    [InlineData(6, 5)]   // f=1, threshold=5
-    [InlineData(9, 7)]   // f=2, threshold=7
-    [InlineData(10, 8)]  // f=2, threshold=8
+    [InlineData(3, 3)] // f=0, threshold=3 (all must agree)
+    [InlineData(4, 4)] // f=0, threshold=4 (all must agree)
+    [InlineData(5, 4)] // f=1, threshold=4
+    [InlineData(6, 5)] // f=1, threshold=5
+    [InlineData(9, 7)] // f=2, threshold=7
+    [InlineData(10, 8)] // f=2, threshold=8
     [InlineData(13, 10)] // f=3, threshold=10
     public void FastRound_ThresholdCalculation_IsCorrect(int membershipSize, int expectedThreshold)
     {
@@ -553,7 +526,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     /// <para>
     /// Scenario: 5 nodes, threshold=4
     /// - 2 votes for proposal A
-    /// - 2 votes for proposal B  
+    /// - 2 votes for proposal B
     /// - 1 remaining voter
     /// Neither A nor B can reach 4 votes, so we should abandon.
     /// </para>
@@ -921,7 +894,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) => broadcasted.Enqueue(request);
 
-        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) => broadcasted.Enqueue(request);// No delivery failures reported
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) => broadcasted.Enqueue(request); // No delivery failures reported
     }
 
     /// <summary>
@@ -944,10 +917,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             }
         }
     }
-
-    #endregion
-
-    #region Factory Tests
 
     [Fact]
     public async Task Factory_CreatesCoordinatorWithCorrectConfig()
@@ -974,10 +943,6 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         Assert.NotNull(coordinator);
         Assert.False(coordinator.Decided.IsCompleted);
     }
-
-    #endregion
-
-    #region Helper Methods
 
     private ConsensusCoordinator CreateCoordinator(
         Endpoint myAddr,
@@ -1030,12 +995,9 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             endpoint.NodeId = Utils.GetNextNodeId();
             proposal.Members.Add(endpoint);
         }
+
         return proposal;
     }
-
-    #endregion
-
-    #region Test Doubles
 
     /// <summary>
     /// Simple test broadcaster that does nothing.
@@ -1043,7 +1005,9 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     private sealed class TestBroadcaster : IBroadcaster
     {
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) { }
+
         public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
+
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
     }
 
@@ -1053,8 +1017,10 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     private sealed class TestMessagingClient : IMessagingClient
     {
         public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
+
         public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new RapidClusterResponse());
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
@@ -1064,6 +1030,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     private sealed class TestMembershipViewAccessor(int membershipSize = 3) : IMembershipViewAccessor
     {
         public MembershipView CurrentView { get; } = Utils.CreateMembershipView(membershipSize);
+
         public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
 
@@ -1087,9 +1054,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 meter.Dispose();
             }
+
             _meters.Clear();
         }
     }
-
-    #endregion
 }

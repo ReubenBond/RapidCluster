@@ -21,6 +21,7 @@ internal sealed class SimulationLogManager : IDisposable
     private const long MaxFullLogSizeBytes = 100 * 1024 * 1024;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SimulationLogManager"/> class.
     /// Creates a new log manager for a simulation.
     /// </summary>
     /// <param name="timeProvider">The time provider for timestamps.</param>
@@ -112,6 +113,7 @@ internal sealed class SimulationLogManager : IDisposable
         {
             sanitized.Append(invalidChars.Contains(c) ? '_' : c);
         }
+
         // Truncate to a reasonable length to avoid path length issues
         var result = sanitized.ToString();
         return result.Length > 100 ? result[..100] : result;

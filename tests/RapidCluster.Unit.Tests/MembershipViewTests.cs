@@ -14,7 +14,7 @@ public class MembershipViewTests
     private const int K = 10;
 
     /// <summary>
-    /// Add a single node and verify whether it appears on all rings
+    /// Add a single node and verify whether it appears on all rings.
     /// </summary>
     [Fact]
     public void OneRingAddition()
@@ -38,7 +38,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Add multiple nodes and verify whether they appear on all rings
+    /// Add multiple nodes and verify whether they appear on all rings.
     /// </summary>
     [Fact]
     public void MultipleRingAdditions()
@@ -62,7 +62,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Add multiple nodes twice and verify whether the rings reject duplicates
+    /// Add multiple nodes twice and verify whether the rings reject duplicates.
     /// </summary>
     [Fact]
     public void RingReAdditions()
@@ -99,7 +99,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Delete nodes that were never added and verify whether the object rejects those attempts
+    /// Delete nodes that were never added and verify whether the object rejects those attempts.
     /// </summary>
     [Fact]
     public void RingDeletionsOnly()
@@ -187,7 +187,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify the monitoring relationships in a two node setting
+    /// Verify the monitoring relationships in a two node setting.
     /// </summary>
     [Fact]
     public void MonitoringRelationshipTwoNodes()
@@ -208,7 +208,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify the monitoring relationships in a three node setting with delete
+    /// Verify the monitoring relationships in a three node setting with delete.
     /// </summary>
     [Fact]
     public void MonitoringRelationshipThreeNodesWithDelete()
@@ -226,6 +226,7 @@ public class MembershipViewTests
         // With 3 nodes and max K=10, actual ring count is clamped to 2
         Assert.Equal(view.RingCount, view.GetSubjectsOf(n1).Length);
         Assert.Equal(view.RingCount, view.GetObserversOf(n1).Length);
+
         // With 2 rings and 3 nodes, there may be 1 or 2 unique subjects/observers
         // depending on hash ordering
         Assert.True(view.GetSubjectsOf(n1).ToHashSet().Count >= 1);
@@ -317,7 +318,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify configuration ID changes with membership changes
+    /// Verify configuration ID changes with membership changes.
     /// </summary>
     [Fact]
     public void ConfigurationIdChanges()
@@ -354,7 +355,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify membership size tracking
+    /// Verify membership size tracking.
     /// </summary>
     [Fact]
     public void MembershipSize()
@@ -378,7 +379,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify IsHostPresent method
+    /// Verify IsHostPresent method.
     /// </summary>
     [Fact]
     public void HostPresence()
@@ -398,7 +399,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify safe to join checks
+    /// Verify safe to join checks.
     /// </summary>
     [Fact]
     public void SafeToJoinChecks()
@@ -420,7 +421,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify the monitoring relationships in a multi node setting
+    /// Verify the monitoring relationships in a multi node setting.
     /// </summary>
     [Fact]
     public void MonitoringRelationshipMultipleNodes()
@@ -442,13 +443,13 @@ public class MembershipViewTests
         {
             var numSubjects = view.GetSubjectsOf(list[i]).Length;
             var numObservers = view.GetObserversOf(list[i]).Length;
-            Assert.True(K == numSubjects, string.Create(CultureInfo.InvariantCulture, $"NumSubjects: {numSubjects}"));
-            Assert.True(K == numObservers, string.Create(CultureInfo.InvariantCulture, $"NumObservers: {numObservers}"));
+            Assert.True(numSubjects == K, string.Create(CultureInfo.InvariantCulture, $"NumSubjects: {numSubjects}"));
+            Assert.True(numObservers == K, string.Create(CultureInfo.InvariantCulture, $"NumObservers: {numObservers}"));
         }
     }
 
     /// <summary>
-    /// Verify the monitoring relationships during bootstrap
+    /// Verify the monitoring relationships during bootstrap.
     /// </summary>
     [Fact]
     public void MonitoringRelationshipBootstrap()
@@ -461,6 +462,7 @@ public class MembershipViewTests
 
         var joiningNode = Utils.HostFromParts("127.0.0.1", serverPort + 1);
         var expectedObservers = view.GetExpectedObserversOf(joiningNode);
+
         // With 1 node, actual ring count is clamped to 1
         Assert.Equal(view.RingCount, expectedObservers.Length);
         Assert.Single(expectedObservers.Distinct());
@@ -468,7 +470,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify the monitoring relationships during bootstrap with up to K nodes
+    /// Verify the monitoring relationships during bootstrap with up to K nodes.
     /// </summary>
     [Fact]
     public void MonitoringRelationshipBootstrapMultiple()
@@ -497,11 +499,11 @@ public class MembershipViewTests
         // The final view has 20 nodes, so ring count = min(K, 19) = 10
         // Expected observers should be equal to the ring count
         Assert.True(numObservers > 0);
-        Assert.True(K >= numObservers);
+        Assert.True(numObservers <= K);
     }
 
     /// <summary>
-    /// Test for adding same host again (should throw NodeAlreadyInRingException)
+    /// Test for adding same host again (should throw NodeAlreadyInRingException).
     /// </summary>
     [Fact]
     public void NodeAdditionSameHostThrows()
@@ -592,7 +594,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify that ToBuilder creates a proper builder from a view
+    /// Verify that ToBuilder creates a proper builder from a view.
     /// </summary>
     [Fact]
     public void ToBuilderAndBuild()
@@ -624,7 +626,7 @@ public class MembershipViewTests
     }
 
     /// <summary>
-    /// Verify that builder becomes sealed after Build is called
+    /// Verify that builder becomes sealed after Build is called.
     /// </summary>
     [Fact]
     public void BuilderBecomesSealed()
@@ -647,8 +649,6 @@ public class MembershipViewTests
         Assert.Throws<InvalidOperationException>(() => _ = builder.MaxRingCount);
     }
 
-    #region Property-Based Tests
-
     /// <summary>
     /// Generator for a list of unique endpoints with their NodeIds.
     /// </summary>
@@ -657,8 +657,7 @@ public class MembershipViewTests
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
-            ).Select((octets, ports, nodeIds) =>
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)).Select((octets, ports, nodeIds) =>
             {
                 var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
@@ -671,6 +670,7 @@ public class MembershipViewTests
                     };
                     result.Add(endpoint);
                 }
+
                 return result;
             }));
     }
@@ -691,6 +691,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Ring count is clamped: Math.Clamp(k, 1, Math.Max(1, nodeCount - 1))
@@ -710,6 +711,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 return view.Size == nodes.Count;
@@ -727,6 +729,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Each ring should have the same number of elements as there are nodes
@@ -736,6 +739,7 @@ public class MembershipViewTests
                     var ring = view.GetRing(ringNumber);
                     if (ring.Length != nodes.Count) return false;
                 }
+
                 return true;
             });
     }
@@ -751,6 +755,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // All added nodes should be present
@@ -769,6 +774,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var testNode = nodes[0];
@@ -790,6 +796,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var testNode = nodes[0];
@@ -811,6 +818,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // IsMember and IsHostPresent should return the same result for all nodes
@@ -837,6 +845,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var testNode = nodes[0];
@@ -858,6 +867,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var testNode = nodes[0];
@@ -880,6 +890,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 var observer = nodes[0];
@@ -892,6 +903,7 @@ public class MembershipViewTests
                     if (ringNumbers.Length == 0) return false;
                     if (ringNumbers.Any(r => r < 0 || r >= view.RingCount)) return false;
                 }
+
                 return true;
             });
     }
@@ -907,6 +919,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // All added endpoints should be in Members
@@ -926,6 +939,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Get configuration and verify it contains the same data
@@ -946,6 +960,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Existing hosts should not be safe to join
@@ -965,6 +980,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // New host should be safe to join
@@ -984,6 +1000,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view1 = builder.Build();
 
                 // Create a new builder and modify it
@@ -1008,6 +1025,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view1 = builder.Build();
 
                 // Delete a node
@@ -1034,6 +1052,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // All rings should contain the same set of nodes (just in different order)
@@ -1044,6 +1063,7 @@ public class MembershipViewTests
                     var ringNodes = ring.ToHashSet();
                     if (!ringNodes.SetEquals(expectedNodes)) return false;
                 }
+
                 return true;
             });
     }
@@ -1059,6 +1079,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // For a new joining node, expected observers count equals ring count
@@ -1110,6 +1131,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Negative index should throw
@@ -1137,6 +1159,7 @@ public class MembershipViewTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // For each node, if B is an observer of A, then A is a subject of B
@@ -1150,9 +1173,8 @@ public class MembershipViewTests
                             return false;
                     }
                 }
+
                 return true;
             });
     }
-
-    #endregion
 }

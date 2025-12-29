@@ -7,6 +7,7 @@ public sealed class NodeNotInRingException : Exception
     public NodeNotInRingException(Endpoint node) : this(node?.ToString() ?? throw new ArgumentNullException(nameof(node)))
     {
     }
+
     public NodeNotInRingException()
     {
     }

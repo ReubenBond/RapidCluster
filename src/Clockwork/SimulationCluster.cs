@@ -23,6 +23,7 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SimulationCluster{TNode}"/> class.
     /// Initializes a new simulation cluster with the specified seed.
     /// </summary>
     /// <param name="seed">The seed for deterministic random number generation.</param>
@@ -52,12 +53,12 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
     public int Seed { get; }
 
     /// <summary>
-    /// A cancellation token used to signal when the simulation is being torn down.
+    /// Gets a cancellation token used to signal when the simulation is being torn down.
     /// </summary>
     public CancellationToken TeardownCancellationToken { get; }
 
     /// <summary>
-    /// Maximum simulated time to advance before considering the simulation stuck.
+    /// Gets or sets maximum simulated time to advance before considering the simulation stuck.
     /// Default is 10 minutes of simulated time.
     /// </summary>
     public TimeSpan MaxSimulatedTimeAdvance { get; set; } = TimeSpan.FromMinutes(10);
@@ -141,6 +142,7 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
         {
             throw new InvalidOperationException($"Node with address {key} already exists");
         }
+
         OnNodeRegistered(node);
     }
 
@@ -250,6 +252,7 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
             {
                 Clock.Advance(timeDelta);
             }
+
             timeAdvanceCount++;
 
             // Safety check: if we've advanced time many times without executing tasks, we might be stuck
@@ -353,6 +356,7 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
             {
                 Clock.Advance(timeDelta);
             }
+
             timeAdvanceCount++;
 
             // Safety check: if we've advanced time many times without executing tasks, we might be stuck
@@ -434,8 +438,6 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
         return RunUntilIdleCore(maxSimulatedTime: null, remainingIterations) < remainingIterations;
     }
 
-    #region Logging hooks for derived classes
-
     /// <summary>Called when a RunUntil condition is met.</summary>
     protected virtual void OnConditionMet(int iterations) { }
 
@@ -459,8 +461,6 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
 
     /// <summary>Called when time is about to be advanced.</summary>
     protected virtual void OnTimeAdvancing(TimeSpan delta) { }
-
-    #endregion
 
     /// <summary>
     /// Safely cancels a CancellationTokenSource, catching and optionally logging any exceptions.

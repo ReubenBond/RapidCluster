@@ -41,6 +41,7 @@ internal sealed partial class GrpcClient(
     private readonly struct LoggableEndpoint(Endpoint endpoint)
     {
         private readonly string _display = endpoint.GetNetworkAddressString();
+
         public override readonly string ToString() => _display;
     }
 
@@ -173,6 +174,7 @@ internal sealed partial class GrpcClient(
         catch (OperationCanceledException)
         {
             stopwatch.Stop();
+
             // User cancellation - don't invoke callback but still record metrics
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "Cancelled");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "Cancelled", stopwatch);

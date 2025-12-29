@@ -219,15 +219,13 @@ public class ListEndpointComparerTests
         Assert.Same(instance1, instance2);
     }
 
-    #region Property-Based Tests
-
     /// <summary>
     /// Generator for valid endpoints.
     /// </summary>
     private static readonly Gen<Endpoint> GenEndpoint =
         Gen.Int[1, 255].Select(
-            Gen.Int[1000, 65535]  // Port
-        ).Select((octet, port) => new Endpoint
+            Gen.Int[1000, 65535]) // Port
+        .Select((octet, port) => new Endpoint
         {
             Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{octet}")),
             Port = port,
@@ -241,8 +239,7 @@ public class ListEndpointComparerTests
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
-            ).Select((octets, ports, nodeIdSeeds) =>
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)).Select((octets, ports, nodeIdSeeds) =>
             {
                 var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
@@ -255,6 +252,7 @@ public class ListEndpointComparerTests
                     };
                     result.Add(endpoint);
                 }
+
                 return result;
             }));
     }
@@ -308,10 +306,6 @@ public class ListEndpointComparerTests
                 return !comparer.Equals(list1, list2);
             });
     }
-
-    #endregion
-
-    #region MembershipProposalComparer Tests
 
     [Fact]
     public void MembershipProposalComparer_Compare_OrdersByConfigurationId()
@@ -388,8 +382,7 @@ public class ListEndpointComparerTests
             member.NodeId = counter++;
             proposal.Members.Add(member);
         }
+
         return proposal;
     }
-
-    #endregion
 }

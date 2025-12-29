@@ -24,7 +24,7 @@ internal sealed class MembershipViewBuilder
     private bool _isSealed;
 
     /// <summary>
-    /// Initializes a new instance of the MembershipViewBuilder class with the specified maximum number of rings.
+    /// Initializes a new instance of the <see cref="MembershipViewBuilder"/> class with the specified maximum number of rings.
     /// </summary>
     /// <param name="maxRingCount">Maximum number of monitoring rings to maintain. Must be positive.
     /// The actual ring count in the built view may be less if there are insufficient nodes
@@ -48,6 +48,7 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MembershipViewBuilder"/> class.
     /// Initializes a new MembershipViewBuilder from an existing MembershipView.
     /// Uses the view's current ring count as the maximum.
     /// </summary>
@@ -58,6 +59,7 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MembershipViewBuilder"/> class.
     /// Initializes a new MembershipViewBuilder from an existing MembershipView with a specified max ring count.
     /// Use this overload when the cluster may grow and need more rings than currently exist.
     /// </summary>
@@ -91,6 +93,7 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MembershipViewBuilder"/> class.
     /// Used to bootstrap a membership view from a collection of MemberInfo objects.
     /// </summary>
     /// <param name="maxRingCount">Maximum number of monitoring rings to maintain. Must be positive.
@@ -126,6 +129,7 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MembershipViewBuilder"/> class.
     /// Used to bootstrap a membership view from the fields of a MembershipView.Configuration object.
     /// </summary>
     /// <param name="maxRingCount">Maximum number of monitoring rings to maintain. Must be positive.
@@ -139,6 +143,7 @@ internal sealed class MembershipViewBuilder
     }
 
     private static int ComputeRingCount(int ringCount, int nodeCount) =>
+
         // There is no reason to have more rings than there are nodes.
         // For one or two nodes, there should be one ring.
         // For more nodes, there should be at most one less ring than there are nodes.
@@ -308,6 +313,7 @@ internal sealed class MembershipViewBuilder
 
             comparator.RemoveMemberInfo(memberInfo);
         }
+
         _memberInfoByEndpoint.Remove(node);
 
         return this;
@@ -413,14 +419,14 @@ internal sealed class MembershipViewBuilder
     ///    - Use xxhash ranking to deterministically select among candidates.
     /// 3. For each ring r with offset d_r:
     ///    - successor_r(O[i]) = O[(i + d_r) mod N]
-    ///    - predecessor_r(O[i]) = O[(i - d_r + N) mod N]
+    ///    - predecessor_r(O[i]) = O[(i - d_r + N) mod N].
     /// </para>
     /// <para>
     /// This guarantees:
     /// - Each node has exactly K unique successors (monitors K unique nodes)
     /// - Each node has exactly K unique predecessors (is monitored by K unique nodes)
     /// - The construction is deterministic (same on all nodes)
-    /// - No algorithmic deadlock (pure computation)
+    /// - No algorithmic deadlock (pure computation).
     /// </para>
     /// </summary>
     private (ImmutableArray<ImmutableArray<MemberInfo>> rings, ImmutableArray<int> offsets) BuildUniqueMonitoringRings(int ringCount)
@@ -465,6 +471,7 @@ internal sealed class MembershipViewBuilder
         for (var d = 1; d < n; d++)
         {
             var isCoprime = Gcd(d, n) == 1;
+
             // Use xxhash to rank offsets deterministically
             BinaryPrimitives.WriteInt32LittleEndian(rankInput, d);
             BinaryPrimitives.WriteInt32LittleEndian(rankInput[4..], n);
@@ -499,6 +506,7 @@ internal sealed class MembershipViewBuilder
             b = a % b;
             a = t;
         }
+
         return a;
     }
 
@@ -619,6 +627,7 @@ internal sealed class MembershipViewBuilder
             {
                 hash = ComputeEndpointHash(_seed, endpoint);
             }
+
             return hash;
         }
     }

@@ -12,10 +12,12 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
 
     [LoggerMessage(EventName = nameof(Initialized), Level = LogLevel.Debug, Message = "ConsensusCoordinator initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
     private partial void InitializedCore(LoggableEndpoint myAddr, ConfigurationId configId, int membershipSize);
+
     public void Initialized(Endpoint myAddr, ConfigurationId configId, int membershipSize) => InitializedCore(new(myAddr), configId, membershipSize);
 
     [LoggerMessage(EventName = nameof(Propose), Level = LogLevel.Debug, Message = "Propose: starting consensus loop with proposal={Proposal}")]
     private partial void ProposeCore(LoggableMembershipProposal proposal);
+
     public void Propose(MembershipProposal? proposal) => ProposeCore(new(proposal));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Starting fast round (round 1)")]
@@ -23,6 +25,7 @@ internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordi
 
     [LoggerMessage(EventName = nameof(ConsensusDecided), Level = LogLevel.Debug, Message = "Consensus decided (configId={ConfigId}): {Decision}")]
     private partial void ConsensusDecidedCore(ConfigurationId configId, LoggableMembershipProposal decision);
+
     public void ConsensusDecided(ConfigurationId configId, MembershipProposal? decision) => ConsensusDecidedCore(configId, new(decision));
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Fast round timed out or cancelled (configId={ConfigId}) after {Timeout}, falling back to classic Paxos")]

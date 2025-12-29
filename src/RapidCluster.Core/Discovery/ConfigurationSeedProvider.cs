@@ -18,6 +18,7 @@ public sealed class ConfigurationSeedProvider : ISeedProvider
     private readonly IOptionsMonitor<RapidClusterOptions> _optionsMonitor;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="ConfigurationSeedProvider"/> class.
     /// Creates a new ConfigurationSeedProvider.
     /// </summary>
     /// <param name="optionsMonitor">The options monitor to read seed addresses from.</param>

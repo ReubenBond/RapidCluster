@@ -30,7 +30,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
     }
 
     /// <summary>
-    /// Gets whether any violations have been recorded.
+    /// Gets a value indicating whether gets whether any violations have been recorded.
     /// </summary>
     public bool HasViolations
     {
@@ -102,7 +102,6 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
         // A split-brain occurs when:
         // 1. Two nodes have non-overlapping membership views
         // 2. Both nodes are initialized and think they're operational
-
         for (var i = 0; i < nodes.Count; i++)
         {
             var node1 = nodes[i];

@@ -95,6 +95,7 @@ internal static class MetadataConversions
         {
             pb.Metadata_.Add(kvp.Key, ByteString.CopyFrom(kvp.Value));
         }
+
         return pb;
     }
 
@@ -115,6 +116,7 @@ internal static class MetadataConversions
         {
             pb.Metadata_.Add(kvp.Key, ByteString.CopyFrom(kvp.Value));
         }
+
         return pb;
     }
 }

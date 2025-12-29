@@ -13,8 +13,6 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class MembershipProposalEqualityTests
 {
-    #region Basic Equality Tests
-
     [Fact]
     public void Equals_SameReference_ReturnsTrue()
     {
@@ -51,10 +49,6 @@ public class MembershipProposalEqualityTests
         Assert.True(proposal1.Equals(proposal2));
     }
 
-    #endregion
-
-    #region ConfigurationId Tests
-
     [Fact]
     public void Equals_DifferentConfigVersion_ReturnsFalse()
     {
@@ -74,10 +68,6 @@ public class MembershipProposalEqualityTests
 
         Assert.False(proposal1.Equals(proposal2));
     }
-
-    #endregion
-
-    #region Members List Tests
 
     [Fact]
     public void Equals_DifferentMemberCount_ReturnsFalse()
@@ -155,10 +145,6 @@ public class MembershipProposalEqualityTests
         Assert.True(proposal1.Equals(proposal2));
     }
 
-    #endregion
-
-    #region MaxNodeId Tests
-
     [Fact]
     public void Equals_DifferentMaxNodeId_ReturnsFalse()
     {
@@ -178,10 +164,6 @@ public class MembershipProposalEqualityTests
 
         Assert.True(proposal1.Equals(proposal2));
     }
-
-    #endregion
-
-    #region Metadata Tests
 
     [Fact]
     public void Equals_EmptyMetadata_ReturnsTrue()
@@ -244,10 +226,6 @@ public class MembershipProposalEqualityTests
         Assert.False(proposal1.Equals(proposal2));
     }
 
-    #endregion
-
-    #region Dictionary Key Tests (Critical for Fast Paxos)
-
     [Fact]
     public void Dictionary_IdenticalProposals_AreSameKey()
     {
@@ -306,10 +284,6 @@ public class MembershipProposalEqualityTests
         Assert.Equal(3, dict.Values.First());
     }
 
-    #endregion
-
-    #region MembershipProposalComparer vs Built-in Equals Tests
-
     [Fact]
     public void Comparer_AndBuiltInEquals_AreConsistent_ForIdenticalProposals()
     {
@@ -362,7 +336,6 @@ public class MembershipProposalEqualityTests
         // This documents an important behavioral difference:
         // - MembershipProposalComparer only considers ConfigurationId and Members
         // - Built-in Equals considers ALL fields including MaxNodeId and Metadata
-
         var endpoint = Utils.HostFromParts("10.0.0.1", 5001, 1);
         var proposal1 = CreateProposal([endpoint.Clone()], configVersion: 1, maxNodeId: 10);
         var proposal2 = CreateProposal([endpoint.Clone()], configVersion: 1, maxNodeId: 20);
@@ -372,13 +345,10 @@ public class MembershipProposalEqualityTests
 
         // Comparer ignores MaxNodeId - considers them equal
         Assert.True(comparerResult);
+
         // Built-in Equals considers MaxNodeId - considers them different
         Assert.False(builtInResult);
     }
-
-    #endregion
-
-    #region GetHashCode Tests
 
     [Fact]
     public void GetHashCode_IdenticalProposals_SameHashCode()
@@ -409,26 +379,20 @@ public class MembershipProposalEqualityTests
         Assert.True(hashCodes.Count >= 5, $"Expected at least 5 unique hash codes, but got {hashCodes.Count}");
     }
 
-    #endregion
-
-    #region Property-Based Tests
-
     private static Gen<Endpoint> GenEndpoint() =>
         Gen.Int[1, 255].Select(
             Gen.Int[1000, 65535],
-            Gen.Long[1, 1000]
-        ).Select((octet, port, nodeId) => new Endpoint
-        {
-            Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"10.0.0.{octet}")),
-            Port = port,
-            NodeId = nodeId,
-        });
+            Gen.Long[1, 1000]).Select((octet, port, nodeId) => new Endpoint
+            {
+                Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"10.0.0.{octet}")),
+                Port = port,
+                NodeId = nodeId,
+            });
 
     private static Gen<MembershipProposal> GenProposal(int minMembers, int maxMembers) =>
         Gen.Int[minMembers, maxMembers].Select(
             Gen.Long[1, 100],
-            Gen.Long[1, 1000]
-        ).SelectMany((count, configVersion, clusterId) =>
+            Gen.Long[1, 1000]).SelectMany((count, configVersion, clusterId) =>
             GenEndpoint().Array[count].Select(endpoints =>
             {
                 var proposal = new MembershipProposal
@@ -466,6 +430,7 @@ public class MembershipProposalEqualityTests
             {
                 return proposal.GetHashCode() == clone.GetHashCode();
             }
+
             return true; // If not equal, no constraint on hash code
         });
     }
@@ -479,10 +444,6 @@ public class MembershipProposalEqualityTests
             return proposal.Equals(clone) && clone.Equals(proposal);
         });
     }
-
-    #endregion
-
-    #region Helper Methods
 
     private static MembershipProposal CreateProposal(
         Endpoint[] endpoints,
@@ -522,6 +483,4 @@ public class MembershipProposalEqualityTests
         metadata.Metadata_.Add(key, ByteString.CopyFromUtf8(value));
         return metadata;
     }
-
-    #endregion
 }

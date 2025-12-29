@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace RapidCluster;
 
 /// <summary>
-/// Represents a configuration identifier that combines a stable <see cref="ClusterId"/> 
+/// Represents a configuration identifier that combines a stable <see cref="ClusterId"/>
 /// with a monotonically incrementing version counter.
 /// </summary>
 /// <remarks>
@@ -45,6 +45,7 @@ public readonly struct ConfigurationId(ClusterId clusterId, long version) : IEqu
             throw new InvalidOperationException(
                 $"Cannot compare ConfigurationIds with different ClusterIds: {ClusterId} vs {other.ClusterId}");
         }
+
         return Version.CompareTo(other.Version);
     }
 
@@ -61,10 +62,15 @@ public readonly struct ConfigurationId(ClusterId clusterId, long version) : IEqu
     public override string ToString() => $"ConfigurationId({ClusterId}, v{Version})";
 
     public static bool operator ==(ConfigurationId left, ConfigurationId right) => left.Equals(right);
+
     public static bool operator !=(ConfigurationId left, ConfigurationId right) => !left.Equals(right);
+
     public static bool operator <(ConfigurationId left, ConfigurationId right) => left.CompareTo(right) < 0;
+
     public static bool operator <=(ConfigurationId left, ConfigurationId right) => left.CompareTo(right) <= 0;
+
     public static bool operator >(ConfigurationId left, ConfigurationId right) => left.CompareTo(right) > 0;
+
     public static bool operator >=(ConfigurationId left, ConfigurationId right) => left.CompareTo(right) >= 0;
 
     /// <summary>

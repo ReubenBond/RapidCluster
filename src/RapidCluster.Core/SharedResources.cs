@@ -49,7 +49,7 @@ public sealed class SharedResources(
     public CancellationToken ShuttingDownToken { get; } = shuttingDownToken;
 
     /// <summary>
-    /// Gets whether shutdown has been initiated.
+    /// Gets a value indicating whether gets whether shutdown has been initiated.
     /// </summary>
     public bool IsShuttingDown => ShuttingDownToken.IsCancellationRequested;
 }

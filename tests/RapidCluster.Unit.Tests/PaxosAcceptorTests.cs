@@ -9,6 +9,7 @@ namespace RapidCluster.Unit.Tests;
 public sealed class PaxosAcceptorTests
 {
     private static readonly IMeterFactory MeterFactory = new TestMeterFactory();
+
     private static RapidClusterMetrics CreateMetrics() => new(MeterFactory);
 
     [Fact]
@@ -211,7 +212,9 @@ public sealed class PaxosAcceptorTests
     private sealed class NoopBroadcaster : IBroadcaster
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
+
         public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) { }
+
         public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) { }
     }
 
@@ -231,6 +234,7 @@ public sealed class PaxosAcceptorTests
         public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken) => Task.FromResult(new RapidClusterResponse());
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
         public void Dispose() { }
     }
 
@@ -251,6 +255,7 @@ public sealed class PaxosAcceptorTests
             {
                 meter.Dispose();
             }
+
             _meters.Clear();
         }
     }

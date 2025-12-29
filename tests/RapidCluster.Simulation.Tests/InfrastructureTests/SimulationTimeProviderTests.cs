@@ -16,8 +16,11 @@ public class SimulationTimeProviderTests
     private sealed class TestTimeProvider
     {
         public SimulationClock Clock { get; }
+
         public SimulationTaskQueue TaskQueue { get; }
+
         public SimulationTimeProvider TimeProvider { get; }
+
         public DateTimeOffset Start { get; }
 
         public TestTimeProvider(DateTimeOffset? startDateTime = null)
@@ -31,10 +34,15 @@ public class SimulationTimeProviderTests
 
         // Convenience delegations to TimeProvider
         public DateTimeOffset GetUtcNow() => TimeProvider.GetUtcNow();
+
         public long GetTimestamp() => TimeProvider.GetTimestamp();
+
         public long TimestampFrequency => TimeProvider.TimestampFrequency;
+
         public TimeSpan GetElapsedTime(long startingTimestamp) => TimeProvider.GetElapsedTime(startingTimestamp);
+
         public TimeSpan GetElapsedTime(long startingTimestamp, long endingTimestamp) => TimeProvider.GetElapsedTime(startingTimestamp, endingTimestamp);
+
         public ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
             => TimeProvider.CreateTimer(callback, state, dueTime, period);
 
@@ -85,6 +93,7 @@ public class SimulationTimeProviderTests
         public int PendingTimerCount => SimulationTimer.GetPendingTimerCount(TaskQueue);
 
         public void RunOnce() => TaskQueue.RunOnce();
+
         public void RunUntilIdle() => TaskQueue.RunUntilIdle();
     }
 
@@ -459,6 +468,7 @@ public class SimulationTimeProviderTests
         using var timer = p.CreateTimer(_ =>
         {
             callCount++;
+
             // Advance the time with exactly the same amount as the period of the timer.
             // This could lead to an infinite loop where this callback repeatedly gets invoked.
             // A correct implementation will adjust the timer's wake time.
@@ -483,6 +493,7 @@ public class SimulationTimeProviderTests
 state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(3));
+
         // This should throw due to timer1's callback - exceptions propagate from timer callbacks
         var ex = Assert.Throws<InvalidOperationException>(p.RunUntilIdle);
         Assert.Equal("Test exception", ex.Message);

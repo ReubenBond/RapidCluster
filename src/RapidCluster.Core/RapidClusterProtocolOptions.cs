@@ -5,8 +5,8 @@ namespace RapidCluster;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The Rapid protocol uses a K-ring topology where each node monitors K subjects and is monitored 
-/// by K observers. This creates an expander graph with strong connectivity properties that ensures 
+/// The Rapid protocol uses a K-ring topology where each node monitors K subjects and is monitored
+/// by K observers. This creates an expander graph with strong connectivity properties that ensures
 /// healthy processes detect failures with high probability.
 /// </para>
 /// <para>
@@ -17,7 +17,7 @@ namespace RapidCluster;
 /// </list>
 /// </para>
 /// <para>
-/// The constraints from the Rapid paper are: K ≥ 3, K > H ≥ L > 0. The gap (H - L) affects 
+/// The constraints from the Rapid paper are: K ≥ 3, K > H ≥ L > 0. The gap (H - L) affects
 /// the probability of achieving almost-everywhere agreement. Typical values: K=10, H=9, L=3.
 /// </para>
 /// <para>
@@ -37,12 +37,12 @@ public sealed class RapidClusterProtocolOptions
     public const int MinObserversPerSubject = 3;
 
     /// <summary>
-    /// Whether to use in-process transport for testing. Default: false
+    /// Gets or sets a value indicating whether whether to use in-process transport for testing. Default: false.
     /// </summary>
     public bool UseInProcessTransport { get; set; }
 
     /// <summary>
-    /// Whether to use HTTPS for gRPC communication. Default: false (use HTTP)
+    /// Gets or sets a value indicating whether whether to use HTTPS for gRPC communication. Default: false (use HTTP).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -58,32 +58,32 @@ public sealed class RapidClusterProtocolOptions
     public bool UseHttps { get; set; }
 
     /// <summary>
-    /// gRPC request timeout. Default: 10 seconds
+    /// Gets or sets gRPC request timeout. Default: 10 seconds.
     /// </summary>
     public TimeSpan GrpcTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// Number of retries for failed gRPC requests. Default: 5
+    /// Gets or sets number of retries for failed gRPC requests. Default: 5.
     /// </summary>
     public int GrpcDefaultRetries { get; set; } = 5;
 
     /// <summary>
-    /// Timeout for join operations. Default: 5 seconds
+    /// Gets or sets timeout for join operations. Default: 5 seconds.
     /// </summary>
     public TimeSpan GrpcJoinTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Timeout for failure detector probe messages. Default: 500 milliseconds
+    /// Gets or sets timeout for failure detector probe messages. Default: 500 milliseconds.
     /// </summary>
     public TimeSpan GrpcProbeTimeout { get; set; } = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
-    /// Interval between failure detector probes. Default: 1 second
+    /// Gets or sets interval between failure detector probes. Default: 1 second.
     /// </summary>
     public TimeSpan FailureDetectorInterval { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// Window for batching alert messages before broadcasting. Default: 100 milliseconds
+    /// Gets or sets window for batching alert messages before broadcasting. Default: 100 milliseconds.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -107,21 +107,21 @@ public sealed class RapidClusterProtocolOptions
     public TimeSpan BatchingWindow { get; set; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
-    /// Base delay for consensus fallback timeout. Default: 500 milliseconds.
+    /// Gets or sets base delay for consensus fallback timeout. Default: 500 milliseconds.
     /// This is the minimum time to wait before falling back to Classic Paxos
     /// if Fast Paxos hasn't completed. Actual delay includes random jitter.
     /// </summary>
     public TimeSpan ConsensusFallbackTimeoutBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
-    /// Timeout for leave messages. Default: 1.5 seconds
+    /// Gets or sets timeout for leave messages. Default: 1.5 seconds.
     /// </summary>
     public TimeSpan LeaveMessageTimeout { get; set; } = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>
-    /// Number of observers per subject (K in the Rapid paper). Also equals the number of
+    /// Gets or sets number of observers per subject (K in the Rapid paper). Also equals the number of
     /// subjects each node monitors. This determines the number of virtual rings in the
-    /// K-ring monitoring topology. Default: 10
+    /// K-ring monitoring topology. Default: 10.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -136,9 +136,9 @@ public sealed class RapidClusterProtocolOptions
     public int ObserversPerSubject { get; set; } = 10;
 
     /// <summary>
-    /// High watermark threshold for multi-node cut detection (H in the Rapid paper). 
+    /// Gets or sets high watermark threshold for multi-node cut detection (H in the Rapid paper).
     /// A subject enters "stable" report mode when it has received at least H observer reports,
-    /// indicating high-fidelity failure detection that is safe to act upon. Default: 9
+    /// indicating high-fidelity failure detection that is safe to act upon. Default: 9.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -155,10 +155,10 @@ public sealed class RapidClusterProtocolOptions
     public int HighWatermark { get; set; } = 9;
 
     /// <summary>
-    /// Low watermark threshold for multi-node cut detection (L in the Rapid paper).
+    /// Gets or sets low watermark threshold for multi-node cut detection (L in the Rapid paper).
     /// A subject enters "unstable" report mode when it has between L and H reports.
     /// The system delays proposing a view change until all subjects in unstable mode
-    /// transition to stable mode. Default: 3
+    /// transition to stable mode. Default: 3.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -176,32 +176,32 @@ public sealed class RapidClusterProtocolOptions
     public int LowWatermark { get; set; } = 3;
 
     /// <summary>
-    /// Number of consecutive probe failures required before declaring a node down. Default: 3
+    /// Gets or sets number of consecutive probe failures required before declaring a node down. Default: 3.
     /// </summary>
     public int FailureDetectorConsecutiveFailures { get; set; } = 3;
 
     /// <summary>
-    /// Maximum number of times to retry join attempts
+    /// Gets or sets maximum number of times to retry join attempts.
     /// </summary>
     public int MaxJoinRetries { get; set; } = int.MaxValue;
 
     /// <summary>
-    /// Base delay between join retry attempts. Default: 100 milliseconds
+    /// Gets or sets base delay between join retry attempts. Default: 100 milliseconds.
     /// </summary>
     public TimeSpan JoinRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
-    /// Maximum delay between join retry attempts. Default: 5 seconds
+    /// Gets or sets maximum delay between join retry attempts. Default: 5 seconds.
     /// </summary>
     public TimeSpan JoinRetryMaxDelay { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Multiplier for exponential backoff between join retries. Default: 2.0
+    /// Gets or sets multiplier for exponential backoff between join retries. Default: 2.0.
     /// </summary>
     public double JoinRetryBackoffMultiplier { get; set; } = 2.0;
 
     /// <summary>
-    /// Minimum delay before attempting to rejoin after being kicked. Default: 1 second
+    /// Gets or sets minimum delay before attempting to rejoin after being kicked. Default: 1 second.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -217,12 +217,12 @@ public sealed class RapidClusterProtocolOptions
     public TimeSpan RejoinBackoffBase { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// Maximum delay before attempting to rejoin after being kicked. Default: 30 seconds
+    /// Gets or sets maximum delay before attempting to rejoin after being kicked. Default: 30 seconds.
     /// </summary>
     public TimeSpan RejoinBackoffMax { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Timeout for unstable mode in the cut detector. Default: 5 seconds.
+    /// Gets or sets timeout for unstable mode in the cut detector. Default: 5 seconds.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -234,7 +234,7 @@ public sealed class RapidClusterProtocolOptions
     public TimeSpan StaleViewRefreshInterval { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// Timeout for unstable mode in the cut detector. Default: 5 seconds.
+    /// Gets or sets timeout for unstable mode in the cut detector. Default: 5 seconds.
     /// </summary>
     /// <remarks>
     /// <para>

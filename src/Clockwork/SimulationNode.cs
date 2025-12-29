@@ -24,12 +24,12 @@ public abstract class SimulationNode
     public abstract string NetworkAddress { get; }
 
     /// <summary>
-    /// Gets whether this node has been initialized and is ready for operation.
+    /// Gets a value indicating whether gets whether this node has been initialized and is ready for operation.
     /// </summary>
     public abstract bool IsInitialized { get; }
 
     /// <summary>
-    /// Gets whether this node is currently suspended.
+    /// Gets a value indicating whether gets whether this node is currently suspended.
     /// Suspended nodes do not execute tasks from their queue.
     /// </summary>
     public bool IsSuspended => Context.IsSuspended;

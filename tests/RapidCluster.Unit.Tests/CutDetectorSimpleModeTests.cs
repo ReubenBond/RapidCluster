@@ -38,6 +38,7 @@ public class CutDetectorSimpleModeTests
             node.NodeId = Utils.GetNextNodeId();
             builder.RingAdd(node);
         }
+
         return builder.Build();
     }
 
@@ -48,6 +49,7 @@ public class CutDetectorSimpleModeTests
     private static CutDetector CreateDetector(MembershipView view)
     {
         var k = view.RingCount;
+
         // Use k as both H and L (simple mode requires all observers)
         var detector = new CutDetector(k, k, k);
         detector.UpdateView(view);
@@ -72,6 +74,7 @@ public class CutDetectorSimpleModeTests
 
     [Fact]
     public void Constructor_K0_Throws() =>
+
         // MembershipViewBuilder throws on creation with k <= 0
         // This test verifies that the validation happens at the MembershipViewBuilder level,
         // which prevents CutDetector from ever receiving a view with RingCount=0
@@ -286,6 +289,7 @@ public class CutDetectorSimpleModeTests
             EdgeStatus = EdgeStatus.Up,
             ConfigurationId = DefaultConfigId.ToProtobuf(),
         };
+
         // For K=1, only ring 0 is valid, but the message might contain it
         msg.RingNumber.Add(0);
 
@@ -375,8 +379,6 @@ public class CutDetectorSimpleModeTests
         Assert.Empty(result);
     }
 
-    #region Property-Based Tests
-
     /// <summary>
     /// Generator for a list of unique endpoints with their NodeIds.
     /// </summary>
@@ -385,8 +387,7 @@ public class CutDetectorSimpleModeTests
         return Gen.Int[minCount, maxCount].SelectMany(count =>
             Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
-            ).Select((octets, ports, nodeIds) =>
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)).Select((octets, ports, nodeIds) =>
             {
                 var result = new List<Endpoint>(count);
                 for (var i = 0; i < count; i++)
@@ -399,6 +400,7 @@ public class CutDetectorSimpleModeTests
                     };
                     result.Add(endpoint);
                 }
+
                 return result;
             }));
     }
@@ -415,6 +417,7 @@ public class CutDetectorSimpleModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Use actual ring count for iterations
@@ -457,6 +460,7 @@ public class CutDetectorSimpleModeTests
                 {
                     builder.RingAdd(endpoint);
                 }
+
                 var view = builder.Build();
 
                 // Use actual ring count
@@ -486,10 +490,6 @@ public class CutDetectorSimpleModeTests
                 return actualRingCount == 1 ? result.Contains(unknownEndpoint) : result.Count == 0;
             });
     }
-
-    #endregion
-
-    #region Unstable Mode Detection
 
     [Fact]
     public void HasNodesInUnstableMode_ReturnsTrue_WhenPendingProposals()
@@ -527,6 +527,4 @@ public class CutDetectorSimpleModeTests
         Assert.False(detector.HasNodesInUnstableMode());
         Assert.Equal(1, detector.GetNumProposals());
     }
-
-    #endregion
 }

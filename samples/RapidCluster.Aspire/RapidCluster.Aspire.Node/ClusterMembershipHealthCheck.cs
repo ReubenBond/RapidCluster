@@ -36,8 +36,7 @@ internal sealed class ClusterMembershipHealthCheck(IRapidCluster cluster) : IHea
             return Task.FromResult(HealthCheckResult.Degraded("Not a member of any cluster"));
         }
 
-        var data = new Dictionary<string, object>
-(StringComparer.Ordinal)
+        var data = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["MemberCount"] = memberCount,
             ["ConfigurationId"] = configId,

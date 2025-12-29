@@ -817,3 +817,218 @@ dotnet_diagnostic.RCS1194.severity = suggestion
 # RCS1238: Avoid nested ?: operators - valid but sometimes clearer
 dotnet_diagnostic.RCS1238.severity = suggestion
 
+# ============================================================================
+# StyleCop.Analyzers Rules
+# ============================================================================
+# StyleCop is primarily used for SA1110 (opening parenthesis on same line).
+# Most other rules are disabled to match existing project conventions.
+# Rules are organized by category and ID number.
+
+# ----- Documentation Rules (SA1600-SA1651) -----
+# Disabled: Project uses XML doc selectively, not comprehensively
+dotnet_diagnostic.SA1600.severity = warning  # Elements should be documented
+dotnet_diagnostic.SA1601.severity = warning  # Partial elements should be documented
+dotnet_diagnostic.SA1602.severity = warning  # Enumeration items should be documented
+dotnet_diagnostic.SA1603.severity = warning  # Documentation should contain valid XML
+dotnet_diagnostic.SA1604.severity = warning  # Element documentation should have summary
+dotnet_diagnostic.SA1605.severity = warning  # Partial element documentation should have summary
+dotnet_diagnostic.SA1606.severity = warning  # Element documentation should have summary text
+dotnet_diagnostic.SA1607.severity = warning  # Partial element documentation should have summary text
+dotnet_diagnostic.SA1608.severity = warning  # Element documentation should not have default summary
+dotnet_diagnostic.SA1609.severity = warning  # Property documentation should have value
+dotnet_diagnostic.SA1610.severity = warning  # Property documentation should have value text
+dotnet_diagnostic.SA1611.severity = warning  # Element parameters should be documented
+dotnet_diagnostic.SA1612.severity = warning  # Element parameter documentation should match
+dotnet_diagnostic.SA1613.severity = warning  # Element parameter documentation should declare parameter name
+dotnet_diagnostic.SA1614.severity = warning  # Element parameter documentation should have text
+dotnet_diagnostic.SA1615.severity = warning  # Element return value should be documented
+dotnet_diagnostic.SA1616.severity = warning  # Element return value documentation should have text
+dotnet_diagnostic.SA1617.severity = warning  # Void return value should not be documented
+dotnet_diagnostic.SA1618.severity = warning  # Generic type parameters should be documented
+dotnet_diagnostic.SA1619.severity = warning  # Generic type parameters should be documented partial class
+dotnet_diagnostic.SA1620.severity = warning  # Generic type parameter documentation should match
+dotnet_diagnostic.SA1621.severity = warning  # Generic type parameter documentation should declare parameter name
+dotnet_diagnostic.SA1622.severity = warning  # Generic type parameter documentation should have text
+dotnet_diagnostic.SA1623.severity = warning  # Property summary documentation should match accessors
+dotnet_diagnostic.SA1624.severity = warning  # Property summary documentation should omit accessor
+dotnet_diagnostic.SA1625.severity = warning  # Element documentation should not be copied and pasted
+dotnet_diagnostic.SA1626.severity = warning  # Single-line comments should not use documentation style slashes
+dotnet_diagnostic.SA1627.severity = warning  # Documentation text should not be empty
+dotnet_diagnostic.SA1628.severity = warning  # Documentation text should begin with a capital letter
+dotnet_diagnostic.SA1629.severity = warning  # Documentation text should end with a period
+dotnet_diagnostic.SA1630.severity = warning  # Documentation text should contain whitespace
+dotnet_diagnostic.SA1631.severity = none  # Documentation should meet character percentage
+dotnet_diagnostic.SA1632.severity = none  # Documentation text should meet minimum character length
+dotnet_diagnostic.SA1633.severity = none  # File should have header
+dotnet_diagnostic.SA1634.severity = none  # File header should show copyright
+dotnet_diagnostic.SA1635.severity = none  # File header should have copyright text
+dotnet_diagnostic.SA1636.severity = none  # File header copyright text should match
+dotnet_diagnostic.SA1637.severity = none  # File header should contain file name
+dotnet_diagnostic.SA1638.severity = none  # File header file name documentation should match
+dotnet_diagnostic.SA1639.severity = none  # File header should have summary
+dotnet_diagnostic.SA1640.severity = none  # File header should have valid company text
+dotnet_diagnostic.SA1641.severity = none  # File header company name text should match
+dotnet_diagnostic.SA1642.severity = warning  # Constructor summary documentation should begin with standard text
+dotnet_diagnostic.SA1643.severity = warning  # Destructor summary documentation should begin with standard text
+dotnet_diagnostic.SA1644.severity = warning  # Documentation headers should not contain blank lines
+dotnet_diagnostic.SA1645.severity = warning  # Included documentation file does not exist
+dotnet_diagnostic.SA1646.severity = warning  # Included documentation XPath does not exist
+dotnet_diagnostic.SA1647.severity = warning  # Include node does not contain valid file and path
+dotnet_diagnostic.SA1648.severity = warning  # Inheritdoc should be used with inheriting class
+dotnet_diagnostic.SA1649.severity = silent  # File name should match first type name
+dotnet_diagnostic.SA1650.severity = warning  # Element documentation should be spelled correctly
+dotnet_diagnostic.SA1651.severity = warning  # Do not use placeholder elements
+
+# ----- Spacing Rules (SA1000-SA1028) -----
+# Most handled by IDE0055/dotnet format; keep SA1110 for the newline case
+dotnet_diagnostic.SA1000.severity = warning  # Keywords should be spaced correctly (conflicts with IDE0055)
+dotnet_diagnostic.SA1001.severity = warning  # Commas should be spaced correctly
+dotnet_diagnostic.SA1002.severity = warning  # Semicolons should be spaced correctly
+dotnet_diagnostic.SA1003.severity = warning  # Symbols should be spaced correctly
+dotnet_diagnostic.SA1004.severity = warning  # Documentation lines should begin with single space
+dotnet_diagnostic.SA1005.severity = warning  # Single line comments should begin with single space
+dotnet_diagnostic.SA1006.severity = warning  # Preprocessor keywords should not be preceded by space
+dotnet_diagnostic.SA1007.severity = warning  # Operator keyword should be followed by space
+dotnet_diagnostic.SA1008.severity = warning  # Opening parenthesis should be spaced correctly
+dotnet_diagnostic.SA1009.severity = warning  # Closing parenthesis should be spaced correctly
+dotnet_diagnostic.SA1010.severity = warning  # Opening square brackets should be spaced correctly
+dotnet_diagnostic.SA1011.severity = warning  # Closing square brackets should be spaced correctly
+dotnet_diagnostic.SA1012.severity = warning  # Opening braces should be spaced correctly
+dotnet_diagnostic.SA1013.severity = warning  # Closing braces should be spaced correctly
+dotnet_diagnostic.SA1014.severity = warning  # Opening generic brackets should be spaced correctly
+dotnet_diagnostic.SA1015.severity = warning  # Closing generic brackets should be spaced correctly
+dotnet_diagnostic.SA1016.severity = warning  # Opening attribute brackets should be spaced correctly
+dotnet_diagnostic.SA1017.severity = warning  # Closing attribute brackets should be spaced correctly
+dotnet_diagnostic.SA1018.severity = warning  # Nullable type symbols should be spaced correctly
+dotnet_diagnostic.SA1019.severity = warning  # Member access symbols should be spaced correctly
+dotnet_diagnostic.SA1020.severity = warning  # Increment decrement symbols should be spaced correctly
+dotnet_diagnostic.SA1021.severity = warning  # Negative signs should be spaced correctly
+dotnet_diagnostic.SA1022.severity = warning  # Positive signs should be spaced correctly
+dotnet_diagnostic.SA1023.severity = warning  # Dereference and access of symbols should be spaced correctly
+dotnet_diagnostic.SA1024.severity = warning  # Colons should be spaced correctly
+dotnet_diagnostic.SA1025.severity = warning  # Code should not contain multiple whitespace in a row
+dotnet_diagnostic.SA1026.severity = warning  # Code should not contain space after new keyword in implicitly typed array
+dotnet_diagnostic.SA1027.severity = warning  # Use tabs correctly
+dotnet_diagnostic.SA1028.severity = warning  # Code should not contain trailing whitespace
+
+# ----- Readability Rules (SA1100-SA1139) -----
+# Rule enforces X => Disabled: reason
+dotnet_diagnostic.SA1100.severity = none  # Enforces: no base. prefix unless needed => Disabled: base. prefix sometimes useful for clarity
+dotnet_diagnostic.SA1101.severity = none  # Enforces: this. prefix on local calls => Disabled: we don't use this. prefix
+dotnet_diagnostic.SA1102.severity = none  # Enforces: query clause follows previous => Disabled: query formatting handled elsewhere
+dotnet_diagnostic.SA1103.severity = none  # Enforces: query clauses on separate/same lines => Disabled: query formatting handled elsewhere
+dotnet_diagnostic.SA1104.severity = none  # Enforces: query clause on new line after multi-line => Disabled: query formatting handled elsewhere
+dotnet_diagnostic.SA1105.severity = none  # Enforces: multi-line query clauses on own line => Disabled: query formatting handled elsewhere
+dotnet_diagnostic.SA1106.severity = warning  # Enforces: no empty statements => catches accidental ;; or empty if;
+dotnet_diagnostic.SA1107.severity = none  # Enforces: single statement per line => Disabled: multiple statements sometimes acceptable
+dotnet_diagnostic.SA1108.severity = none  # Enforces: no comments inside block statements => Disabled: embedded comments are fine
+dotnet_diagnostic.SA1109.severity = none  # Enforces: no regions inside block statements => Disabled: regions disabled via SA1124
+dotnet_diagnostic.SA1110.severity = warning  # Enforces: opening parenthesis on declaration line => THE MAIN RULE WE WANT
+dotnet_diagnostic.SA1111.severity = warning  # Enforces: closing parenthesis on line of last parameter => pairs with SA1110
+dotnet_diagnostic.SA1112.severity = none  # Enforces: closing paren on same line for empty params => Disabled: handled elsewhere
+dotnet_diagnostic.SA1113.severity = none  # Enforces: comma on same line as previous param => Disabled: handled elsewhere
+dotnet_diagnostic.SA1114.severity = none  # Enforces: param list follows declaration => Disabled: handled elsewhere
+dotnet_diagnostic.SA1115.severity = none  # Enforces: param follows comma => Disabled: handled elsewhere
+dotnet_diagnostic.SA1116.severity = none  # Enforces: split params start on line after declaration => Disabled: handled elsewhere
+dotnet_diagnostic.SA1117.severity = none  # Enforces: params all on same line or all separate => Disabled: handled elsewhere
+dotnet_diagnostic.SA1118.severity = none  # Enforces: param doesn't span multiple lines => Disabled: multi-line params sometimes needed
+dotnet_diagnostic.SA1119.severity = warning  # Enforces: no unnecessary parentheses => aligns with IDE0047
+dotnet_diagnostic.SA1120.severity = none  # Enforces: comments contain text => Disabled: empty comments sometimes used as placeholders
+dotnet_diagnostic.SA1121.severity = warning  # Enforces: use built-in type alias => enforces int over Int32, string over String
+dotnet_diagnostic.SA1122.severity = none  # Enforces: string.Empty instead of "" => Disabled: we prefer ""
+dotnet_diagnostic.SA1123.severity = warning  # Enforces: do not place regions within elements
+dotnet_diagnostic.SA1124.severity = warning  # Enforces: do not use regions => per AGENTS.md
+dotnet_diagnostic.SA1125.severity = none  # Enforces: T? instead of Nullable<T> => Disabled: Nullable<T> sometimes clearer
+dotnet_diagnostic.SA1126.severity = none  # Enforces: correct call prefixing => Disabled: handled by SA1101
+dotnet_diagnostic.SA1127.severity = warning  # Enforces: generic type constraints on their own line
+dotnet_diagnostic.SA1128.severity = none  # Enforces: constructor initializers on own line => Disabled: same line is fine
+dotnet_diagnostic.SA1129.severity = none  # Enforces: default(T) instead of new T() => Disabled: we prefer new T()
+dotnet_diagnostic.SA1130.severity = none  # Enforces: lambda instead of delegate => Disabled: delegate syntax sometimes clearer
+dotnet_diagnostic.SA1131.severity = warning  # Enforces: use readable conditions => prevents Yoda conditions like if (null == x)
+dotnet_diagnostic.SA1132.severity = warning  # Enforces: do not combine fields => one field declaration per line
+dotnet_diagnostic.SA1133.severity = none  # Enforces: one attribute per line => Disabled: combining attributes is fine
+dotnet_diagnostic.SA1134.severity = none  # Enforces: attribute on separate line from member => Disabled: same line is fine
+dotnet_diagnostic.SA1135.severity = warning  # Enforces: fully qualified using directives
+dotnet_diagnostic.SA1136.severity = warning  # Enforces: enum values on separate lines
+dotnet_diagnostic.SA1137.severity = warning  # Enforces: consistent indentation
+dotnet_diagnostic.SA1139.severity = warning  # Enforces: use literal suffix notation => 1L instead of (long)1
+
+# ----- Ordering Rules (SA1200-SA1217) -----
+# Ordering rules - not strictly enforced in this project
+dotnet_diagnostic.SA1200.severity = none  # Enforces: using directives inside namespace => Disabled: handled by .editorconfig
+dotnet_diagnostic.SA1201.severity = none  # Enforces: member ordering (fields, ctors, props, methods) => Disabled: not enforced
+dotnet_diagnostic.SA1202.severity = none  # Enforces: public before private members => Disabled: not enforced
+dotnet_diagnostic.SA1203.severity = none  # Enforces: constants before fields => Disabled: not enforced
+dotnet_diagnostic.SA1204.severity = none  # Enforces: static members before instance => Disabled: not enforced
+dotnet_diagnostic.SA1205.severity = none  # Enforces: partial elements declare access => Disabled: not enforced
+dotnet_diagnostic.SA1206.severity = none  # Enforces: keyword order (public static readonly) => Disabled: handled elsewhere
+dotnet_diagnostic.SA1207.severity = none  # Enforces: protected before internal => Disabled: not enforced
+dotnet_diagnostic.SA1208.severity = none  # Enforces: System usings first => Disabled: handled by .editorconfig
+dotnet_diagnostic.SA1209.severity = warning  # Enforces: alias usings after regular usings
+dotnet_diagnostic.SA1210.severity = none  # Enforces: usings alphabetized => Disabled: handled by .editorconfig
+dotnet_diagnostic.SA1211.severity = warning  # Enforces: alias usings alphabetized
+dotnet_diagnostic.SA1212.severity = warning  # Enforces: get before set in properties => Disabled: not enforced
+dotnet_diagnostic.SA1213.severity = none  # Enforces: add before remove in events => Disabled: not enforced
+dotnet_diagnostic.SA1214.severity = warning  # Enforces: readonly fields before mutable
+dotnet_diagnostic.SA1216.severity = warning  # Enforces: using static placement
+dotnet_diagnostic.SA1217.severity = warning  # Enforces: using static alphabetized
+
+# ----- Naming Rules (SA1300-SA1316) -----
+# Naming rules - handled by .NET naming rules (IDE1006, etc.)
+dotnet_diagnostic.SA1300.severity = none  # Enforces: elements begin with upper-case => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1301.severity = none  # Enforces: elements begin with lower-case => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1302.severity = none  # Enforces: interfaces begin with I => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1303.severity = none  # Enforces: const fields are PascalCase => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1304.severity = none  # Enforces: non-private readonly fields are PascalCase => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1305.severity = none  # Enforces: no Hungarian notation => Disabled: not needed
+dotnet_diagnostic.SA1306.severity = none  # Enforces: fields begin with lower-case => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1307.severity = none  # Enforces: public fields are PascalCase => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1308.severity = none  # Enforces: no variable prefixes (m_, s_) => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1309.severity = none  # Enforces: fields don't begin with underscore => Disabled: we use _camelCase
+dotnet_diagnostic.SA1310.severity = none  # Enforces: fields don't contain underscore => Disabled: underscores allowed
+dotnet_diagnostic.SA1311.severity = none  # Enforces: static readonly fields are PascalCase => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1312.severity = none  # Enforces: variables begin with lower-case => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1313.severity = none  # Enforces: parameters begin with lower-case => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1314.severity = none  # Enforces: type params begin with T => Disabled: handled by IDE1006
+dotnet_diagnostic.SA1316.severity = none  # Enforces: tuple elements are PascalCase => Disabled: not enforced
+
+# ----- Maintainability Rules (SA1400-SA1413) -----
+dotnet_diagnostic.SA1400.severity = none  # Enforces: explicit access modifiers => Disabled: handled elsewhere
+dotnet_diagnostic.SA1401.severity = none  # Enforces: fields should be private => Disabled: public fields sometimes needed
+dotnet_diagnostic.SA1402.severity = none  # Enforces: one type per file => Disabled: nested/helper types allowed
+dotnet_diagnostic.SA1403.severity = warning  # Enforces: one namespace per file => Disabled: not enforced
+dotnet_diagnostic.SA1404.severity = none  # Enforces: suppression justification required => Disabled: not enforced
+dotnet_diagnostic.SA1405.severity = none  # Enforces: Debug.Assert has message => Disabled: not enforced
+dotnet_diagnostic.SA1406.severity = none  # Enforces: Debug.Fail has message => Disabled: not enforced
+dotnet_diagnostic.SA1407.severity = none  # Enforces: parentheses in arithmetic => Disabled: handled by IDE0047
+dotnet_diagnostic.SA1408.severity = none  # Enforces: parentheses in conditionals => Disabled: handled by IDE0047
+dotnet_diagnostic.SA1409.severity = warning  # Enforces: remove unnecessary code
+dotnet_diagnostic.SA1410.severity = none  # Enforces: remove delegate parentheses => Disabled: not enforced
+dotnet_diagnostic.SA1411.severity = warning  # Enforces: no empty attribute parentheses
+dotnet_diagnostic.SA1412.severity = none  # Enforces: UTF-8 with BOM => Disabled: we use UTF-8 without BOM
+dotnet_diagnostic.SA1413.severity = warning  # Enforces: use trailing comma in multi-line initializers => makes diffs cleaner
+
+# ----- Layout Rules (SA1500-SA1520) -----
+dotnet_diagnostic.SA1500.severity = none  # Enforces: braces on own line (Allman) => Disabled: handled by .editorconfig
+dotnet_diagnostic.SA1501.severity = none  # Enforces: no single-line statements => Disabled: single-line allowed
+dotnet_diagnostic.SA1502.severity = none  # Enforces: no single-line elements => Disabled: expression-bodied allowed
+dotnet_diagnostic.SA1503.severity = none  # Enforces: braces required => Disabled: handled by csharp_prefer_braces
+dotnet_diagnostic.SA1504.severity = none  # Enforces: accessors consistent style => Disabled: not enforced
+dotnet_diagnostic.SA1505.severity = warning  # Enforces: opening braces should not be followed by blank line
+dotnet_diagnostic.SA1506.severity = warning  # Enforces: no blank line after doc header
+dotnet_diagnostic.SA1507.severity = none  # Enforces: no multiple blank lines => Disabled: handled by IDE2000
+dotnet_diagnostic.SA1508.severity = warning  # Enforces: closing braces should not be preceded by blank line
+dotnet_diagnostic.SA1509.severity = warning  # Enforces: no blank line before opening brace
+dotnet_diagnostic.SA1510.severity = warning  # Enforces: no blank line before else/catch/finally
+dotnet_diagnostic.SA1511.severity = warning  # Enforces: no blank line before while in do-while
+dotnet_diagnostic.SA1512.severity = warning  # Enforces: no blank line after single-line comment
+dotnet_diagnostic.SA1513.severity = warning  # Enforces: blank line after closing brace
+dotnet_diagnostic.SA1514.severity = warning  # Enforces: blank line before doc header
+dotnet_diagnostic.SA1515.severity = warning  # Enforces: blank line before single-line comment
+dotnet_diagnostic.SA1516.severity = warning  # Enforces: blank line between members
+dotnet_diagnostic.SA1517.severity = warning  # Enforces: no blank lines at start of file
+dotnet_diagnostic.SA1518.severity = none  # Enforces: single newline at end of file => Disabled: handled by .editorconfig
+dotnet_diagnostic.SA1519.severity = warning  # Enforces: braces on multi-line child statements
+dotnet_diagnostic.SA1520.severity = warning  # Enforces: consistent brace usage in if-else
+
+

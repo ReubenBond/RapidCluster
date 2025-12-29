@@ -32,7 +32,7 @@ public sealed partial class PingPongFailureDetectorFactory(
     /// This is the Paxos "learner" role - requesting missed consensus decisions.
     /// The callback receives the learned membership view and can determine if the
     /// local node was kicked (not in view) or just missed consensus rounds (still in view).
-    /// Parameters: (remoteEndpoint, remoteConfigId, localConfigId)
+    /// Parameters: (remoteEndpoint, remoteConfigId, localConfigId).
     /// </summary>
     public Action<Endpoint, ConfigurationId, ConfigurationId>? OnStaleViewDetected { get; set; }
 
@@ -82,6 +82,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     private int _consecutiveFailures;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="PingPongFailureDetector"/> class.
     /// Creates a new ping-pong failure detector.
     /// </summary>
     /// <param name="subject">The endpoint to monitor.</param>
@@ -195,6 +196,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
                 {
                     LogProbeSucceeded(new LoggableEndpoint(_subject));
                 }
+
                 _consecutiveFailures = 0;
                 _metrics.RecordProbeSuccess();
                 _metrics.RecordProbeLatency(MetricNames.Results.Success, stopwatch);

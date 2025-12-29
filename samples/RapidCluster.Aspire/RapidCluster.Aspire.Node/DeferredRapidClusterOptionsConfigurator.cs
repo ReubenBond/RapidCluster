@@ -14,9 +14,9 @@ namespace RapidCluster.Aspire.Node;
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated via DI")]
 internal sealed class DeferredRapidClusterOptionsConfigurator : IConfigureOptions<RapidClusterOptions>, IDisposable
 {
-    private EndPoint? _listenAddress;
     private readonly Lock _lock = new();
     private readonly ManualResetEventSlim _addressConfigured = new(initialState: false);
+    private EndPoint? _listenAddress;
 
     public void Configure(RapidClusterOptions options)
     {

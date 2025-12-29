@@ -27,8 +27,6 @@ internal sealed class SimulationNetwork : Clockwork.SimulationNetwork
         base.SetLogger(logger);
     }
 
-    #region Override logging hooks for RapidCluster-specific logging
-
     /// <inheritdoc />
     protected override void OnPartitionCreated(string source, string target) => _log.PartitionCreated(source, target);
 
@@ -55,8 +53,6 @@ internal sealed class SimulationNetwork : Clockwork.SimulationNetwork
 
     /// <inheritdoc />
     protected override void OnMessageDroppedRandom(string source, string target) => _log.MessageDroppedRandom(source, target);
-
-    #endregion
 
     private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"SimulationNetwork(DropRate={MessageDropRate:P0})");
 }

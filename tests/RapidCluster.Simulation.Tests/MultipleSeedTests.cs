@@ -23,8 +23,6 @@ public sealed class MultipleSeedTests : IAsyncLifetime
 
     public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
-    #region Basic Multiple Seed Functionality
-
     /// <summary>
     /// Tests that a node can join through the first available seed when multiple seeds are configured.
     /// </summary>
@@ -110,10 +108,6 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         Assert.Equal(4, joiner5.MembershipSize);
     }
 
-    #endregion
-
-    #region Seed Failover with Suspended Nodes
-
     /// <summary>
     /// Tests that join fails over to the next seed when the first seed is suspended (unresponsive).
     /// Suspended nodes don't respond to messages, simulating a network issue or hung process.
@@ -144,10 +138,6 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         Assert.True(joiner3.MembershipSize >= 3 && joiner3.MembershipSize <= 4);
     }
 
-    #endregion
-
-    #region All Seeds Unavailable
-
     /// <summary>
     /// Tests that join fails with JoinException when all configured seeds are unavailable.
     /// </summary>
@@ -175,10 +165,6 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         Assert.Contains("Timeout", ex.Message, StringComparison.Ordinal);
     }
 
-    #endregion
-
-    #region Duplicate and Self-Exclusion
-
     /// <summary>
     /// Tests that duplicate seeds in the configuration are handled correctly.
     /// The join should succeed even if the same seed is listed multiple times.
@@ -204,10 +190,6 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         Assert.Equal(4, joiner3.MembershipSize);
     }
 
-    #endregion
-
-    #region Order Preservation
-
     /// <summary>
     /// Tests that seeds are tried in the order they are configured.
     /// When the first seed is available, the join should succeed without trying others.
@@ -228,9 +210,8 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         _harness.WaitForConvergence();
 
         Assert.True(joiner3.IsInitialized);
+
         // The join succeeded, which means at least one seed worked
         Assert.Equal(4, joiner3.MembershipSize);
     }
-
-    #endregion
 }

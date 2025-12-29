@@ -172,6 +172,7 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
 
         // No tasks were executed (task is scheduled beyond the time limit)
         Assert.Equal(0, iterations);
+
         // Time should not have advanced beyond 5 minutes
         Assert.True(_harness.TimeProvider.GetUtcNow() < initialTime + TimeSpan.FromMinutes(10));
     }

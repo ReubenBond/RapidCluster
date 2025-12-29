@@ -1,7 +1,7 @@
 namespace RapidCluster.Integration.Tests;
 
 /// <summary>
-/// Helper class for creating deterministic GUIDs from names
+/// Helper class for creating deterministic GUIDs from names.
 /// </summary>
 internal static class GuidUtility
 {

@@ -76,6 +76,7 @@ internal sealed class ListEndpointComparer : IEqualityComparer<List<Endpoint>>
         {
             hash.Add(endpoint.GetHashCode());
         }
+
         return hash.ToHashCode();
     }
 }
@@ -106,6 +107,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
                 return false;
             }
         }
+
         return true;
     }
 
@@ -117,6 +119,7 @@ internal sealed class MembershipProposalComparer : IEqualityComparer<MembershipP
         {
             hash.Add(member?.GetHashCode() ?? 0);
         }
+
         return hash.ToHashCode();
     }
 

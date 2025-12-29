@@ -94,6 +94,7 @@ public static class ServiceDefaultsExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddHealthChecks()
+
             // Add a default liveness check to ensure app is responsive
             .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
 

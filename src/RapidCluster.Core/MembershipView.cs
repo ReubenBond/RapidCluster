@@ -17,7 +17,7 @@ namespace RapidCluster;
 public sealed class MembershipView
 {
     /// <summary>
-    /// An empty membership view with no members. Used as the initial state before the cluster is initialized.
+    /// Gets an empty membership view with no members. Used as the initial state before the cluster is initialized.
     /// </summary>
     public static MembershipView Empty { get; } = new(0, ConfigurationId.Empty, [], [], 0);
 
@@ -27,6 +27,7 @@ public sealed class MembershipView
     private readonly ImmutableDictionary<Endpoint, int> _endpointToBaseIndex;
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MembershipView"/> class.
     /// Initializes a new immutable MembershipView instance.
     /// </summary>
     /// <param name="ringCount">Number of monitoring rings.</param>
@@ -58,6 +59,7 @@ public sealed class MembershipView
                 indexBuilder[memberInfo.Endpoint] = i;
             }
         }
+
         _memberInfoByEndpoint = memberBuilder.ToImmutable();
         _endpointToBaseIndex = indexBuilder.ToImmutable();
     }
@@ -160,6 +162,7 @@ public sealed class MembershipView
         {
             throw new NodeNotInRingException(endpoint);
         }
+
         return memberInfo.Endpoint.NodeId;
     }
 
@@ -240,6 +243,7 @@ public sealed class MembershipView
             var predecessorIndex = (nodeIndex - offset + n) % n;
             observers.Add(baseOrder[predecessorIndex].Endpoint);
         }
+
         return observers.MoveToImmutable();
     }
 
@@ -276,6 +280,7 @@ public sealed class MembershipView
             var successorIndex = (nodeIndex + offset) % n;
             subjects.Add(baseOrder[successorIndex].Endpoint);
         }
+
         return subjects.MoveToImmutable();
     }
 
@@ -336,6 +341,7 @@ public sealed class MembershipView
                 ringIndexes.Add(ringNumber);
             }
         }
+
         return ringIndexes.ToImmutable();
     }
 
@@ -381,6 +387,7 @@ public sealed class MembershipView
                 return i;
             }
         }
+
         return -1;
     }
 
@@ -405,6 +412,7 @@ public sealed class MembershipView
                 right = mid;
             }
         }
+
         return left;
     }
 }
@@ -450,7 +458,9 @@ public sealed class MembershipViewConfiguration
 internal sealed class MembershipViewDebugView(MembershipView view)
 {
     public int Size => view.Size;
+
     public ConfigurationId ConfigurationId => view.ConfigurationId;
+
     public int RingCount => view.RingCount;
 
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]

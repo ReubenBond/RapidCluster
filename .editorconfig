@@ -627,3 +627,72 @@ dotnet_diagnostic.RS0026.severity = suggestion
 
 # RS0027: API with optional parameter(s) should have the most parameters amongst its public overloads
 dotnet_diagnostic.RS0027.severity = suggestion
+
+# ============================================================================
+# Meziantou.Analyzer Rules
+# ============================================================================
+
+# MA0004: Use ConfigureAwait - disabled as we rely on SynchronizationContext in simulation
+dotnet_diagnostic.MA0004.severity = none
+
+# MA0011: IFormatProvider should be specified - too noisy for internal formatting
+dotnet_diagnostic.MA0011.severity = suggestion
+
+# MA0015: Specify the parameter name in ArgumentException - should fix but not critical
+dotnet_diagnostic.MA0015.severity = suggestion
+
+# MA0016: Prefer using collection abstraction instead of implementation
+dotnet_diagnostic.MA0016.severity = suggestion
+
+# MA0026: Fix TODO comments - useful to track but not block build
+dotnet_diagnostic.MA0026.severity = suggestion
+
+# MA0048: File name must match type name - too strict for helper types in same file
+dotnet_diagnostic.MA0048.severity = suggestion
+
+# MA0051: Method is too long - good to track but complex protocol code needs flexibility
+dotnet_diagnostic.MA0051.severity = suggestion
+
+# MA0096: IComparable should implement IEquatable - valid but low priority
+dotnet_diagnostic.MA0096.severity = suggestion
+
+# MA0097: IComparable should override comparison operators - valid but low priority  
+dotnet_diagnostic.MA0097.severity = suggestion
+
+# MA0134: Observe result of async calls - intentional fire-and-forget in some cases
+dotnet_diagnostic.MA0134.severity = suggestion
+
+# MA0150: ToString on object will use default - sometimes intentional for logging
+dotnet_diagnostic.MA0150.severity = suggestion
+
+# MA0002: Use IEqualityComparer for string operations - valid but low priority
+dotnet_diagnostic.MA0002.severity = suggestion
+
+# MA0008: Add StructLayoutAttribute - only needed for interop scenarios
+dotnet_diagnostic.MA0008.severity = none
+
+# ============================================================================
+# AsyncFixer Rules  
+# ============================================================================
+
+# AsyncFixer01: Unnecessary async/await - sometimes clearer to keep async
+dotnet_diagnostic.AsyncFixer01.severity = suggestion
+
+# AsyncFixer02: Use await instead of .Wait() - valid but may require refactoring
+dotnet_diagnostic.AsyncFixer02.severity = suggestion
+
+# MA0006: Use string.Equals instead of == - valid but low priority
+dotnet_diagnostic.MA0006.severity = suggestion
+
+# MA0025: Implement functionality or raise NotSupportedException - test mocks are intentionally minimal
+dotnet_diagnostic.MA0025.severity = suggestion
+
+# MA0047: Declare type in namespace - top-level programs don't need namespaces
+dotnet_diagnostic.MA0047.severity = suggestion
+
+# MA0055: Do not use finalizer - sometimes needed for resource cleanup
+dotnet_diagnostic.MA0055.severity = suggestion
+
+# MA0158: Use System.Threading.Lock - .NET 10 feature, will adopt later
+dotnet_diagnostic.MA0158.severity = suggestion
+

@@ -1,0 +1,14 @@
+# Banned APIs for RapidCluster
+# See: https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.BannedApiAnalyzers/BannedApiAnalyzers.Help.md
+
+# Ban DateTime.Now/UtcNow - use TimeProvider instead for testability
+P:System.DateTime.Now;Use TimeProvider.GetUtcNow() instead for deterministic testing
+P:System.DateTime.UtcNow;Use TimeProvider.GetUtcNow() instead for deterministic testing
+
+# Ban Thread.Sleep - use Task.Delay with TimeProvider instead
+M:System.Threading.Thread.Sleep(System.Int32);Use Task.Delay with TimeProvider instead
+M:System.Threading.Thread.Sleep(System.TimeSpan);Use Task.Delay with TimeProvider instead
+
+# Ban Random constructor - use injected Random for deterministic testing
+M:System.Random.#ctor();Use injected Random instance for deterministic testing
+M:System.Random.#ctor(System.Int32);Use injected Random instance for deterministic testing

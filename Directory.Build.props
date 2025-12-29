@@ -35,4 +35,20 @@
 		<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
 	</PropertyGroup>
 
+	<!-- Global analyzers for all projects -->
+	<ItemGroup>
+		<PackageReference Include="Meziantou.Analyzer">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>analyzers</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>analyzers</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="AsyncFixer">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>analyzers</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
 </Project>

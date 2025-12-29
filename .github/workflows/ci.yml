@@ -33,6 +33,10 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore RapidCluster.slnx
 
+      - name: Check formatting
+        run: dotnet format RapidCluster.slnx --verify-no-changes --verbosity diagnostic
+        if: matrix.os == 'ubuntu-latest'
+
       - name: Build
         run: dotnet build RapidCluster.slnx --configuration Release --no-restore
 

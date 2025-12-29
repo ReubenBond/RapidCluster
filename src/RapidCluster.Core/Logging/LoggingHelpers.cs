@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using RapidCluster.Pb;
 
@@ -19,9 +20,9 @@ internal readonly struct LoggableEndpoint
     {
         _display = endpoint switch
         {
-            IPEndPoint ip => $"{ip.Address}:{ip.Port}",
-            DnsEndPoint dns => $"{dns.Host}:{dns.Port}",
-            _ => endpoint.ToString() ?? "unknown"
+            IPEndPoint ip => string.Create(CultureInfo.InvariantCulture, $"{ip.Address}:{ip.Port}"),
+            DnsEndPoint dns => string.Create(CultureInfo.InvariantCulture, $"{dns.Host}:{dns.Port}"),
+            _ => endpoint.ToString() ?? "unknown",
         };
     }
 
@@ -74,7 +75,7 @@ internal readonly struct LoggableMembershipViewConfigurationId(MembershipView vi
 internal readonly struct LoggableMembershipSize(MembershipView view)
 {
     private readonly MembershipView _view = view;
-    public override readonly string ToString() => _view.Size.ToString();
+    public override readonly string ToString() => _view.Size.ToString(CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -83,7 +84,7 @@ internal readonly struct LoggableMembershipSize(MembershipView view)
 internal readonly struct LoggableRingNumbers(IEnumerable<int> ringNumbers)
 {
     private readonly IEnumerable<int> _ringNumbers = ringNumbers;
-    public override readonly string ToString() => string.Join(",", _ringNumbers);
+    public override readonly string ToString() => string.Join(',', _ringNumbers);
 }
 
 /// <summary>

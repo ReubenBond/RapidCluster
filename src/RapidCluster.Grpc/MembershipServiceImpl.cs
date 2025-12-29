@@ -9,5 +9,5 @@ namespace RapidCluster.Grpc;
 /// </summary>
 internal sealed class MembershipServiceImpl(IMembershipServiceHandler handler) : Pb.MembershipService.MembershipServiceBase
 {
-    public override async Task<RapidClusterResponse> SendRequest(RapidClusterRequest request, ServerCallContext context) => await handler.HandleMessageAsync(request, context.CancellationToken).ConfigureAwait(true);
+    public override async Task<RapidClusterResponse> SendRequest(RapidClusterRequest request, ServerCallContext context) => await handler.HandleMessageAsync(request, context.CancellationToken);
 }

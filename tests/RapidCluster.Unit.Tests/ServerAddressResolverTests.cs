@@ -93,10 +93,7 @@ public class ServerAddressResolverTests
     }
 
     [Fact]
-    public void GetAdvertisedEndpoint_WithNullServer_ThrowsArgumentNullException()
-    {
-        Assert.Throws<ArgumentNullException>(() => ServerAddressResolver.GetAdvertisedEndpoint(null!));
-    }
+    public void GetAdvertisedEndpoint_WithNullServer_ThrowsArgumentNullException() => Assert.Throws<ArgumentNullException>(() => ServerAddressResolver.GetAdvertisedEndpoint(null!));
 
     [Fact]
     public void GetAdvertisedEndpoint_WithInvalidUri_ThrowsInvalidOperationException()
@@ -182,29 +179,18 @@ public class ServerAddressResolverTests
 
         public IFeatureCollection Features => _features;
 
-        public Task StartAsync<TContext>(IHttpApplication<TContext> application, CancellationToken cancellationToken) where TContext : notnull
-        {
-            return Task.CompletedTask;
-        }
+        public Task StartAsync<TContext>(IHttpApplication<TContext> application, CancellationToken cancellationToken) where TContext : notnull => Task.CompletedTask;
 
-        public Task StopAsync(CancellationToken cancellationToken)
-        {
-            return Task.CompletedTask;
-        }
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public void Dispose()
         {
         }
     }
 
-    private sealed class MockServerAddressesFeature : IServerAddressesFeature
+    private sealed class MockServerAddressesFeature(string[] addresses) : IServerAddressesFeature
     {
-        public MockServerAddressesFeature(string[] addresses)
-        {
-            Addresses = new List<string>(addresses);
-        }
-
-        public ICollection<string> Addresses { get; }
+        public ICollection<string> Addresses { get; } = [.. addresses];
 
         public bool PreferHostingUrls { get; set; }
     }

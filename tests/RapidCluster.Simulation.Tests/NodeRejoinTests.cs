@@ -20,10 +20,7 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     /// <summary>
     /// Tests that a node can rejoin the cluster after graceful leave.
@@ -89,7 +86,7 @@ public sealed class NodeRejoinTests : IAsyncLifetime
     {
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
@@ -146,7 +143,7 @@ public sealed class NodeRejoinTests : IAsyncLifetime
     {
         // Create a 4-node cluster
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
@@ -180,8 +177,8 @@ public sealed class NodeRejoinTests : IAsyncLifetime
     {
         // Create a 4-node cluster
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
         _harness.WaitForConvergence();
@@ -269,8 +266,8 @@ public sealed class NodeRejoinTests : IAsyncLifetime
     {
         // Create a 4-node cluster (need majority on both sides consideration)
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
         _harness.WaitForConvergence();
@@ -302,8 +299,8 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         // Create a 4-node cluster
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
         _harness.WaitForConvergence();
 
@@ -384,5 +381,4 @@ public sealed class NodeRejoinTests : IAsyncLifetime
         // Verify final consistency
         Assert.All(_harness.Nodes, n => Assert.Equal(4, n.MembershipSize));
     }
-
 }

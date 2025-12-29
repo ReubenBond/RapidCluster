@@ -1,3 +1,4 @@
+using System.Globalization;
 using CsCheck;
 using Google.Protobuf;
 using RapidCluster.Pb;
@@ -12,20 +13,20 @@ public class ListEndpointComparerTests
     private static readonly ListEndpointComparer Comparer = ListEndpointComparer.Instance;
 
     [Fact]
-    public void EqualsBothNullReturnsTrue() => Assert.True(Comparer.Equals(null, null));
+    public void EqualsBothNullReturnsTrue() => Assert.True(Comparer.Equals(x: null, y: null));
 
     [Fact]
     public void EqualsFirstNullReturnsFalse()
     {
         var list = new List<Endpoint> { Utils.HostFromParts("127.0.0.1", 1234) };
-        Assert.False(Comparer.Equals(null, list));
+        Assert.False(Comparer.Equals(x: null, list));
     }
 
     [Fact]
     public void EqualsSecondNullReturnsFalse()
     {
         var list = new List<Endpoint> { Utils.HostFromParts("127.0.0.1", 1234) };
-        Assert.False(Comparer.Equals(list, null));
+        Assert.False(Comparer.Equals(list, y: null));
     }
 
     [Fact]
@@ -37,12 +38,12 @@ public class ListEndpointComparerTests
         var list1 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
         var list2 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
 
         Assert.True(Comparer.Equals(list1, list2));
@@ -54,12 +55,12 @@ public class ListEndpointComparerTests
         var list1 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
         var list2 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.2", 1235),
-            Utils.HostFromParts("127.0.0.1", 1234)
+            Utils.HostFromParts("127.0.0.1", 1234),
         };
 
         Assert.False(Comparer.Equals(list1, list2));
@@ -70,12 +71,12 @@ public class ListEndpointComparerTests
     {
         var list1 = new List<Endpoint>
         {
-            Utils.HostFromParts("127.0.0.1", 1234)
+            Utils.HostFromParts("127.0.0.1", 1234),
         };
         var list2 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
 
         Assert.False(Comparer.Equals(list1, list2));
@@ -86,11 +87,11 @@ public class ListEndpointComparerTests
     {
         var list1 = new List<Endpoint>
         {
-            Utils.HostFromParts("127.0.0.1", 1234)
+            Utils.HostFromParts("127.0.0.1", 1234),
         };
         var list2 = new List<Endpoint>
         {
-            Utils.HostFromParts("127.0.0.1", 9999)
+            Utils.HostFromParts("127.0.0.1", 9999),
         };
 
         Assert.False(Comparer.Equals(list1, list2));
@@ -111,8 +112,8 @@ public class ListEndpointComparerTests
 
         for (var i = 0; i < 100; i++)
         {
-            list1.Add(Utils.HostFromParts("192.168.1." + i, 5000 + i));
-            list2.Add(Utils.HostFromParts("192.168.1." + i, 5000 + i));
+            list1.Add(Utils.HostFromParts("192.168.1." + i.ToString(CultureInfo.InvariantCulture), 5000 + i));
+            list2.Add(Utils.HostFromParts("192.168.1." + i.ToString(CultureInfo.InvariantCulture), 5000 + i));
         }
 
         Assert.True(Comparer.Equals(list1, list2));
@@ -124,12 +125,12 @@ public class ListEndpointComparerTests
         var list1 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
         var list2 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
 
         Assert.Equal(Comparer.GetHashCode(list1), Comparer.GetHashCode(list2));
@@ -153,12 +154,12 @@ public class ListEndpointComparerTests
         var list1 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.1", 1234),
-            Utils.HostFromParts("127.0.0.2", 1235)
+            Utils.HostFromParts("127.0.0.2", 1235),
         };
         var list2 = new List<Endpoint>
         {
             Utils.HostFromParts("127.0.0.2", 1235),
-            Utils.HostFromParts("127.0.0.1", 1234)
+            Utils.HostFromParts("127.0.0.1", 1234),
         };
 
         // Different order means different sequences - they should not be equal
@@ -224,13 +225,12 @@ public class ListEndpointComparerTests
     /// Generator for valid endpoints.
     /// </summary>
     private static readonly Gen<Endpoint> GenEndpoint =
-        Gen.Select(
-            Gen.Int[1, 255],  // IP last octet
+        Gen.Int[1, 255].Select(
             Gen.Int[1000, 65535]  // Port
         ).Select((octet, port) => new Endpoint
         {
-            Hostname = ByteString.CopyFromUtf8($"127.0.0.{octet}"),
-            Port = port
+            Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{octet}")),
+            Port = port,
         });
 
     /// <summary>
@@ -239,10 +239,9 @@ public class ListEndpointComparerTests
     private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
-            Gen.Select(
-                Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Count() == count),
+            Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
             ).Select((octets, ports, nodeIdSeeds) =>
             {
                 var result = new List<Endpoint>(count);
@@ -250,9 +249,9 @@ public class ListEndpointComparerTests
                 {
                     var endpoint = new Endpoint
                     {
-                        Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
+                        Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{octets[i]}")),
                         Port = ports[i],
-                        NodeId = nodeIdSeeds[i]
+                        NodeId = nodeIdSeeds[i],
                     };
                     result.Add(endpoint);
                 }
@@ -296,7 +295,7 @@ public class ListEndpointComparerTests
     [Fact]
     public void Property_Different_Elements_Are_Not_Equal()
     {
-        Gen.Select(GenUniqueNodes(2, 10), GenEndpoint)
+        GenUniqueNodes(2, 10).Select(GenEndpoint)
             .Sample((nodes, extra) =>
             {
                 var list1 = nodes.ToList();
@@ -372,15 +371,12 @@ public class ListEndpointComparerTests
         var node = Utils.HostFromParts("10.0.0.1", 5001);
         var proposal = CreateProposal(node, configId: 100);
 
-        Assert.True(MembershipProposalComparer.Instance.Compare(null, proposal) < 0);
-        Assert.True(MembershipProposalComparer.Instance.Compare(proposal, null) > 0);
-        Assert.Equal(0, MembershipProposalComparer.Instance.Compare(null, null));
+        Assert.True(MembershipProposalComparer.Instance.Compare(x: null, proposal) < 0);
+        Assert.True(MembershipProposalComparer.Instance.Compare(proposal, y: null) > 0);
+        Assert.Equal(0, MembershipProposalComparer.Instance.Compare(x: null, y: null));
     }
 
-    private static MembershipProposal CreateProposal(Endpoint endpoint, long configId)
-    {
-        return CreateProposal([endpoint], configId);
-    }
+    private static MembershipProposal CreateProposal(Endpoint endpoint, long configId) => CreateProposal([endpoint], configId);
 
     private static MembershipProposal CreateProposal(Endpoint[] endpoints, long configId)
     {

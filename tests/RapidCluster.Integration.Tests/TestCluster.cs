@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
@@ -60,17 +61,17 @@ internal sealed class TestCluster : IAsyncDisposable
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
 
-        await app.StartAsync(cancellationToken).ConfigureAwait(true);
+        await app.StartAsync(cancellationToken);
         _apps.Add(app);
 
         // Start the cluster AFTER the gRPC server is listening
         var lifecycle = app.Services.GetRequiredService<IRapidClusterLifecycle>();
-        await lifecycle.StartAsync(cancellationToken).ConfigureAwait(true);
+        await lifecycle.StartAsync(cancellationToken);
 
         var cluster = app.Services.GetRequiredService<IRapidCluster>();
 
         // Wait for the cluster to be initialized
-        await WaitForClusterInitializedAsync(cluster, cancellationToken).ConfigureAwait(true);
+        await WaitForClusterInitializedAsync(cluster, cancellationToken);
 
         return (app, cluster);
     }
@@ -100,17 +101,17 @@ internal sealed class TestCluster : IAsyncDisposable
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
 
-        await app.StartAsync(cancellationToken).ConfigureAwait(true);
+        await app.StartAsync(cancellationToken);
         _apps.Add(app);
 
         // Start the cluster AFTER the gRPC server is listening
         var lifecycle = app.Services.GetRequiredService<IRapidClusterLifecycle>();
-        await lifecycle.StartAsync(cancellationToken).ConfigureAwait(true);
+        await lifecycle.StartAsync(cancellationToken);
 
         var cluster = app.Services.GetRequiredService<IRapidCluster>();
 
         // Wait for the cluster to be initialized
-        await WaitForClusterInitializedAsync(cluster, cancellationToken).ConfigureAwait(true);
+        await WaitForClusterInitializedAsync(cluster, cancellationToken);
 
         return (app, cluster);
     }
@@ -139,13 +140,13 @@ internal sealed class TestCluster : IAsyncDisposable
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
 
-        await app.StartAsync(cancellationToken).ConfigureAwait(true);
+        await app.StartAsync(cancellationToken);
         _apps.Add(app);
 
         var cluster = app.Services.GetRequiredService<IRapidCluster>();
 
         // Wait for the cluster to be initialized
-        await WaitForClusterInitializedAsync(cluster, cancellationToken).ConfigureAwait(true);
+        await WaitForClusterInitializedAsync(cluster, cancellationToken);
 
         return (app, cluster);
     }
@@ -176,13 +177,13 @@ internal sealed class TestCluster : IAsyncDisposable
         var app = builder.Build();
         app.MapRapidClusterMembershipService();
 
-        await app.StartAsync(cancellationToken).ConfigureAwait(true);
+        await app.StartAsync(cancellationToken);
         _apps.Add(app);
 
         var cluster = app.Services.GetRequiredService<IRapidCluster>();
 
         // Wait for the cluster to be initialized
-        await WaitForClusterInitializedAsync(cluster, cancellationToken).ConfigureAwait(true);
+        await WaitForClusterInitializedAsync(cluster, cancellationToken);
 
         return (app, cluster);
     }
@@ -194,7 +195,7 @@ internal sealed class TestCluster : IAsyncDisposable
     {
         while (cluster.CurrentView.Members.Length == 0)
         {
-            await Task.Delay(10, cancellationToken).ConfigureAwait(true);
+            await Task.Delay(10, cancellationToken);
         }
     }
 
@@ -208,9 +209,9 @@ internal sealed class TestCluster : IAsyncDisposable
         {
             if (cluster.CurrentView.Members.Length >= expectedSize)
                 return;
-            await Task.Delay(10).ConfigureAwait(true);
+            await Task.Delay(10);
         }
-        throw new TimeoutException($"Cluster did not reach expected size {expectedSize} within {timeout}");
+        throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"Cluster did not reach expected size {expectedSize} within {timeout}"));
     }
 
     /// <summary>
@@ -223,9 +224,9 @@ internal sealed class TestCluster : IAsyncDisposable
         {
             if (cluster.CurrentView.Members.Length == expectedSize)
                 return;
-            await Task.Delay(10).ConfigureAwait(true);
+            await Task.Delay(10);
         }
-        throw new TimeoutException($"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.CurrentView.Members.Length}");
+        throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"Cluster did not reach expected size {expectedSize} within {timeout}. Current size: {cluster.CurrentView.Members.Length}"));
     }
 
     public async ValueTask DisposeAsync()
@@ -235,8 +236,8 @@ internal sealed class TestCluster : IAsyncDisposable
 #pragma warning disable CA1031
             try
             {
-                await app.StopAsync().ConfigureAwait(true);
-                await app.DisposeAsync().ConfigureAwait(true);
+                await app.StopAsync(TestContext.Current.CancellationToken);
+                await app.DisposeAsync();
             }
             catch
             {

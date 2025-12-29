@@ -1,18 +1,23 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Clockwork;
 
 /// <summary>
+/// <para>
 /// A time-aware task queue that serves as the common core for both
 /// <see cref="TaskScheduler"/> and <see cref="SimulationTimeProvider"/>.
-/// 
+/// </para>
+/// <para>
 /// Items are stored in a single queue ordered by due time, then sequence number.
 /// Items with DueTime &lt;= UtcNow are considered "ready" for execution.
 /// This enables deterministic simulation testing by providing unified control
 /// over task execution order and time advancement.
-/// 
+/// </para>
+/// <para>
 /// The queue delegates time to a shared <see cref="SimulationClock"/>,
 /// enabling multiple queues to share a unified view of time.
+/// </para>
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 [DebuggerTypeProxy(typeof(SimulationTaskQueueDebugView))]
@@ -20,7 +25,7 @@ namespace Clockwork;
 public sealed class SimulationTaskQueue
 {
     // Single queue ordered by due time, then sequence number
-    private readonly SortedSet<ScheduledItem> _queue = new(new ScheduledItemComparer());
+    private readonly SortedSet<ScheduledItem> _queue = new(ScheduledItem.Comparer);
     private readonly SimulationClock _clock;
     private readonly SingleThreadedGuard _guard;
     private long _sequenceNumber;
@@ -197,35 +202,15 @@ public sealed class SimulationTaskQueue
         return count;
     }
 
-    private string DebuggerDisplay => $"Count={_queue.Count} UtcNow={UtcNow:HH:mm:ss.fff}";
-
-    /// <summary>
-    /// Comparer for ordering scheduled items by due time, then by sequence number.
-    /// </summary>
-    private sealed class ScheduledItemComparer : IComparer<ScheduledItem>
-    {
-        public int Compare(ScheduledItem? x, ScheduledItem? y)
-        {
-            if (ReferenceEquals(x, y)) return 0;
-            if (x is null) return -1;
-            if (y is null) return 1;
-
-            return x.CompareTo(y);
-        }
-    }
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"Count={_queue.Count} UtcNow={UtcNow:HH:mm:ss.fff}");
 }
 
 /// <summary>
 /// Debug view for SimulationTaskQueue that shows scheduled items in a more readable format.
 /// </summary>
-internal sealed class SimulationTaskQueueDebugView
+internal sealed class SimulationTaskQueueDebugView(SimulationTaskQueue queue)
 {
-    private readonly SimulationTaskQueue _queue;
-
-    public SimulationTaskQueueDebugView(SimulationTaskQueue queue)
-    {
-        _queue = queue;
-    }
+    private readonly SimulationTaskQueue _queue = queue;
 
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
     public ScheduledItem[] Items => [.. _queue.ScheduledItems];

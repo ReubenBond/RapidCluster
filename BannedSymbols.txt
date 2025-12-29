@@ -1,6 +1,17 @@
 # Banned APIs for RapidCluster
 # See: https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.BannedApiAnalyzers/BannedApiAnalyzers.Help.md
 
+# Ban all ConfigureAwait calls - ConfigureAwait(true) is the default, and ConfigureAwait(false)
+# breaks deterministic simulation testing by not preserving SynchronizationContext.
+# Simply omit ConfigureAwait entirely to get the correct (true) behavior.
+M:System.Threading.Tasks.Task.ConfigureAwait(System.Boolean);Do not use ConfigureAwait - the default behavior (true) is required for deterministic simulation
+M:System.Threading.Tasks.Task`1.ConfigureAwait(System.Boolean);Do not use ConfigureAwait - the default behavior (true) is required for deterministic simulation
+M:System.Threading.Tasks.ValueTask.ConfigureAwait(System.Boolean);Do not use ConfigureAwait - the default behavior (true) is required for deterministic simulation
+M:System.Threading.Tasks.ValueTask`1.ConfigureAwait(System.Boolean);Do not use ConfigureAwait - the default behavior (true) is required for deterministic simulation
+
+# Ban CancellationTokenSource.CancelAsync - use Cancel() instead for deterministic simulation
+M:System.Threading.CancellationTokenSource.CancelAsync;Use Cancel() instead - CancelAsync breaks deterministic simulation
+
 # Ban DateTime.Now/UtcNow - use TimeProvider instead for testability
 P:System.DateTime.Now;Use TimeProvider.GetUtcNow() instead for deterministic testing
 P:System.DateTime.UtcNow;Use TimeProvider.GetUtcNow() instead for deterministic testing

@@ -1,15 +1,19 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
 
 /// <summary>
+/// <para>
 /// Tests for node restart scenarios using the simulation harness.
 /// These tests verify that nodes can be restarted (crashed/left and recreated with the same address)
 /// and that the cluster correctly assigns new NodeIds to restarted nodes.
-/// 
+/// </para>
+/// <para>
 /// This is distinct from NodeRejoinTests which tests nodes joining with different addresses.
 /// Restart tests specifically verify the NodeId assignment logic for Paxos correctness.
+/// </para>
 /// </summary>
 [SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores", Justification = "Test naming convention")]
 public sealed class NodeRestartTests : IAsyncLifetime
@@ -23,10 +27,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     /// <summary>
     /// Tests that a node restarted at the same address gets a new NodeId.
@@ -59,7 +60,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Verify the restarted node got a NEW (higher) NodeId
         var newNodeId = restartedNode.CurrentView.GetNodeId(restartedNode.Address);
         Assert.True(newNodeId > originalNodeId,
-            $"Restarted node should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
+            string.Create(CultureInfo.InvariantCulture, $"Restarted node should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}"));
 
         // Verify all nodes agree on the new NodeId
         Assert.Equal(newNodeId, seedNode.CurrentView.GetNodeId(restartedNode.Address));
@@ -75,7 +76,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
 
@@ -93,7 +94,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Verify the restarted node got a NEW (higher) NodeId
         var newNodeId = restartedNode.CurrentView.GetNodeId(restartedNode.Address);
         Assert.True(newNodeId > originalNodeId,
-            $"Restarted node should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
+            string.Create(CultureInfo.InvariantCulture, $"Restarted node should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}"));
     }
 
     /// <summary>
@@ -105,7 +106,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
 
@@ -126,7 +127,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
             // Verify NodeId increased
             var newNodeId = currentNode.CurrentView.GetNodeId(currentNode.Address);
             Assert.True(newNodeId > previousNodeId,
-                $"Restart {i + 1}: NodeId should increase. Previous: {previousNodeId}, New: {newNodeId}");
+                string.Create(CultureInfo.InvariantCulture, $"Restart {i + 1}: NodeId should increase. Previous: {previousNodeId}, New: {newNodeId}"));
             previousNodeId = newNodeId;
         }
     }
@@ -140,7 +141,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
 
@@ -159,7 +160,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // Verify the restarted seed got a NEW (higher) NodeId
         var newNodeId = restartedSeed.CurrentView.GetNodeId(restartedSeed.Address);
         Assert.True(newNodeId > originalNodeId,
-            $"Restarted seed should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
+            string.Create(CultureInfo.InvariantCulture, $"Restarted seed should have a higher NodeId. Original: {originalNodeId}, New: {newNodeId}"));
     }
 
     /// <summary>
@@ -172,8 +173,8 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
-        var joiner4 = _harness.CreateJoinerNode(seedNode, nodeId: 4);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 3);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 4);
 
         _harness.WaitForConvergence();
 
@@ -198,9 +199,9 @@ public sealed class NodeRestartTests : IAsyncLifetime
         var newId2 = restarted2.CurrentView.GetNodeId(restarted2.Address);
 
         Assert.True(newId1 > originalId1,
-            $"Restarted node 1 should have higher NodeId. Original: {originalId1}, New: {newId1}");
+            string.Create(CultureInfo.InvariantCulture, $"Restarted node 1 should have higher NodeId. Original: {originalId1}, New: {newId1}"));
         Assert.True(newId2 > originalId2,
-            $"Restarted node 2 should have higher NodeId. Original: {originalId2}, New: {newId2}");
+            string.Create(CultureInfo.InvariantCulture, $"Restarted node 2 should have higher NodeId. Original: {originalId2}, New: {newId2}"));
 
         // Verify they got different IDs from each other
         Assert.NotEqual(newId1, newId2);
@@ -233,7 +234,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // MaxNodeId should have increased
         var newMaxId = seedNode.CurrentView.MaxNodeId;
         Assert.True(newMaxId > initialMaxId,
-            $"MaxNodeId should increase after restart. Initial: {initialMaxId}, New: {newMaxId}");
+            string.Create(CultureInfo.InvariantCulture, $"MaxNodeId should increase after restart. Initial: {initialMaxId}, New: {newMaxId}"));
 
         // All nodes should agree on MaxNodeId
         Assert.Equal(newMaxId, joiner2.CurrentView.MaxNodeId);
@@ -299,7 +300,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
             // Verify MaxNodeId increased
             var currentMaxId = seedNode.CurrentView.MaxNodeId;
             Assert.True(currentMaxId > previousMaxId,
-                $"Cycle {i + 1}: MaxNodeId should increase. Previous: {previousMaxId}, Current: {currentMaxId}");
+                string.Create(CultureInfo.InvariantCulture, $"Cycle {i + 1}: MaxNodeId should increase. Previous: {previousMaxId}, Current: {currentMaxId}"));
             previousMaxId = currentMaxId;
         }
 
@@ -373,7 +374,7 @@ public sealed class NodeRestartTests : IAsyncLifetime
         // But a different (higher) NodeId from the membership view
         var newNodeId = restarted.CurrentView.GetNodeId(restarted.Address);
         Assert.True(newNodeId > originalNodeId,
-            $"Restarted node should have higher NodeId. Original: {originalNodeId}, New: {newNodeId}");
+            string.Create(CultureInfo.InvariantCulture, $"Restarted node should have higher NodeId. Original: {originalNodeId}, New: {newNodeId}"));
 
         // Verify membership operations work correctly
         Assert.True(seedNode.CurrentView.IsHostPresent(newAddress));

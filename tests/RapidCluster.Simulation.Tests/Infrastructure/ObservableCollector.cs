@@ -88,10 +88,7 @@ public sealed class ObservableCollector<T> : IDisposable
         IsCompleted = true;
     }
 
-    private void OnCompleted()
-    {
-        IsCompleted = true;
-    }
+    private void OnCompleted() => IsCompleted = true;
 
     public void Dispose()
     {

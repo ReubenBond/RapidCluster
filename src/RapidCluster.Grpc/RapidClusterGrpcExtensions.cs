@@ -18,10 +18,7 @@ public static class RapidClusterGrpcExtensions
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services)
-    {
-        return services.AddRapidClusterGrpc(_ => { });
-    }
+    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services) => services.AddRapidClusterGrpc(_ => { });
 
     /// <summary>
     /// Adds RapidCluster gRPC transport services to the service collection with configuration.
@@ -67,13 +64,7 @@ public static class RapidClusterGrpcExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.WebHost.ConfigureKestrel(options =>
-        {
-            options.ListenAnyIP(port, listenOptions =>
-            {
-                listenOptions.Protocols = HttpProtocols.Http2;
-            });
-        });
+        builder.WebHost.ConfigureKestrel(options => options.ListenAnyIP(port, listenOptions => listenOptions.Protocols = HttpProtocols.Http2));
 
         return builder;
     }

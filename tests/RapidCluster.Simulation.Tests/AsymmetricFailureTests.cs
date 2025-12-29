@@ -21,10 +21,7 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void OneWayPartition_SourceCannotReachTarget()
@@ -673,5 +670,4 @@ public sealed class AsymmetricFailureTests : IAsyncLifetime
         // Cluster should adapt somehow
         Assert.True(_harness.Nodes.Count >= 2, "Cluster should handle cyclic partitions");
     }
-
 }

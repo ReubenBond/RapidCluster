@@ -9,10 +9,11 @@ using RapidCluster.Pb;
 namespace RapidCluster;
 
 /// <summary>
-/// Paxos Acceptor role.
-///
+/// <para>Paxos Acceptor role.</para>
+/// <para>
 /// Owns promise/accepted state and responds to classic Paxos messages.
 /// Also stores the local acceptor state created by participating in the (single) fast round.
+/// </para>
 /// </summary>
 internal sealed class PaxosAcceptor
 {
@@ -50,9 +51,8 @@ internal sealed class PaxosAcceptor
     }
 
     /// <summary>
-    /// Records that this acceptor participated in the (single) fast round by locally accepting the proposal.
-    ///
-    /// Fast round is modeled as if the acceptor received an <c>AcceptRequest</c> directly.
+    /// <para>Records that this acceptor participated in the (single) fast round by locally accepting the proposal.</para>
+    /// <para>Fast round is modeled as if the acceptor received an <c>AcceptRequest</c> directly.</para>
     /// </summary>
     public void RegisterFastRoundVote(MembershipProposal proposal)
     {
@@ -117,7 +117,7 @@ internal sealed class PaxosAcceptor
             Sender = _myAddr,
             Rnd = _promisedRank,
             Vrnd = _acceptedRank,
-            Proposal = _acceptedValue
+            Proposal = _acceptedValue,
         };
 
         _log.SendingPhase1b(phase1aMessage.Sender, _promisedRank, _acceptedRank, _acceptedValue);
@@ -171,7 +171,7 @@ internal sealed class PaxosAcceptor
                 ConfigurationId = _configurationId.ToProtobuf(),
                 Sender = _myAddr,
                 Rnd = _promisedRank,
-                Proposal = null
+                Proposal = null,
             };
 
             _log.SendingPhase2b(phase2aMessage.Sender, _promisedRank, vval: null);
@@ -200,7 +200,7 @@ internal sealed class PaxosAcceptor
             ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
             Rnd = _acceptedRank,
-            Proposal = _acceptedValue
+            Proposal = _acceptedValue,
         };
 
         _log.SendingPhase2b(phase2aMessage.Sender, _acceptedRank, _acceptedValue);

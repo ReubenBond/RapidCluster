@@ -23,10 +23,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     #region Single Seed Discovery
 
@@ -114,7 +111,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
         _harness.WaitForConvergence();
 
@@ -164,7 +161,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
             seedNode.Address,
             seedNode.Address,
             joiner1.Address,
-            seedNode.Address
+            seedNode.Address,
         };
         var joiner2 = _harness.CreateJoinerNodeWithSeedAddresses(duplicateSeeds, nodeId: 2);
 
@@ -224,7 +221,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
             joiner2Address,
             seedNode.Address,
             joiner2Address,
-            joiner1.Address
+            joiner1.Address,
         };
         var joiner2 = _harness.CreateJoinerNodeWithSeedAddresses(seedsWithMultipleSelf, nodeId: 2);
 
@@ -272,7 +269,7 @@ public sealed class SeedDiscoveryTests : IAsyncLifetime
         var seeds = new List<EndPoint>
         {
             new DnsEndPoint("host1", 5000),
-            new DnsEndPoint("host2", 5000)
+            new DnsEndPoint("host2", 5000),
         };
 
         var options = new RapidClusterOptions { SeedAddresses = seeds };

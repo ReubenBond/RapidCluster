@@ -17,7 +17,7 @@ public static class RapidClusterUtils
         var parts = hostString.Split(':');
         if (parts.Length != 2 || !int.TryParse(parts[1], out var port))
         {
-            throw new ArgumentException($"Invalid host:port string: {hostString}");
+            throw new ArgumentException($"Invalid host:port string: {hostString}", nameof(hostString));
         }
         return HostFromParts(parts[0], port);
     }
@@ -30,7 +30,7 @@ public static class RapidClusterUtils
         return new Endpoint
         {
             Hostname = ByteString.CopyFromUtf8(hostname),
-            Port = port
+            Port = port,
         };
     }
 

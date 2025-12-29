@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
@@ -21,10 +22,7 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void MembershipViewNeverEmptyForInitializedNode()
@@ -41,8 +39,8 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
 
         var view = seedNode.CurrentView;
-        var selfAddress = $"{seedNode.Address.Hostname}:{seedNode.Address.Port}";
-        var viewAddresses = view.Members.Select(m => $"{m.Hostname}:{m.Port}").ToHashSet();
+        var selfAddress = string.Create(CultureInfo.InvariantCulture, $"{seedNode.Address.Hostname.ToStringUtf8()}:{seedNode.Address.Port}");
+        var viewAddresses = view.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).ToHashSet(StringComparer.Ordinal);
 
         Assert.Contains(selfAddress, viewAddresses);
     }
@@ -56,12 +54,12 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         _harness.RunUntilConverged(expectedSize: 2);
 
         var knownAddresses = _harness.Nodes
-            .Select(n => $"{n.Address.Hostname}:{n.Address.Port}")
-            .ToHashSet();
+            .Select(n => string.Create(CultureInfo.InvariantCulture, $"{n.Address.Hostname.ToStringUtf8()}:{n.Address.Port}"))
+            .ToHashSet(StringComparer.Ordinal);
 
         var viewAddresses = seedNode.CurrentView.Members
-            .Select(m => $"{m.Hostname}:{m.Port}")
-            .ToHashSet();
+            .Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}"))
+            .ToHashSet(StringComparer.Ordinal);
 
         // All addresses in view should be known nodes
         Assert.Subset(viewAddresses, knownAddresses);
@@ -82,7 +80,7 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
     public void NoSplitBrainWithTwoNodes()
     {
         var seedNode = _harness.CreateSeedNode();
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         _harness.RunUntilConverged(expectedSize: 2);
 
@@ -107,8 +105,7 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
     {
         var seedNode = _harness.CreateSeedNode();
         var initialConfigId = seedNode.CurrentView.ConfigurationId;
-
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         _harness.RunUntilConverged(expectedSize: 2);
 
@@ -139,7 +136,7 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
     public void MembershipConsistencyWithConvergedCluster()
     {
         var seedNode = _harness.CreateSeedNode();
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         _harness.RunUntilConverged(expectedSize: 2);
 
@@ -169,7 +166,7 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
     public void CheckAllWithTwoNodes()
     {
         var seedNode = _harness.CreateSeedNode();
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         _harness.RunUntilConverged(expectedSize: 2);
 
@@ -305,5 +302,4 @@ public sealed class InvariantVerificationTests : IAsyncLifetime
         // Each call should return a new copy
         Assert.NotSame(violations1, violations2);
     }
-
 }

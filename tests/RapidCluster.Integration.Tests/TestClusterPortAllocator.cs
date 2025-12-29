@@ -30,16 +30,6 @@ internal sealed class TestClusterPortAllocator : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Releases unmanaged and - optionally - managed resources.
-    /// </summary>
-    /// <param name="disposing"><see langword="true" /> to release both managed and unmanaged resources; <see langword="false" /> to release only unmanaged resources.</param>
-    private void Dispose(bool disposing)
-    {
         if (_disposed)
         {
             return;
@@ -60,14 +50,8 @@ internal sealed class TestClusterPortAllocator : IDisposable
             _allocatedPorts.Clear();
             _disposed = true;
         }
-    }
 
-    /// <summary>
-    /// Finalizes an instance of the <see cref="TestClusterPortAllocator"/> class.
-    /// </summary>
-    ~TestClusterPortAllocator()
-    {
-        Dispose(false);
+        GC.SuppressFinalize(this);
     }
 
     private int GetAvailablePort(IPEndPoint[] tcpConnInfoArray, int portStartRange, int portEndRange)
@@ -127,7 +111,7 @@ internal sealed class TestClusterPortAllocator : IDisposable
                 IsBackground = true,
             };
             _thread.Start();
-            AppDomain.CurrentDomain.DomainUnload += this.OnAppDomainUnload;
+            AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnload;
         }
 
         private void OnAppDomainUnload(object? sender, EventArgs e) => Shutdown();
@@ -148,7 +132,7 @@ internal sealed class TestClusterPortAllocator : IDisposable
                 {
                     if (!_mutexes.TryGetValue(name, out var mutex))
                     {
-                        mutex = new Mutex(false, name);
+                        mutex = new Mutex(initiallyOwned: false, name);
                         if (mutex.WaitOne(500))
                         {
                             // Acquired

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -95,7 +96,7 @@ public sealed class MemberInfo : IEquatable<MemberInfo>
     /// </summary>
     public static bool operator !=(MemberInfo? left, MemberInfo? right) => !(left == right);
 
-    private string DebuggerDisplay => $"MemberInfo({Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port}, NodeId={Endpoint.NodeId})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"MemberInfo({Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port}, NodeId={Endpoint.NodeId})");
 }
 
 /// <summary>

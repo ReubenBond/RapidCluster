@@ -18,10 +18,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void ZeroBatchingWindowWorks()
@@ -38,7 +35,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
     {
         var options = new RapidClusterProtocolOptions
         {
-            FailureDetectorInterval = TimeSpan.FromMilliseconds(100)
+            FailureDetectorInterval = TimeSpan.FromMilliseconds(100),
         };
         var seedNode = _harness.CreateSeedNode(options: options);
 
@@ -53,7 +50,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         {
             ObserversPerSubject = 5,
             HighWatermark = 4,
-            LowWatermark = 2
+            LowWatermark = 2,
         };
         var seedNode = _harness.CreateSeedNode(options: options);
 
@@ -67,7 +64,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         var options = new RapidClusterProtocolOptions
         {
             HighWatermark = 8,
-            LowWatermark = 3
+            LowWatermark = 3,
         };
         var seedNode = _harness.CreateSeedNode(options: options);
 
@@ -139,10 +136,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         _ = _harness.CreateSeedNode();
 
         // CreateJoinerNode requires a valid seed node
-        Assert.Throws<ArgumentNullException>(() =>
-        {
-            _harness.CreateJoinerNode(null!, nodeId: 1);
-        });
+        Assert.Throws<ArgumentNullException>(() => _harness.CreateJoinerNode(null!, nodeId: 1));
     }
 
     [Fact]
@@ -165,10 +159,7 @@ public sealed class EdgeCaseTests : IAsyncLifetime
 
         // Attempting to join using an uninitialized node as seed should fail
         // because the uninitialized node doesn't have proper membership set up
-        Assert.ThrowsAny<Exception>(() =>
-        {
-            _harness.CreateJoinerNode(uninitializedNode, nodeId: 2);
-        });
+        Assert.ThrowsAny<Exception>(() => _harness.CreateJoinerNode(uninitializedNode, nodeId: 2));
 
         // Cleanup
         _harness.CrashNode(uninitializedNode);
@@ -294,6 +285,4 @@ public sealed class EdgeCaseTests : IAsyncLifetime
         Assert.True(duration >= TimeSpan.Zero);
         Assert.True(duration < maxDuration);
     }
-
 }
-

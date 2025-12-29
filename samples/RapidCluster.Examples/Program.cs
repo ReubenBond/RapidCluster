@@ -4,15 +4,15 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using RapidCluster;
 using RapidCluster.Grpc;
+
+namespace RapidCluster.Examples;
 
 /// <summary>
 /// RapidCluster example application using modern ASP.NET hosting.
 /// </summary>
 internal sealed partial class Program
 {
-
     [LoggerMessage(Level = LogLevel.Information, Message = "Starting RapidCluster agent on {Listen}")]
     private static partial void LogStarting(ILogger logger, string Listen);
 

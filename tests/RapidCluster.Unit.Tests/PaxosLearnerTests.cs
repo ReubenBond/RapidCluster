@@ -122,7 +122,7 @@ public sealed class PaxosLearnerTests
             Sender = Utils.HostFromParts("127.0.0.1", senderPort, nodeId: Utils.GetNextNodeId()),
             ConfigurationId = configId.ToProtobuf(),
             Rnd = rnd,
-            Proposal = proposal
+            Proposal = proposal,
         };
     }
 

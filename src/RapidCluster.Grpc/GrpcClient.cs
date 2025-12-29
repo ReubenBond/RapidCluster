@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Hosting;
@@ -23,8 +24,10 @@ internal sealed partial class GrpcClient(
 {
     private readonly RapidClusterProtocolOptions _options = options.Value;
     private readonly RapidClusterMetrics _metrics = metrics;
+#pragma warning disable CA1823 // Avoid unused private fields
     private readonly ILogger<GrpcClient> _logger = logger;
-    private readonly ConcurrentDictionary<string, Pb.MembershipService.MembershipServiceClient> _clients = new();
+#pragma warning restore CA1823 // Avoid unused private fields
+    private readonly ConcurrentDictionary<string, Pb.MembershipService.MembershipServiceClient> _clients = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<int, Task> _pendingTasks = new();
     private readonly CancellationTokenSource _stoppingCts = new();
     private int _taskIdCounter;
@@ -56,8 +59,8 @@ internal sealed partial class GrpcClient(
     [LoggerMessage(Level = LogLevel.Debug, Message = "One-way message delivery failed to {Remote}: Timeout after {Timeout}")]
     private partial void LogOneWayDeliveryFailedTimeout(LoggableEndpoint Remote, TimeSpan Timeout);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "One-way message delivery failed to {Remote}: Unexpected error - {Error}")]
-    private partial void LogOneWayDeliveryFailedUnexpected(LoggableEndpoint Remote, string Error);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "One-way message delivery failed to {Remote}")]
+    private partial void LogOneWayDeliveryFailedUnexpected(Exception exception, LoggableEndpoint Remote);
 
     [LoggerMessage(Level = LogLevel.Trace, Message = "One-way message delivered successfully to {Remote}")]
     private partial void LogOneWayDeliverySucceeded(LoggableEndpoint Remote);
@@ -76,7 +79,7 @@ internal sealed partial class GrpcClient(
             LogStopping(pendingTasks.Length);
             try
             {
-                await Task.WhenAll(pendingTasks).WaitAsync(cancellationToken).ConfigureAwait(true);
+                await Task.WhenAll(pendingTasks).WaitAsync(cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -177,7 +180,7 @@ internal sealed partial class GrpcClient(
         catch (Exception ex)
         {
             stopwatch.Stop();
-            LogOneWayDeliveryFailedUnexpected(new LoggableEndpoint(remote), ex.Message);
+            LogOneWayDeliveryFailedUnexpected(ex, new LoggableEndpoint(remote));
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "Unknown");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "Unknown", stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Unknown);
@@ -191,23 +194,23 @@ internal sealed partial class GrpcClient(
 
     private Pb.MembershipService.MembershipServiceClient GetOrCreateClient(Endpoint remote)
     {
-        var key = $"{remote.Hostname.ToStringUtf8()}:{remote.Port}";
-        return _clients.GetOrAdd(key, _ =>
+        var key = string.Create(CultureInfo.InvariantCulture, $"{remote.Hostname.ToStringUtf8()}:{remote.Port}");
+        return _clients.GetOrAdd(key, static (key, options) =>
         {
-            var scheme = _options.UseHttps ? "https" : "http";
+            var scheme = options.UseHttps ? "https" : "http";
             var handler = new SocketsHttpHandler
             {
-                EnableMultipleHttp2Connections = true
+                EnableMultipleHttp2Connections = true,
             };
             var channel = GrpcChannel.ForAddress($"{scheme}://{key}", new GrpcChannelOptions
             {
                 HttpHandler = handler,
                 HttpVersion = new Version(2, 0),
                 HttpVersionPolicy = HttpVersionPolicy.RequestVersionExact, // Force HTTP/2 prior knowledge (for HTTP) or ALPN (for HTTPS)
-                ThrowOperationCanceledOnCancellation = true
+                ThrowOperationCanceledOnCancellation = true,
             });
             return new Pb.MembershipService.MembershipServiceClient(channel);
-        });
+        }, _options);
     }
 
     public async ValueTask DisposeAsync()
@@ -225,7 +228,7 @@ internal sealed partial class GrpcClient(
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             try
             {
-                await Task.WhenAll(pendingTasks).WaitAsync(cts.Token).ConfigureAwait(true);
+                await Task.WhenAll(pendingTasks).WaitAsync(cts.Token);
             }
             catch (OperationCanceledException)
             {

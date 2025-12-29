@@ -39,10 +39,7 @@ internal sealed class EndpointAddressComparer : IEqualityComparer<Endpoint>, ICo
         return x.Hostname == y.Hostname && x.Port == y.Port;
     }
 
-    public int GetHashCode(Endpoint obj)
-    {
-        return HashCode.Combine(obj.Hostname, obj.Port);
-    }
+    public int GetHashCode(Endpoint obj) => HashCode.Combine(obj.Hostname, obj.Port);
 
     public int Compare(Endpoint? x, Endpoint? y)
     {

@@ -7,45 +7,34 @@ using RapidCluster.Pb;
 namespace RapidCluster;
 
 /// <summary>
-/// Paxos Learner role.
-///
-/// Collects accept votes (Phase2b) and determines when a value is chosen.
+/// <para>Paxos Learner role.</para>
+/// <para>Collects accept votes (Phase2b) and determines when a value is chosen.</para>
 /// </summary>
-internal sealed class PaxosLearner
+internal sealed class PaxosLearner(
+    ConfigurationId configurationId,
+    int membershipSize,
+    RapidClusterMetrics metrics,
+    ILogger logger)
 {
-    private readonly PaxosLogger _log;
-    private readonly RapidClusterMetrics _metrics;
-    private readonly ConfigurationId _configurationId;
-    private readonly int _membershipSize;
+    private readonly PaxosLogger _log = new(logger);
+    private readonly RapidClusterMetrics _metrics = metrics;
+    private readonly ConfigurationId _configurationId = configurationId;
+    private readonly int _membershipSize = membershipSize;
 
     private readonly Dictionary<Rank, Dictionary<Endpoint, Phase2bMessage>> _acceptResponses = [];
 
-    private ConsensusResult? _decided;
+    public bool IsDecided => Decided != null;
 
-    public PaxosLearner(
-        ConfigurationId configurationId,
-        int membershipSize,
-        RapidClusterMetrics metrics,
-        ILogger logger)
-    {
-        _configurationId = configurationId;
-        _membershipSize = membershipSize;
-        _metrics = metrics;
-        _log = new PaxosLogger(logger);
-    }
-
-    public bool IsDecided => _decided != null;
-
-    public ConsensusResult? Decided => _decided;
+    public ConsensusResult? Decided { get; private set; }
 
     private bool TryDecide(ConsensusResult result)
     {
-        if (_decided != null)
+        if (Decided != null)
         {
             return false;
         }
 
-        _decided = result;
+        Decided = result;
         return true;
     }
 
@@ -95,8 +84,5 @@ internal sealed class PaxosLearner
         }
     }
 
-    public void Cancel()
-    {
-        TryDecide(ConsensusResult.Cancelled.Instance);
-    }
+    public void Cancel() => TryDecide(ConsensusResult.Cancelled.Instance);
 }

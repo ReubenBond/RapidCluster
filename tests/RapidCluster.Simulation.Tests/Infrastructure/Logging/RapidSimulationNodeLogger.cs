@@ -8,12 +8,10 @@ namespace RapidCluster.Simulation.Tests.Infrastructure.Logging;
 /// </summary>
 internal sealed partial class RapidSimulationNodeLogger(ILogger<RapidSimulationNode> logger)
 {
-    private readonly ILogger _logger = logger;
-
     /// <summary>
     /// Gets the underlying logger instance.
     /// </summary>
-    public ILogger Logger => _logger;
+    public ILogger Logger { get; } = logger;
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Node {Address} initialized with {MembershipSize} members, ConfigId={ConfigId}")]
     public partial void NodeInitialized(string address, int membershipSize, long configId);

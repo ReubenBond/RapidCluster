@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
@@ -23,10 +24,7 @@ public sealed class ChaosTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void ChaosInjectorDefaultsToZeroRates()
@@ -115,7 +113,7 @@ public sealed class ChaosTests : IAsyncLifetime
         _chaos.MinimumAliveNodes = 2;
 
         // Run for many steps
-        var faultsInjected = _chaos.RunChaos(steps: 500, stepInterval: TimeSpan.FromMilliseconds(10));
+        _ = _chaos.RunChaos(steps: 500, stepInterval: TimeSpan.FromMilliseconds(10));
 
         // Some faults should have been injected
         // Note: With probabilistic injection, we may or may not have faults
@@ -126,7 +124,7 @@ public sealed class ChaosTests : IAsyncLifetime
     public void InvariantsHoldUnderLightChaos()
     {
         // Create a proper cluster with joined nodes
-        var nodes = _harness.CreateCluster(size: 3);
+        _ = _harness.CreateCluster(size: 3);
 
         _chaos.NodeCrashRate = 0.0; // No crashes
         _chaos.PartitionRate = 0.02; // Light partitions
@@ -143,18 +141,18 @@ public sealed class ChaosTests : IAsyncLifetime
         if (!result)
         {
             var output = TestContext.Current.TestOutputHelper;
-            output?.WriteLine($"Invariant check failed! Violations:");
+            output?.WriteLine("Invariant check failed! Violations:");
             foreach (var violation in _checker.Violations)
             {
-                output?.WriteLine($"  [{violation.Type}] {violation.Message} (SimulatedTime={violation.SimulatedTime})");
+                output?.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  [{violation.Type}] {violation.Message} (SimulatedTime={violation.SimulatedTime})"));
             }
 
             // Output node membership info
-            output?.WriteLine($"Node membership states:");
+            output?.WriteLine("Node membership states:");
             foreach (var node in _harness.Nodes)
             {
                 var view = node.CurrentView;
-                output?.WriteLine($"  {RapidClusterUtils.Loggable(node.Address)}: IsInitialized={node.IsInitialized}, MembershipSize={node.MembershipSize}, ConfigId={view?.ConfigurationId}");
+                output?.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {RapidClusterUtils.Loggable(node.Address)}: IsInitialized={node.IsInitialized}, MembershipSize={node.MembershipSize}, ConfigId={view?.ConfigurationId}"));
             }
         }
 
@@ -308,7 +306,7 @@ public sealed class ChaosTests : IAsyncLifetime
     public void ScheduledFaultsExecuteInChronologicalOrder()
     {
         var node1 = _harness.CreateSeedNode(0);
-        var node2 = _harness.CreateSeedNode(1);
+        _ = _harness.CreateSeedNode(1);
 
         var events = new List<string>();
 
@@ -356,7 +354,7 @@ public sealed class ChaosTests : IAsyncLifetime
         _chaos.SchedulePartitionHeal(nodes[0], nodes[1], TimeSpan.FromSeconds(5));
 
         // Run chaos
-        var faultsInjected = _chaos.RunChaos(steps: 300, stepInterval: TimeSpan.FromMilliseconds(10));
+        _ = _chaos.RunChaos(steps: 300, stepInterval: TimeSpan.FromMilliseconds(10));
 
         // Verify minimum alive nodes maintained
         Assert.True(_harness.Nodes.Count >= 3);
@@ -387,6 +385,4 @@ public sealed class ChaosTests : IAsyncLifetime
         // System should survive
         Assert.True(_harness.Nodes.Count >= 2);
     }
-
 }
-

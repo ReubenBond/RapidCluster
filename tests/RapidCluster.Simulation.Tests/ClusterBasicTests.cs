@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
@@ -19,10 +20,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void SingleNodeClusterInitializes()
@@ -74,7 +72,7 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         Assert.True(seedNode.IsInitialized);
 
         // Stop should not throw (degenerates to shutdown for single node)
-        _harness.Run(seedNode.StopAsync);
+        _harness.Run(() => seedNode.StopAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -99,16 +97,16 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         Assert.Equal(2, view.Members.Length);
 
         // View should contain both nodes
-        var addresses = view.Members.Select(m => $"{m.Hostname}:{m.Port}").ToHashSet();
-        Assert.Contains($"{seedNode.Address.Hostname}:{seedNode.Address.Port}", addresses);
-        Assert.Contains($"{joiner.Address.Hostname}:{joiner.Address.Port}", addresses);
+        var addresses = view.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{seedNode.Address.Hostname.ToStringUtf8()}:{seedNode.Address.Port}"), addresses);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{joiner.Address.Hostname.ToStringUtf8()}:{joiner.Address.Port}"), addresses);
     }
 
     [Fact]
     public void SeedSeesJoinerAfterJoin()
     {
         var seedNode = _harness.CreateSeedNode();
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         // Wait for seed to see the joiner
         _harness.WaitForNodeSize(seedNode, expectedSize: 2);
@@ -246,11 +244,11 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         _harness.WaitForConvergence();
 
         var view = seedNode.CurrentView;
-        var addresses = view.Members.Select(m => $"{m.Hostname}:{m.Port}").ToHashSet();
+        var addresses = view.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains($"{seedNode.Address.Hostname}:{seedNode.Address.Port}", addresses);
-        Assert.Contains($"{joiner1.Address.Hostname}:{joiner1.Address.Port}", addresses);
-        Assert.Contains($"{joiner2.Address.Hostname}:{joiner2.Address.Port}", addresses);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{seedNode.Address.Hostname.ToStringUtf8()}:{seedNode.Address.Port}"), addresses);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{joiner1.Address.Hostname.ToStringUtf8()}:{joiner1.Address.Port}"), addresses);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{joiner2.Address.Hostname.ToStringUtf8()}:{joiner2.Address.Port}"), addresses);
     }
 
     [Fact]
@@ -265,5 +263,4 @@ public sealed class ClusterBasicTests : IAsyncLifetime
         var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         Assert.True(joiner.IsInitialized);
     }
-
 }

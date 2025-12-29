@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 
 namespace RapidCluster.Integration.Tests;
@@ -22,8 +23,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
     public async Task SeedNode_Has_NonEmpty_ClusterId()
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (app, cluster) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, cluster) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var clusterId = cluster.CurrentView.ConfigurationId.ClusterId;
 
         Assert.NotEqual(ClusterId.None, clusterId);
@@ -34,9 +34,8 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
         await TestCluster.WaitForClusterSizeAsync(joiner, 2, TimeSpan.FromSeconds(10));
@@ -54,10 +53,9 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joiner1Address = CreateAddress(_cluster.GetNextPort());
         var joiner2Address = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
-        var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
 
         await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10));
         await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10));
@@ -77,12 +75,11 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var initialClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
         // Add a node
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+        var (_, _) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // ClusterId should remain stable
@@ -96,8 +93,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
     public async Task ClusterId_Stable_After_Multiple_Sequential_Joins()
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var initialClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
         // Add multiple nodes sequentially
@@ -105,7 +101,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         for (var i = 0; i < 3; i++)
         {
             var joinerAddress = CreateAddress(_cluster.GetNextPort());
-            var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+            var (_, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
             await TestCluster.WaitForClusterSizeAsync(joiner, nodes.Count + 1, TimeSpan.FromSeconds(10));
             nodes.Add(joiner);
         }
@@ -122,13 +118,12 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var initialVersion = seed.CurrentView.ConfigurationId.Version;
         var initialClusterId = seed.CurrentView.ConfigurationId.ClusterId;
 
         // Add a node
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+        var (_, _) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
         await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         var afterJoinVersion = seed.CurrentView.ConfigurationId.Version;
@@ -136,7 +131,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
 
         // Version should have increased
         Assert.True(afterJoinVersion > initialVersion,
-            $"Version should increase: initial={initialVersion}, afterJoin={afterJoinVersion}");
+            string.Create(CultureInfo.InvariantCulture, $"Version should increase: initial={initialVersion}, afterJoin={afterJoinVersion}"));
 
         // ClusterId should remain stable
         Assert.Equal(initialClusterId, afterJoinClusterId);
@@ -152,7 +147,7 @@ public sealed class ClusterIdIntegrationTests(ITestOutputHelper outputHelper) : 
         await seedApp1.StopAsync(TestContext.Current.CancellationToken);
 
         var seedAddress2 = CreateAddress(_cluster.GetNextPort());
-        var (seedApp2, seed2) = await _cluster.CreateSeedNodeAsync(seedAddress2, TestContext.Current.CancellationToken);
+        var (_, seed2) = await _cluster.CreateSeedNodeAsync(seedAddress2, TestContext.Current.CancellationToken);
         var clusterId2 = seed2.CurrentView.ConfigurationId.ClusterId;
 
         // Different addresses should produce different ClusterIds

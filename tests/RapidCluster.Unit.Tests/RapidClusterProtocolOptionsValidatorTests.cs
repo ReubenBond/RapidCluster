@@ -13,7 +13,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcTimeout = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("GrpcTimeout", result.FailureMessage, StringComparison.Ordinal);
@@ -25,7 +25,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcTimeout = TimeSpan.FromSeconds(-1);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
     }
@@ -36,7 +36,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcTimeout = TimeSpan.FromSeconds(10);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -47,7 +47,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcDefaultRetries = -1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("GrpcDefaultRetries", result.FailureMessage, StringComparison.Ordinal);
@@ -59,7 +59,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcDefaultRetries = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -70,7 +70,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcDefaultRetries = 5;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -81,7 +81,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcJoinTimeout = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("GrpcJoinTimeout", result.FailureMessage, StringComparison.Ordinal);
@@ -93,7 +93,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcJoinTimeout = TimeSpan.FromSeconds(5);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -104,7 +104,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcProbeTimeout = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("GrpcProbeTimeout", result.FailureMessage, StringComparison.Ordinal);
@@ -116,7 +116,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.GrpcProbeTimeout = TimeSpan.FromMilliseconds(500);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -127,7 +127,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.FailureDetectorInterval = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("FailureDetectorInterval", result.FailureMessage, StringComparison.Ordinal);
@@ -139,7 +139,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.FailureDetectorInterval = TimeSpan.FromSeconds(1);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -150,7 +150,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.BatchingWindow = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("BatchingWindow", result.FailureMessage, StringComparison.Ordinal);
@@ -162,7 +162,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.BatchingWindow = TimeSpan.FromMilliseconds(100);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -173,7 +173,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.ConsensusFallbackTimeoutBaseDelay = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("ConsensusFallbackTimeoutBaseDelay", result.FailureMessage, StringComparison.Ordinal);
@@ -185,7 +185,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(500);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -196,7 +196,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.LeaveMessageTimeout = TimeSpan.Zero;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("LeaveMessageTimeout", result.FailureMessage, StringComparison.Ordinal);
@@ -208,7 +208,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.LeaveMessageTimeout = TimeSpan.FromMilliseconds(1500);
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -219,7 +219,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.ObserversPerSubject = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("ObserversPerSubject", result.FailureMessage, StringComparison.Ordinal);
@@ -231,7 +231,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.ObserversPerSubject = -1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
     }
@@ -242,7 +242,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.ObserversPerSubject = 2; // Below minimum of 3
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("at least 3", result.FailureMessage, StringComparison.Ordinal);
@@ -256,7 +256,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         options.HighWatermark = 2;
         options.LowWatermark = 1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -267,7 +267,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.ObserversPerSubject = 10;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -278,7 +278,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.HighWatermark = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("HighWatermark", result.FailureMessage, StringComparison.Ordinal);
@@ -290,7 +290,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.HighWatermark = -1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
     }
@@ -301,7 +301,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.HighWatermark = 9;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -313,7 +313,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         options.ObserversPerSubject = 10;
         options.HighWatermark = 10; // Must be < K
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("must be less than ObserversPerSubject", result.FailureMessage, StringComparison.Ordinal);
@@ -326,7 +326,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         options.ObserversPerSubject = 10;
         options.HighWatermark = 11; // Must be < K
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("must be less than ObserversPerSubject", result.FailureMessage, StringComparison.Ordinal);
@@ -338,7 +338,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.LowWatermark = -1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("LowWatermark", result.FailureMessage, StringComparison.Ordinal);
@@ -350,7 +350,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.LowWatermark = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("LowWatermark", result.FailureMessage, StringComparison.Ordinal);
@@ -362,7 +362,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.LowWatermark = 3;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -374,7 +374,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         options.LowWatermark = 9;
         options.HighWatermark = 9;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("must be less than HighWatermark", result.FailureMessage, StringComparison.Ordinal);
@@ -387,7 +387,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         options.LowWatermark = 10;
         options.HighWatermark = 5;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("must be less than HighWatermark", result.FailureMessage, StringComparison.Ordinal);
@@ -399,7 +399,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.FailureDetectorConsecutiveFailures = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("FailureDetectorConsecutiveFailures", result.FailureMessage, StringComparison.Ordinal);
@@ -411,7 +411,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.FailureDetectorConsecutiveFailures = -1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Failed);
         Assert.Contains("FailureDetectorConsecutiveFailures", result.FailureMessage, StringComparison.Ordinal);
@@ -423,7 +423,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         options.FailureDetectorConsecutiveFailures = 1;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -434,7 +434,7 @@ public class RapidClusterProtocolOptionsValidatorTests
         var options = CreateValidOptions();
         // Default is 3
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
         Assert.Equal(3, options.FailureDetectorConsecutiveFailures);
@@ -445,7 +445,7 @@ public class RapidClusterProtocolOptionsValidatorTests
     {
         var options = new RapidClusterProtocolOptions();
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }
@@ -462,10 +462,10 @@ public class RapidClusterProtocolOptionsValidatorTests
             FailureDetectorInterval = TimeSpan.FromMilliseconds(500),
             BatchingWindow = TimeSpan.FromMilliseconds(50),
             ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(250),
-            LeaveMessageTimeout = TimeSpan.FromMilliseconds(1000)
+            LeaveMessageTimeout = TimeSpan.FromMilliseconds(1000),
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         Assert.True(result.Succeeded);
     }

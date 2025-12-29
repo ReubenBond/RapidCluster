@@ -18,7 +18,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
     [Fact]
     public async Task Phase1b_IgnoresWrongConfigurationId()
     {
-        var membershipSize = 3;
+        const int membershipSize = 3;
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
@@ -42,7 +42,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             metrics,
             NullLogger<ConsensusCoordinator>.Instance);
 
-        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)));
 
         await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
         var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
@@ -57,8 +57,8 @@ public sealed class ClassicProposerConsensusCoordinatorTests
                 ConfigurationId = new ConfigurationId(new ClusterId(888), version: 999).ToProtobuf(),
                 Rnd = phase1aRank,
                 Vrnd = new Rank { Round = 1, NodeIndex = 1 },
-                Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002))
-            }
+                Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002)),
+            },
         }, TestContext.Current.CancellationToken);
 
         await Task.Delay(100, TestContext.Current.CancellationToken);
@@ -68,7 +68,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
     [Fact]
     public async Task Phase1b_IgnoresRoundMismatch()
     {
-        var membershipSize = 3;
+        const int membershipSize = 3;
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
@@ -92,7 +92,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             metrics,
             NullLogger<ConsensusCoordinator>.Instance);
 
-        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)));
 
         await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
         var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
@@ -108,8 +108,8 @@ public sealed class ClassicProposerConsensusCoordinatorTests
                 ConfigurationId = configId.ToProtobuf(),
                 Rnd = new Rank { Round = phase1aRank.Round - 1, NodeIndex = phase1aRank.NodeIndex },
                 Vrnd = new Rank { Round = 1, NodeIndex = 1 },
-                Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002))
-            }
+                Proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.2", 5002)),
+            },
         }, TestContext.Current.CancellationToken);
 
         await Task.Delay(100, TestContext.Current.CancellationToken);
@@ -119,7 +119,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
     [Fact]
     public async Task Phase1b_BroadcastsPhase2aOnce_WhenMajorityReached()
     {
-        var membershipSize = 3;
+        const int membershipSize = 3;
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
@@ -143,7 +143,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             metrics,
             NullLogger<ConsensusCoordinator>.Instance);
 
-        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)));
 
         await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
         var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
@@ -153,12 +153,12 @@ public sealed class ClassicProposerConsensusCoordinatorTests
 
         coordinator.HandleMessages(new RapidClusterRequest
         {
-            Phase1BMessage = CreatePhase1b(configId, senderPort: 2000, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal)
+            Phase1BMessage = CreatePhase1b(configId, senderPort: 2000, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal),
         }, TestContext.Current.CancellationToken);
 
         coordinator.HandleMessages(new RapidClusterRequest
         {
-            Phase1BMessage = CreatePhase1b(configId, senderPort: 2001, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal)
+            Phase1BMessage = CreatePhase1b(configId, senderPort: 2001, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal),
         }, TestContext.Current.CancellationToken);
 
         await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage), TimeSpan.FromSeconds(2));
@@ -168,18 +168,18 @@ public sealed class ClassicProposerConsensusCoordinatorTests
         // Additional Phase1b messages should not cause rebroadcast.
         coordinator.HandleMessages(new RapidClusterRequest
         {
-            Phase1BMessage = CreatePhase1b(configId, senderPort: 2002, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal)
+            Phase1BMessage = CreatePhase1b(configId, senderPort: 2002, phase1aRank, vrnd: new Rank { Round = 1, NodeIndex = 10 }, proposal),
         }, TestContext.Current.CancellationToken);
 
         await Task.Delay(100, TestContext.Current.CancellationToken);
-        phase2aMessages = broadcasted.Where(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage).ToList();
+        phase2aMessages = [.. broadcasted.Where(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase2AMessage)];
         Assert.Single(phase2aMessages);
     }
 
     [Fact]
     public async Task Phase1b_DoesNotBroadcast_WhenNoValueChosen()
     {
-        var membershipSize = 3;
+        const int membershipSize = 3;
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
@@ -203,7 +203,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             metrics,
             NullLogger<ConsensusCoordinator>.Instance);
 
-        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+        coordinator.Propose(CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001)));
 
         await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
         var phase1aRank = broadcasted.First(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage).Phase1AMessage.Rank;
@@ -215,8 +215,8 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             {
                 Sender = Utils.HostFromParts("127.0.0.1", 2000, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
-                Rnd = phase1aRank
-            }
+                Rnd = phase1aRank,
+            },
         }, TestContext.Current.CancellationToken);
 
         coordinator.HandleMessages(new RapidClusterRequest
@@ -225,8 +225,8 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             {
                 Sender = Utils.HostFromParts("127.0.0.1", 2001, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
-                Rnd = phase1aRank
-            }
+                Rnd = phase1aRank,
+            },
         }, TestContext.Current.CancellationToken);
 
         await Task.Delay(100, TestContext.Current.CancellationToken);
@@ -252,7 +252,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
             ConfigurationId = configId.ToProtobuf(),
             Rnd = rnd,
             Vrnd = vrnd,
-            Proposal = proposal
+            Proposal = proposal,
         };
     }
 
@@ -274,10 +274,7 @@ public sealed class ClassicProposerConsensusCoordinatorTests
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
 
-        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            broadcasted.Enqueue(request);
-        }
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) => broadcasted.Enqueue(request);
 
         public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
@@ -306,17 +303,10 @@ public sealed class ClassicProposerConsensusCoordinatorTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class TestMembershipViewAccessor : IMembershipViewAccessor
+    private sealed class TestMembershipViewAccessor(int membershipSize) : IMembershipViewAccessor
     {
-        private readonly MembershipView _view;
-
-        public TestMembershipViewAccessor(int membershipSize)
-        {
-            _view = Utils.CreateMembershipView(membershipSize);
-        }
-
-        public MembershipView CurrentView => _view;
-        public BroadcastChannelReader<MembershipView> Updates => throw new NotImplementedException();
+        public MembershipView CurrentView { get; } = Utils.CreateMembershipView(membershipSize);
+        public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
 
     private sealed class TestMeterFactory : IMeterFactory

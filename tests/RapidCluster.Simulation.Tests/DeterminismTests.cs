@@ -19,10 +19,7 @@ public sealed class DeterminismTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public async Task SameSeedProducesSameRandomSequence()
@@ -124,5 +121,4 @@ public sealed class DeterminismTests : IAsyncLifetime
 
     [Fact]
     public void SeedIsAccessible() => Assert.Equal(TestSeed, _harness.Seed);
-
 }

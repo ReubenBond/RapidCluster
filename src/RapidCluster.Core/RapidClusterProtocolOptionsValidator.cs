@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Options;
 
 namespace RapidCluster;
@@ -70,16 +71,16 @@ internal sealed class RapidClusterProtocolOptionsValidator : IValidateOptions<Ra
         // K > H: Need at least one more observer than required for stable detection
         if (options.HighWatermark >= options.ObserversPerSubject)
         {
-            return ValidateOptionsResult.Fail(
-                $"HighWatermark ({options.HighWatermark}) must be less than ObserversPerSubject ({options.ObserversPerSubject}). " +
+            return ValidateOptionsResult.Fail(string.Create(CultureInfo.InvariantCulture,
+                $"HighWatermark ({options.HighWatermark}) must be less than ObserversPerSubject ({options.ObserversPerSubject}). ") +
                 "The protocol requires K > H to allow for some observer failures.");
         }
 
         // H > L: Need a gap between stable and unstable thresholds
         if (options.LowWatermark >= options.HighWatermark)
         {
-            return ValidateOptionsResult.Fail(
-                $"LowWatermark ({options.LowWatermark}) must be less than HighWatermark ({options.HighWatermark}). " +
+            return ValidateOptionsResult.Fail(string.Create(CultureInfo.InvariantCulture,
+                $"LowWatermark ({options.LowWatermark}) must be less than HighWatermark ({options.HighWatermark}). ") +
                 "The gap between H and L is required for almost-everywhere agreement.");
         }
 

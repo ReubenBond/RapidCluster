@@ -2,7 +2,7 @@ namespace RapidCluster;
 
 internal sealed class OneShotTimer : IDisposable
 {
-    private System.Threading.ITimer? _timer;
+    private ITimer? _timer;
     private int _token;
 
     public void Dispose()

@@ -10,10 +10,7 @@ public class ConfigurationIdTests
     #region ClusterId Tests
 
     [Fact]
-    public void ClusterId_Empty_Has_Value_Zero()
-    {
-        Assert.Equal(0, ClusterId.None.Value);
-    }
+    public void ClusterId_Empty_Has_Value_Zero() => Assert.Equal(0, ClusterId.None.Value);
 
     [Fact]
     public void ClusterId_Constructor_Sets_Value()
@@ -54,16 +51,10 @@ public class ConfigurationIdTests
     #region ConfigurationId Basic Tests
 
     [Fact]
-    public void Empty_Has_Version_Zero()
-    {
-        Assert.Equal(0, ConfigurationId.Empty.Version);
-    }
+    public void Empty_Has_Version_Zero() => Assert.Equal(0, ConfigurationId.Empty.Version);
 
     [Fact]
-    public void Empty_Has_Empty_ClusterId()
-    {
-        Assert.Equal(ClusterId.None, ConfigurationId.Empty.ClusterId);
-    }
+    public void Empty_Has_Empty_ClusterId() => Assert.Equal(ClusterId.None, ConfigurationId.Empty.ClusterId);
 
     [Fact]
     public void Constructor_Sets_Version()
@@ -307,7 +298,7 @@ public class ConfigurationIdTests
     [Fact]
     public void FromProtobuf_Null_Returns_Empty()
     {
-        var config = ConfigurationId.FromProtobuf(null);
+        var config = ConfigurationId.FromProtobuf(proto: null);
         Assert.Equal(ConfigurationId.Empty, config);
     }
 
@@ -338,7 +329,7 @@ public class ConfigurationIdTests
     [Fact]
     public void Property_Comparison_With_Empty_ClusterId_Works_Correctly()
     {
-        Gen.Select(Gen.Long[1, 1000], Gen.Long[1, 1000])
+        Gen.Long[1, 1000].Select(Gen.Long[1, 1000])
             .Sample((v1, v2) =>
             {
                 var config1 = new ConfigurationId(new ClusterId(888), v1);
@@ -353,7 +344,7 @@ public class ConfigurationIdTests
     [Fact]
     public void Property_Comparison_With_Same_ClusterId_Works_Correctly()
     {
-        Gen.Select(Gen.Long[1, 1000], Gen.Long[1, 1000], Gen.Long[1, long.MaxValue])
+        Gen.Long[1, 1000].Select(Gen.Long[1, 1000], Gen.Long[1, long.MaxValue])
             .Sample((v1, v2, clusterIdValue) =>
             {
                 var clusterId = new ClusterId(clusterIdValue);

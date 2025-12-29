@@ -62,7 +62,7 @@ internal sealed partial class RapidClusterLifecycleService(
             return;
         }
 
-        await InitializeClusterAsync(stoppingToken).ConfigureAwait(true);
+        await InitializeClusterAsync(stoppingToken);
 
         // Keep running until stoppingToken is cancelled
         await Task.Delay(Timeout.Infinite, stoppingToken)
@@ -72,18 +72,18 @@ internal sealed partial class RapidClusterLifecycleService(
     /// <inheritdoc />
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await base.StopAsync(cancellationToken).ConfigureAwait(true);
+        await base.StopAsync(cancellationToken);
 
         LogStopping();
 
         if (_started)
         {
-            await membershipService.StopAsync(cancellationToken).ConfigureAwait(true);
+            await membershipService.StopAsync(cancellationToken);
         }
     }
 
     /// <inheritdoc />
-    async Task IRapidClusterLifecycle.StartAsync(CancellationToken cancellationToken) => await InitializeClusterAsync(cancellationToken).ConfigureAwait(true);
+    async Task IRapidClusterLifecycle.StartAsync(CancellationToken cancellationToken) => await InitializeClusterAsync(cancellationToken);
 
     /// <inheritdoc />
     Task IRapidClusterLifecycle.StopAsync(CancellationToken cancellationToken) => StopAsync(cancellationToken);
@@ -95,7 +95,7 @@ internal sealed partial class RapidClusterLifecycleService(
             LogStarting(new LoggableEndpoint(_options.ListenAddress));
 
             // Initialize the membership service (start new cluster or join existing)
-            await membershipService.InitializeAsync(cancellationToken).ConfigureAwait(true);
+            await membershipService.InitializeAsync(cancellationToken);
             _started = true;
 
             LogStarted();

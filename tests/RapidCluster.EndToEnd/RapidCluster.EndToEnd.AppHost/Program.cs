@@ -1,3 +1,5 @@
+using System.Globalization;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 const int clusterSize = 5;
@@ -15,9 +17,9 @@ var bootstrapFilePath = Path.Combine(Path.GetTempPath(), $"rapidcluster-e2e-{Gui
 var nodes = new IResourceBuilder<ProjectResource>[clusterSize];
 for (var i = 0; i < clusterSize; i++)
 {
-    nodes[i] = builder.AddProject<Projects.RapidCluster_EndToEnd_Node>($"cluster-{i}")
-        .WithEnvironment("CLUSTER_SIZE", clusterSize.ToString())
-        .WithEnvironment("CLUSTER_NODE_INDEX", i.ToString())
+    nodes[i] = builder.AddProject<Projects.RapidCluster_EndToEnd_Node>(string.Create(CultureInfo.InvariantCulture, $"cluster-{i}"))
+        .WithEnvironment("CLUSTER_SIZE", clusterSize.ToString(CultureInfo.InvariantCulture))
+        .WithEnvironment("CLUSTER_NODE_INDEX", i.ToString(CultureInfo.InvariantCulture))
         .WithEnvironment("CLUSTER_BOOTSTRAP_FILE", bootstrapFilePath)
         .WithHttpHealthCheck("/health", endpointName: "https");
 }

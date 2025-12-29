@@ -19,10 +19,7 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void FullClusterLifecycle()
@@ -58,7 +55,7 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
 
         // Scale up to 4 nodes
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
@@ -155,7 +152,7 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
     {
         // Use 3-node cluster so remaining 2 nodes can reach quorum after crash
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
@@ -189,8 +186,7 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
     {
         var seedNode = _harness.CreateSeedNode();
         var initialConfigId = seedNode.ViewAccessor.CurrentView.ConfigurationId;
-
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
 
         _harness.WaitForConvergence();
 
@@ -209,5 +205,4 @@ public sealed class ClusterLifecycleTests : IAsyncLifetime
         Assert.NotNull(joiner.ViewAccessor);
         Assert.Equal(2, joiner.ViewAccessor.CurrentView.Size);
     }
-
 }

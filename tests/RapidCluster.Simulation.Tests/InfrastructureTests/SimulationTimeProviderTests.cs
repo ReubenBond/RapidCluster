@@ -1,3 +1,4 @@
+using System.Globalization;
 using Clockwork;
 
 namespace RapidCluster.Simulation.Tests.InfrastructureTests;
@@ -44,7 +45,7 @@ public class SimulationTimeProviderTests
         {
             var delta = value - GetUtcNow();
             if (delta < TimeSpan.Zero)
-                throw new ArgumentOutOfRangeException(nameof(value), $"Cannot go back in time. Current time is {GetUtcNow()}.");
+                throw new ArgumentOutOfRangeException(nameof(value), string.Create(CultureInfo.InvariantCulture, $"Cannot go back in time. Current time is {GetUtcNow()}."));
             Clock.Advance(delta);
         }
 
@@ -216,7 +217,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var start = p.GetUtcNow();
 
-        for (int i = 0; i < 100; i++)
+        for (var i = 0; i < 100; i++)
         {
             p.Advance(TimeSpan.FromMilliseconds(10));
         }
@@ -275,7 +276,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         Assert.Equal(0, callCount);
         Assert.True(p.PendingTimerCount > 0);
@@ -288,7 +289,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.Zero, TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.Zero, TimeSpan.Zero);
 
         // Timer with TimeSpan.Zero schedules callback to task queue
         Assert.Equal(0, callCount);
@@ -302,7 +303,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         Assert.Equal(0, callCount);
 
@@ -334,7 +335,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
         p.Advance(TimeSpan.FromSeconds(1));
         p.RunUntilIdle();
@@ -355,7 +356,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(1));
         p.RunUntilIdle();
@@ -376,7 +377,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         timer.Dispose();
 
         p.Advance(TimeSpan.FromSeconds(10));
@@ -390,7 +391,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(10), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(10), TimeSpan.Zero);
 
         // Change to fire sooner
         timer.Change(TimeSpan.FromMilliseconds(100), TimeSpan.Zero);
@@ -406,7 +407,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         // Change to infinite (disabled)
         timer.Change(Timeout.InfiniteTimeSpan, TimeSpan.Zero);
@@ -422,9 +423,9 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var firedOrder = new List<int>();
 
-        using var timer1 = p.CreateTimer(_ => firedOrder.Add(1), null, TimeSpan.FromSeconds(3), TimeSpan.Zero);
-        using var timer2 = p.CreateTimer(_ => firedOrder.Add(2), null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
-        using var timer3 = p.CreateTimer(_ => firedOrder.Add(3), null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
+        using var timer1 = p.CreateTimer(_ => firedOrder.Add(1), state: null, TimeSpan.FromSeconds(3), TimeSpan.Zero);
+        using var timer2 = p.CreateTimer(_ => firedOrder.Add(2), state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer3 = p.CreateTimer(_ => firedOrder.Add(3), state: null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(5));
         p.RunUntilIdle();
@@ -438,9 +439,9 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var firedOrder = new List<int>();
 
-        using var timer1 = p.CreateTimer(_ => firedOrder.Add(1), null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
-        using var timer2 = p.CreateTimer(_ => firedOrder.Add(2), null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
-        using var timer3 = p.CreateTimer(_ => firedOrder.Add(3), null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer1 = p.CreateTimer(_ => firedOrder.Add(1), state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer2 = p.CreateTimer(_ => firedOrder.Add(2), state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer3 = p.CreateTimer(_ => firedOrder.Add(3), state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(1));
         p.RunUntilIdle();
@@ -462,7 +463,7 @@ public class SimulationTimeProviderTests
             // This could lead to an infinite loop where this callback repeatedly gets invoked.
             // A correct implementation will adjust the timer's wake time.
             p.Advance(oneSecond);
-        }, null, TimeSpan.Zero, oneSecond);
+        }, state: null, TimeSpan.Zero, oneSecond);
 
         // Execute only the currently ready items (not items added during execution)
         // This prevents infinite loops when callbacks enqueue more items
@@ -479,7 +480,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
 
         using var timer1 = p.CreateTimer(_ => throw new InvalidOperationException("Test exception"),
-            null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(3));
         // This should throw due to timer1's callback - exceptions propagate from timer callbacks
@@ -493,7 +494,7 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var callCount = 0;
 
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(5), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(5), TimeSpan.Zero);
 
         var result = p.AdvanceToNextTimer();
         p.RunUntilIdle();
@@ -518,9 +519,9 @@ public class SimulationTimeProviderTests
         var p = new TestTimeProvider();
         var firedTimers = new List<int>();
 
-        using var timer1 = p.CreateTimer(_ => firedTimers.Add(1), null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
-        using var timer2 = p.CreateTimer(_ => firedTimers.Add(2), null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
-        using var timer3 = p.CreateTimer(_ => firedTimers.Add(3), null, TimeSpan.FromSeconds(3), TimeSpan.Zero);
+        using var timer1 = p.CreateTimer(_ => firedTimers.Add(1), state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer2 = p.CreateTimer(_ => firedTimers.Add(2), state: null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
+        using var timer3 = p.CreateTimer(_ => firedTimers.Add(3), state: null, TimeSpan.FromSeconds(3), TimeSpan.Zero);
 
         p.AdvanceToNextTimer();
         p.RunUntilIdle();
@@ -548,7 +549,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(5), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(5), TimeSpan.Zero);
 
         Assert.Equal(TimeSpan.FromSeconds(5), p.TimeUntilNextTimer);
     }
@@ -558,7 +559,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(5), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(5), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(3));
 
@@ -572,7 +573,7 @@ public class SimulationTimeProviderTests
         var callCount = 0;
 
         // Use a periodic timer so it stays registered
-        using var timer = p.CreateTimer(_ => callCount++, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
+        using var timer = p.CreateTimer(_ => callCount++, state: null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
 
         // After timer fires, next time should be period away
         p.Advance(TimeSpan.FromSeconds(1));
@@ -596,8 +597,8 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer1 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
-        using var timer2 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
+        using var timer1 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer2 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
 
         var timers = p.GetPendingTimers();
 
@@ -609,9 +610,9 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer1 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(3), TimeSpan.Zero);
-        using var timer2 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
-        using var timer3 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
+        using var timer1 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(3), TimeSpan.Zero);
+        using var timer2 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer3 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
 
         var timers = p.GetPendingTimers();
 
@@ -784,7 +785,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         Assert.True(p.PendingTimerCount > 0);
     }
@@ -794,7 +795,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
 
         p.Advance(TimeSpan.FromSeconds(1));
 
@@ -808,10 +809,10 @@ public class SimulationTimeProviderTests
 
         Assert.Equal(0, p.PendingTimerCount);
 
-        using var timer1 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        using var timer1 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         Assert.Equal(1, p.PendingTimerCount);
 
-        using var timer2 = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
+        using var timer2 = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(2), TimeSpan.Zero);
         Assert.Equal(2, p.PendingTimerCount);
 
         p.Advance(TimeSpan.FromSeconds(1));
@@ -826,7 +827,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        using var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        using var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
         Assert.Equal(1, p.PendingTimerCount);
 
@@ -844,7 +845,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         Assert.Equal(1, p.PendingTimerCount);
 
         timer.Dispose();
@@ -856,7 +857,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         Assert.Equal(1, p.PendingTimerCount);
 
         await timer.DisposeAsync();
@@ -868,7 +869,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         timer.Dispose();
         timer.Dispose(); // Should not throw
     }
@@ -878,7 +879,7 @@ public class SimulationTimeProviderTests
     {
         var p = new TestTimeProvider();
 
-        var timer = p.CreateTimer(_ => { }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        var timer = p.CreateTimer(_ => { }, state: null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         timer.Dispose();
 
         var result = timer.Change(TimeSpan.FromSeconds(1), TimeSpan.Zero);
@@ -893,8 +894,8 @@ public class SimulationTimeProviderTests
         var clock = new SimulationClock(DateTimeOffset.UtcNow);
         var taskQueue = new SimulationTaskQueue(clock, guard);
 
-        using var thread1EnteredGuard = new ManualResetEventSlim(false);
-        using var thread2CanProceed = new ManualResetEventSlim(false);
+        using var thread1EnteredGuard = new ManualResetEventSlim(initialState: false);
+        using var thread2CanProceed = new ManualResetEventSlim(initialState: false);
         InvalidOperationException? caughtException = null;
 
         // Schedule an item that will block inside the guard
@@ -963,5 +964,4 @@ public class SimulationTimeProviderTests
         Assert.Equal(startTime, p.Start);
         Assert.NotEqual(startTime, p.GetUtcNow());
     }
-
 }

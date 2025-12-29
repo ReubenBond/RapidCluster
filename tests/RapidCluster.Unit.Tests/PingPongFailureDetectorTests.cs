@@ -67,11 +67,11 @@ public sealed class PingPongFailureDetectorTests
         var sharedResources = new SharedResources(timeProvider: timeProvider);
         var observer = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        using var client = new TestMessagingClient();
+        await using var client = new TestMessagingClient();
         var failureNotified = false;
 
         // All probes fail
-        client.ResponseGenerator = _ => throw new Exception("Probe failed");
+        client.ResponseGenerator = _ => throw new InvalidOperationException("Probe failed");
 
         using var detector = new PingPongFailureDetector(
             subject,
@@ -108,11 +108,11 @@ public sealed class PingPongFailureDetectorTests
         var sharedResources = new SharedResources(timeProvider: timeProvider);
         var observer = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        using var client = new TestMessagingClient();
+        await using var client = new TestMessagingClient();
         var failureNotified = false;
 
         // All probes fail
-        client.ResponseGenerator = _ => throw new Exception("Probe failed");
+        client.ResponseGenerator = _ => throw new InvalidOperationException("Probe failed");
 
         using var detector = new PingPongFailureDetector(
             subject,
@@ -148,7 +148,7 @@ public sealed class PingPongFailureDetectorTests
         var sharedResources = new SharedResources(timeProvider: timeProvider);
         var observer = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        using var client = new TestMessagingClient();
+        await using var client = new TestMessagingClient();
         var failureNotified = false;
 
         // First probe fails, second succeeds, third fails
@@ -161,7 +161,7 @@ public sealed class PingPongFailureDetectorTests
                 // Second probe succeeds
                 return new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse();
             }
-            throw new Exception("Probe failed");
+            throw new InvalidOperationException("Probe failed");
         };
 
         using var detector = new PingPongFailureDetector(
@@ -243,7 +243,7 @@ public sealed class PingPongFailureDetectorTests
 
         detector.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => detector.Start());
+        Assert.Throws<ObjectDisposedException>(detector.Start);
     }
 
     #endregion
@@ -257,10 +257,10 @@ public sealed class PingPongFailureDetectorTests
         var sharedResources = new SharedResources(timeProvider: timeProvider);
         var observer = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        using var client = new TestMessagingClient();
+        await using var client = new TestMessagingClient();
         var staleViewDetected = false;
-        ConfigurationId detectedRemoteConfigId = ConfigurationId.Empty;
-        ConfigurationId detectedLocalConfigId = ConfigurationId.Empty;
+        var detectedRemoteConfigId = ConfigurationId.Empty;
+        var detectedLocalConfigId = ConfigurationId.Empty;
 
         client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse();
 
@@ -270,7 +270,7 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => { },
-            onStaleViewDetected: (remote, remoteConfig, localConfig) =>
+            onStaleViewDetected: (_, remoteConfig, localConfig) =>
             {
                 staleViewDetected = true;
                 detectedRemoteConfigId = remoteConfig;
@@ -297,7 +297,7 @@ public sealed class PingPongFailureDetectorTests
         var sharedResources = new SharedResources(timeProvider: timeProvider);
         var observer = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        using var client = new TestMessagingClient();
+        await using var client = new TestMessagingClient();
         var staleViewDetected = false;
 
         client.ResponseGenerator = _ => new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 5).ToProtobuf() }.ToRapidClusterResponse();
@@ -332,7 +332,7 @@ public sealed class PingPongFailureDetectorTests
         var sharedResources = new SharedResources(timeProvider: timeProvider);
         var observer = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        using var client = new TestMessagingClient();
+        await using var client = new TestMessagingClient();
         var failureNotified = false;
 
         client.ResponseGenerator = _ => throw new TimeoutException("Request timed out");
@@ -374,7 +374,7 @@ public sealed class PingPongFailureDetectorTests
         var protocolOptions = Microsoft.Extensions.Options.Options.Create(new RapidClusterProtocolOptions
         {
             FailureDetectorConsecutiveFailures = 5,
-            FailureDetectorInterval = TimeSpan.FromSeconds(2)
+            FailureDetectorInterval = TimeSpan.FromSeconds(2),
         });
 
         var factory = new PingPongFailureDetectorFactory(
@@ -398,11 +398,10 @@ public sealed class PingPongFailureDetectorTests
     /// <summary>
     /// Test messaging client that allows customizing responses.
     /// </summary>
-
     private sealed class TestMembershipViewAccessor(MembershipView view) : IMembershipViewAccessor
     {
         public MembershipView CurrentView => view;
-        public BroadcastChannelReader<MembershipView> Updates => throw new NotImplementedException();
+        public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
     private sealed class TestMessagingClient : IMessagingClient, IDisposable
     {
@@ -413,19 +412,9 @@ public sealed class PingPongFailureDetectorTests
         }
 
         public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            if (ResponseGenerator != null)
-            {
-                return Task.FromResult(ResponseGenerator(request));
-            }
+            => Task.FromResult(ResponseGenerator?.Invoke(request) ?? new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse());
 
-            return Task.FromResult(new ProbeResponse { ConfigurationId = new ConfigurationId(new ClusterId(888), 10).ToProtobuf() }.ToRapidClusterResponse());
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            return ValueTask.CompletedTask;
-        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
         public void Dispose()
         {

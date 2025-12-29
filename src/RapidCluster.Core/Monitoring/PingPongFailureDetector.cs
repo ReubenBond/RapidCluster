@@ -151,8 +151,8 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             while (_disposed == 0)
             {
-                await Task.Delay(_probeInterval, _sharedResources.TimeProvider, _cts.Token).ConfigureAwait(true);
-                await ProbeOnceAsync().ConfigureAwait(true);
+                await Task.Delay(_probeInterval, _sharedResources.TimeProvider, _cts.Token);
+                await ProbeOnceAsync();
             }
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
@@ -178,7 +178,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             var localConfigId = _viewAccessor?.CurrentView.ConfigurationId ?? ConfigurationId.Empty;
             var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId.ToProtobuf() }.ToRapidClusterRequest();
-            var response = await _client.SendMessageAsync(_subject, request, _cts.Token).WaitAsync(_probeInterval, _sharedResources.TimeProvider).ConfigureAwait(true);
+            var response = await _client.SendMessageAsync(_subject, request, _cts.Token).WaitAsync(_probeInterval, _sharedResources.TimeProvider, _cts.Token);
             stopwatch.Stop();
 
             if (response.ProbeResponse == null)
@@ -220,7 +220,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
             {
                 OperationCanceledException => MetricNames.ErrorTypes.Timeout,
                 TimeoutException => MetricNames.ErrorTypes.Timeout,
-                _ => MetricNames.ErrorTypes.Network
+                _ => MetricNames.ErrorTypes.Network,
             };
             _metrics.RecordProbeFailure(reason);
             _metrics.RecordProbeLatency(MetricNames.Results.Failed, stopwatch);

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using Clockwork;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,7 +24,6 @@ namespace RapidCluster.Simulation.Tests.Infrastructure;
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed class RapidSimulationNode : SimulationNode
 {
-    private readonly SimulationNodeContext _context;
     private readonly RapidClusterProtocolOptions _protocolOptions;
     private readonly ILoggerFactory _loggerFactory;
     private readonly RapidSimulationNodeLogger _log;
@@ -53,7 +53,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     /// <summary>
     /// Gets the simulation context for this node.
     /// </summary>
-    public override SimulationNodeContext Context => _context;
+    public override SimulationNodeContext Context { get; }
 
     /// <summary>
     /// Gets the current membership view of this node.
@@ -114,14 +114,14 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Wrap the logger factory to prepend the node name to all log messages
         var baseLoggerFactory = loggerFactory ?? harness.LoggerFactory;
-        var nodeName = $"{address.Hostname.ToStringUtf8()}:{address.Port}";
+        var nodeName = string.Create(CultureInfo.InvariantCulture, $"{address.Hostname.ToStringUtf8()}:{address.Port}");
         _loggerFactory = baseLoggerFactory != null
             ? new NodePrefixedLoggerFactory(baseLoggerFactory, nodeName)
             : NullLoggerFactory.Instance;
 
         // Create logger for the context (suspend/resume logging happens there)
         var contextLogger = _loggerFactory.CreateLogger<SimulationNodeContext>();
-        _context = new SimulationNodeContext(harness.Clock, harness.Guard, harness.CreateDerivedRandom(), harness.TaskQueue, contextLogger);
+        Context = new SimulationNodeContext(harness.Clock, harness.Guard, harness.CreateDerivedRandom(), harness.TaskQueue, contextLogger);
 
         _log = new RapidSimulationNodeLogger(_loggerFactory.CreateLogger<RapidSimulationNode>());
         _membershipServiceLogger = _loggerFactory.CreateLogger<MembershipService>();
@@ -131,10 +131,10 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Create shared resources with the node's time provider, task scheduler, and harness teardown token
         _sharedResources = new SharedResources(
-            _context.TimeProvider,
-            _context.TaskScheduler,
-            _context.Random,
-            _context.Random.NextGuid,
+            Context.TimeProvider,
+            Context.TaskScheduler,
+            Context.Random,
+            Context.Random.NextGuid,
             harness.TeardownCancellationToken);
 
         // Create in-memory messaging client using GrpcTimeout from protocol options.
@@ -148,7 +148,7 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Create metrics for observability
         _meterFactory = new TestMeterFactory();
-        _metrics = new RapidClusterMetrics(_meterFactory, null);
+        _metrics = new RapidClusterMetrics(_meterFactory, cluster: null);
 
         // Create failure detector factory
         var failureDetectorLogger = _loggerFactory.CreateLogger<PingPongFailureDetector>();
@@ -178,7 +178,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         {
             ListenAddress = address.ToEndPointPreferIP(),
             SeedAddresses = seedAddresses?.Select(s => s.ToEndPointPreferIP()).ToList(),
-            Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray()) ?? []
+            Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray(), StringComparer.Ordinal) ?? [],
         };
         var broadcasterFactory = new UnicastToAllBroadcasterFactory(MessagingClient);
         var seedProvider = new ConfigurationSeedProvider(new TestOptionsMonitor<RapidClusterOptions>(rapidClusterOptions));
@@ -202,7 +202,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     /// </summary>
     internal async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await _membershipService.InitializeAsync(cancellationToken).ConfigureAwait(true);
+        await _membershipService.InitializeAsync(cancellationToken);
         _isInitialized = true;
 
         _log.NodeInitialized(RapidClusterUtils.Loggable(Address), CurrentView.Size, CurrentView.ConfigurationId.Version);
@@ -218,7 +218,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         // Link the caller's cancellation token with our disposal token so that
         // in-flight requests complete when this node is disposed
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposeCts.Token);
-        return await _membershipService.HandleMessageAsync(request, linkedCts.Token).ConfigureAwait(true);
+        return await _membershipService.HandleMessageAsync(request, linkedCts.Token);
     }
 
     /// <summary>
@@ -226,7 +226,7 @@ internal sealed class RapidSimulationNode : SimulationNode
     /// The node can still receive messages after this method returns.
     /// Call <see cref="DisposeAsync"/> after unregistering from the network to release resources.
     /// </summary>
-    public async Task StopAsync()
+    public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed) return;
 
@@ -234,7 +234,7 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Graceful stop: notify observers and wait for background tasks
         // Keep MessagingClient alive so we can still participate in consensus
-        await _membershipService.StopAsync().ConfigureAwait(true);
+        await _membershipService.StopAsync(cancellationToken);
 
         _log.NodeLeftGracefully(RapidClusterUtils.Loggable(Address));
     }
@@ -250,14 +250,14 @@ internal sealed class RapidSimulationNode : SimulationNode
         // Cancel any in-flight requests first so they complete promptly
         _disposeCts.SafeCancel(_log.Logger);
 
-        await _membershipService.DisposeAsync().ConfigureAwait(true);
-        await MessagingClient.DisposeAsync().ConfigureAwait(true);
+        await _membershipService.DisposeAsync();
+        await MessagingClient.DisposeAsync();
 
         _meterFactory.Dispose();
         _disposeCts.Dispose();
     }
 
-    private string DebuggerDisplay => $"{RapidClusterUtils.Loggable(Address)} Size={MembershipSize} {(IsSuspended ? "Suspended" : "Running")}";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"{RapidClusterUtils.Loggable(Address)} Size={MembershipSize} {(IsSuspended ? "Suspended" : "Running")}");
 
     /// <summary>
     /// Simple broadcaster factory that creates UnicastToAllBroadcaster instances.

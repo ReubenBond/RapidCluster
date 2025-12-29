@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -74,7 +75,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         // Should not throw
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Decided task should exist but not be completed yet
         Assert.False(coordinator.Decided.IsCompleted);
@@ -88,7 +89,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
         // Start consensus
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Verify decision is not yet complete
         Assert.False(coordinator.Decided.IsCompleted);
@@ -118,8 +119,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
-            }
+                Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)),
+            },
         };
 
         var response = coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
@@ -138,8 +139,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
-                Rank = new Rank { Round = 2, NodeIndex = 1 }
-            }
+                Rank = new Rank { Round = 2, NodeIndex = 1 },
+            },
         };
 
         var response = coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
@@ -159,8 +160,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 },
-                Vrnd = new Rank { Round = 1, NodeIndex = 0 }
-            }
+                Vrnd = new Rank { Round = 1, NodeIndex = 0 },
+            },
         };
 
         var response = coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
@@ -180,8 +181,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
                 Rnd = new Rank { Round = 2, NodeIndex = 1 },
-                Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001))
-            }
+                Proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)),
+            },
         };
 
         var response = coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
@@ -200,8 +201,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
             {
                 ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001),
-                Rnd = new Rank { Round = 2, NodeIndex = 1 }
-            }
+                Rnd = new Rank { Round = 2, NodeIndex = 1 },
+            },
         };
 
         var response = coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
@@ -231,7 +232,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Send fast round votes - should not throw
         for (var i = 0; i < 3; i++)
@@ -241,10 +242,10 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
-                    Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
+                    Sender = Utils.HostFromParts(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{i + 1}"), 1000 + i),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposal
-                }
+                    Proposal = proposal,
+                },
             };
             coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
         }
@@ -260,7 +261,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 3);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Send votes with wrong config ID - should not throw
         var wrongConfigId = new ConfigurationId(new ClusterId(888), version: 999);
@@ -271,10 +272,10 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = wrongConfigId.ToProtobuf(),
-                    Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
+                    Sender = Utils.HostFromParts(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{i + 1}"), 1000 + i),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposal
-                }
+                    Proposal = proposal,
+                },
             };
             coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
         }
@@ -294,7 +295,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 5, trackForCleanup: false);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Dispose while consensus is ongoing
         await coordinator.DisposeAsync();
@@ -341,7 +342,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var coordinator = CreateCoordinator(myAddr, configurationId: new ConfigurationId(new ClusterId(888), 1), membershipSize: 10);
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Send messages concurrently from multiple threads
         var tasks = Enumerable.Range(0, 20).Select(i => Task.Run(() =>
@@ -351,10 +352,10 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
-                    Sender = Utils.HostFromParts($"127.0.0.{i + 1}", 1000 + i),
+                    Sender = Utils.HostFromParts(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{i + 1}"), 1000 + i),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposal
-                }
+                    Proposal = proposal,
+                },
             };
             coordinator.HandleMessages(request, TestContext.Current.CancellationToken);
         }, TestContext.Current.CancellationToken)).ToArray();
@@ -381,7 +382,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         // Override options by creating a dedicated coordinator with a larger delay.
         // (We reuse existing helper but need to ensure it uses a large base delay.)
         // To keep the change minimal, we inject the decision quickly and assert time bound.
-        coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+        coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)));
 
         // Wait until classic round starts (Phase1a broadcast).
         await WaitUntilAsync(() => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage), TimeSpan.FromSeconds(2));
@@ -398,8 +399,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 Rnd = rnd,
-                Proposal = decidedProposal
-            }
+                Proposal = decidedProposal,
+            },
         }, TestContext.Current.CancellationToken);
 
         coordinator.HandleMessages(new RapidClusterRequest
@@ -409,8 +410,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 Rnd = rnd,
-                Proposal = decidedProposal
-            }
+                Proposal = decidedProposal,
+            },
         }, TestContext.Current.CancellationToken);
 
         await WaitUntilAsync(() => coordinator.Decided.IsCompleted, TimeSpan.FromSeconds(2));
@@ -427,7 +428,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var broadcaster = new CapturingBroadcaster(broadcasted);
         var coordinator = CreateCoordinator(myAddr, configId, membershipSize: 3, broadcaster);
 
-        coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)), TestContext.Current.CancellationToken);
+        coordinator.Propose(CreateProposal(Utils.HostFromParts("10.0.0.1", 5001)));
 
         await WaitUntilAsync(
             () => broadcasted.Any(r => r.ContentCase == RapidClusterRequest.ContentOneofCase.Phase1AMessage),
@@ -448,8 +449,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
                 Rnd = new Rank { Round = 5, NodeIndex = 7 },
-                Proposal = null
-            }
+                Proposal = null,
+            },
         }, TestContext.Current.CancellationToken);
 
         // No immediate Phase1a for round 6.
@@ -466,8 +467,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 ConfigurationId = configId.ToProtobuf(),
                 Rnd = new Rank { Round = 5, NodeIndex = 9 },
-                Proposal = null
-            }
+                Proposal = null,
+            },
         }, TestContext.Current.CancellationToken);
 
         await WaitUntilAsync(
@@ -499,10 +500,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
 
-        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            broadcasted.Enqueue(request);
-        }
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) => broadcasted.Enqueue(request);
 
         public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
@@ -543,18 +541,22 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// <para>
     /// When votes are split between two proposals such that neither can reach threshold,
     /// the fast round should abandon early and fall back to classic Paxos.
-    /// 
+    /// </para>
+    /// <para>
     /// This test verifies that the fallback happens IMMEDIATELY after the conflicting vote,
     /// NOT due to a timeout. We verify this by checking that Phase1a is broadcast without
     /// advancing time.
-    /// 
+    /// </para>
+    /// <para>
     /// Scenario: 5 nodes, threshold=4
     /// - 2 votes for proposal A
     /// - 2 votes for proposal B  
     /// - 1 remaining voter
     /// Neither A nor B can reach 4 votes, so we should abandon.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task FastRound_ConflictingProposals_AbandonsWhenNeitherCanReachThreshold()
@@ -569,7 +571,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
 
-        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposalA);
 
         // Vote 1 for A (from ourselves, via Propose)
         // Vote 2 for A
@@ -580,8 +582,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalA
-            }
+                Proposal = proposalA,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 1 for B
@@ -592,8 +594,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalB
-            }
+                Proposal = proposalB,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 2 for B - at this point:
@@ -607,8 +609,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.4", 1003, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalB
-            }
+                Proposal = proposalB,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Allow event loop to process without advancing time significantly
@@ -621,14 +623,17 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// <para>
     /// When one proposal still has a path to reaching threshold despite conflicts,
     /// the fast round should NOT abandon early.
-    /// 
+    /// </para>
+    /// <para>
     /// Scenario: 5 nodes, threshold=4
     /// - 3 votes for proposal A
     /// - 1 vote for proposal B
     /// - 1 remaining voter
     /// A can still reach 4 votes if the remaining voter votes for A.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task FastRound_ConflictingProposals_DoesNotAbandonIfOneCanStillSucceed()
@@ -643,7 +648,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
 
-        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposalA);
 
         // Vote 1 for A (from ourselves)
         // Vote 2 for A
@@ -654,8 +659,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalA
-            }
+                Proposal = proposalA,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 3 for A
@@ -666,8 +671,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalA
-            }
+                Proposal = proposalA,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 1 for B - at this point:
@@ -681,8 +686,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.4", 1003, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalB
-            }
+                Proposal = proposalB,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Allow event loop to process without advancing time
@@ -694,9 +699,11 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// <para>
     /// When conflicting proposals are combined with delivery failures,
     /// and no proposal can reach threshold, should abandon early.
-    /// 
+    /// </para>
+    /// <para>
     /// Scenario: 5 nodes, threshold=4
     /// - 2 votes for proposal A
     /// - 1 vote for proposal B
@@ -704,6 +711,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     /// - 1 remaining voter
     /// A can get at most 3 votes (2 + 1 remaining), B can get at most 2
     /// Neither can reach 4, should abandon.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task FastRound_ConflictingProposals_WithDeliveryFailure_AbandonsEarly()
@@ -719,7 +727,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
 
-        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposalA);
 
         // Vote 1 for A (from ourselves, delivery failure already reported)
         // Vote 2 for A
@@ -730,8 +738,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalA
-            }
+                Proposal = proposalA,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 1 for B - at this point:
@@ -747,8 +755,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalB
-            }
+                Proposal = proposalB,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Allow event loop to process without advancing time
@@ -775,7 +783,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
 
         var proposal = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
 
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         // Vote 1 (from ourselves, already counted via Propose)
         // Vote 2
@@ -786,8 +794,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposal
-            }
+                Proposal = proposal,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 3 - threshold is 3 for N=3, should decide
@@ -798,8 +806,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposal
-            }
+                Proposal = proposal,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Allow event loop to process
@@ -811,14 +819,15 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Test early abandonment with larger cluster (N=9, threshold=7, f=2).
-    /// 
+    /// <para>Test early abandonment with larger cluster (N=9, threshold=7, f=2).</para>
+    /// <para>
     /// Scenario: 9 nodes, threshold=7
     /// - 3 votes for proposal A
     /// - 3 votes for proposal B
     /// - 3 remaining voters
     /// A can get at most 6 votes, B can get at most 6 votes
     /// Neither can reach 7, should abandon.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task FastRound_LargeCluster_AbandonsWhenNoProposalCanReachThreshold()
@@ -833,7 +842,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var proposalA = CreateProposal(Utils.HostFromParts("10.0.0.1", 5001));
         var proposalB = CreateProposal(Utils.HostFromParts("10.0.0.2", 5002));
 
-        coordinator.Propose(proposalA, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposalA);
 
         // Votes 1-2 for A (ourselves + one more)
         coordinator.HandleMessages(new RapidClusterRequest
@@ -843,8 +852,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.2", 1001, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalA
-            }
+                Proposal = proposalA,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Vote 3 for A
@@ -855,8 +864,8 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.3", 1002, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposalA
-            }
+                Proposal = proposalA,
+            },
         }, TestContext.Current.CancellationToken);
 
         // Votes 1-3 for B
@@ -867,10 +876,10 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
                 Phase2BMessage = new Phase2bMessage
                 {
                     ConfigurationId = configId.ToProtobuf(),
-                    Sender = Utils.HostFromParts($"127.0.0.{4 + i}", 1003 + i, nodeId: Utils.GetNextNodeId()),
+                    Sender = Utils.HostFromParts(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{4 + i}"), 1003 + i, nodeId: Utils.GetNextNodeId()),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposalB
-                }
+                    Proposal = proposalB,
+                },
             }, TestContext.Current.CancellationToken);
         }
 
@@ -910,16 +919,9 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
 
-        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            broadcasted.Enqueue(request);
-        }
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) => broadcasted.Enqueue(request);
 
-        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
-        {
-            broadcasted.Enqueue(request);
-            // No delivery failures reported
-        }
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) => broadcasted.Enqueue(request);// No delivery failures reported
     }
 
     /// <summary>
@@ -929,10 +931,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
 
-        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            broadcasted.Enqueue(request);
-        }
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) => broadcasted.Enqueue(request);
 
         public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
         {
@@ -984,10 +983,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         Endpoint myAddr,
         ConfigurationId configurationId,
         int membershipSize,
-        bool trackForCleanup = true)
-    {
-        return CreateCoordinator(myAddr, configurationId, membershipSize, broadcaster: new TestBroadcaster(), trackForCleanup);
-    }
+        bool trackForCleanup = true) => CreateCoordinator(myAddr, configurationId, membershipSize, broadcaster: new TestBroadcaster(), trackForCleanup);
 
     private ConsensusCoordinator CreateCoordinator(
         Endpoint myAddr,
@@ -1001,7 +997,7 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
         var viewAccessor = new TestMembershipViewAccessor(membershipSize);
         var options = Options.Create(new RapidClusterProtocolOptions
         {
-            ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(100)
+            ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(100),
         });
         var sharedResources = new SharedResources(_timeProvider, random: new Random(42));
         var metrics = CreateMetrics();
@@ -1065,17 +1061,10 @@ public class ConsensusCoordinatorTests : IAsyncLifetime
     /// <summary>
     /// Simple test membership view accessor.
     /// </summary>
-    private sealed class TestMembershipViewAccessor : IMembershipViewAccessor
+    private sealed class TestMembershipViewAccessor(int membershipSize = 3) : IMembershipViewAccessor
     {
-        private readonly MembershipView _view;
-
-        public TestMembershipViewAccessor(int membershipSize = 3)
-        {
-            _view = Utils.CreateMembershipView(membershipSize);
-        }
-
-        public MembershipView CurrentView => _view;
-        public BroadcastChannelReader<MembershipView> Updates => throw new NotImplementedException();
+        public MembershipView CurrentView { get; } = Utils.CreateMembershipView(membershipSize);
+        public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
 
     /// <summary>

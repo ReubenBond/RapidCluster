@@ -20,10 +20,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     /// <summary>
     /// Tests that multiple nodes can join the cluster in rapid succession.
@@ -136,13 +133,13 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         _harness.CrashNode(nodes[4]);
 
         // Join a new node
-        var newNode1 = _harness.CreateJoinerNode(nodes[0], nodeId: 5);
+        _ = _harness.CreateJoinerNode(nodes[0], nodeId: 5);
 
         // Crash another node
         _harness.CrashNode(nodes[3]);
 
         // Join another node
-        var newNode2 = _harness.CreateJoinerNode(nodes[0], nodeId: 6);
+        _ = _harness.CreateJoinerNode(nodes[0], nodeId: 6);
 
         // Wait for convergence
         _harness.WaitForConvergence();
@@ -403,7 +400,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         for (var i = 0; i < 5; i++)
         {
             // Remove last node
-            var nodeToRemove = _harness.Nodes.Last();
+            var nodeToRemove = _harness.Nodes[_harness.Nodes.Count - 1];
             _harness.RemoveNodeGracefully(nodeToRemove);
 
             // Add new node
@@ -446,7 +443,7 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         Assert.Equal(3, nodes[2].MembershipSize);
 
         // Operations should succeed with the remaining 3 nodes
-        var newNode = _harness.CreateJoinerNode(nodes[0], nodeId: 5);
+        _ = _harness.CreateJoinerNode(nodes[0], nodeId: 5);
 
         // Active nodes should see the new member (now 4 nodes)
         _harness.WaitForConvergence();
@@ -462,5 +459,4 @@ public sealed class ConcurrentOperationsTests : IAsyncLifetime
         // Cluster should converge to 6 nodes (4 active + 2 rejoined)
         _harness.WaitForConvergence();
     }
-
 }

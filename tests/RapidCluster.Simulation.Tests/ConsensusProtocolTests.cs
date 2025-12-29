@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
@@ -19,10 +20,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void SingleProposalAcceptedInTwoNodeCluster()
@@ -70,7 +68,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
 
         // Consensus should complete in reasonable time (5 seconds is generous)
         Assert.True(elapsed < TimeSpan.FromSeconds(5),
-            $"Consensus took too long: {elapsed.TotalSeconds} seconds");
+            string.Create(CultureInfo.InvariantCulture, $"Consensus took too long: {elapsed.TotalSeconds} seconds"));
         Assert.True(joiner.IsInitialized);
     }
 
@@ -84,9 +82,9 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         _harness.WaitForConvergence();
 
         // All nodes should have the same view of membership (consensus decision)
-        var seedMembers = seedNode.CurrentView.Members.Select(m => $"{m.Hostname}:{m.Port}").OrderBy(x => x).ToList();
-        var joiner1Members = joiner1.CurrentView.Members.Select(m => $"{m.Hostname}:{m.Port}").OrderBy(x => x).ToList();
-        var joiner2Members = joiner2.CurrentView.Members.Select(m => $"{m.Hostname}:{m.Port}").OrderBy(x => x).ToList();
+        var seedMembers = seedNode.CurrentView.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).Order(StringComparer.Ordinal).ToList();
+        var joiner1Members = joiner1.CurrentView.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).Order(StringComparer.Ordinal).ToList();
+        var joiner2Members = joiner2.CurrentView.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(seedMembers, joiner1Members);
         Assert.Equal(seedMembers, joiner2Members);
@@ -178,7 +176,7 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // Join 3 nodes, tracking config ID changes
         for (var i = 1; i <= 3; i++)
         {
-            var joiner = _harness.CreateJoinerNode(seedNode, nodeId: i);
+            _ = _harness.CreateJoinerNode(seedNode, nodeId: i);
 
             _harness.WaitForNodeSize(seedNode, expectedSize: i + 1);
 
@@ -190,18 +188,6 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
 
         // We should have 4 unique configuration IDs (initial + 3 joins)
         Assert.Equal(4, configIds.Count);
-    }
-
-    [Fact(Skip = "Requires ability to inject stale proposals at the protocol level - not supported by simulation harness")]
-    public void OldConfigurationProposalsRejected()
-    {
-        var seedNode = _harness.CreateSeedNode();
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-
-        _harness.WaitForConvergence();
-
-        // This would require injecting a proposal with an old configuration ID
-        // and verifying it's rejected - needs low-level protocol access
     }
 
     [Fact]
@@ -420,8 +406,8 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // Test that once a decision is made, additional Phase1b messages
         // don't cause duplicate consensus (the cval guard)
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
 
@@ -434,6 +420,4 @@ public sealed class ConsensusProtocolTests : IAsyncLifetime
         // Configuration should not have changed (no duplicate consensus)
         Assert.Equal(configAfterJoins, seedNode.CurrentView.ConfigurationId);
     }
-
 }
-

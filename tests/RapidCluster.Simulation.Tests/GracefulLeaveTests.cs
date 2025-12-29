@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Clockwork;
 using RapidCluster.Pb;
 using RapidCluster.Simulation.Tests.Infrastructure;
@@ -31,9 +32,9 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         if (initCount > 1)
         {
             throw new InvalidOperationException(
-                $"INSTANCE REUSE DETECTED! Instance {_instanceId} was initialized {initCount} times. " +
+                string.Create(CultureInfo.InvariantCulture, $"INSTANCE REUSE DETECTED! Instance {_instanceId} was initialized {initCount} times. ") +
                 $"First test: '{_firstTestName}', Current test: '{currentTestName}'. " +
-                $"xUnit should create a new instance for each test.");
+                "xUnit should create a new instance for each test.");
         }
 
         _firstTestName = currentTestName;
@@ -61,7 +62,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         }
         _collectors.Clear();
 
-        await _harness.DisposeAsync().ConfigureAwait(true);
+        await _harness.DisposeAsync();
 
         // Restore the previous synchronization context AFTER harness disposal
         // to ensure any async cleanup operations are captured by the simulation
@@ -322,7 +323,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         {
             CreateViewCollector(nodes[0]),
             CreateViewCollector(nodes[1]),
-            CreateViewCollector(nodes[2])
+            CreateViewCollector(nodes[2]),
         };
 
         // Act: Node 3 gracefully leaves
@@ -375,7 +376,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         var newConfigId = nodes[0].CurrentView.ConfigurationId;
         Assert.NotEqual(initialConfigId, newConfigId);
         Assert.True(newConfigId.Version > initialConfigId.Version,
-            $"Version should increase after leave. Initial: {initialConfigId.Version}, Current: {newConfigId.Version}");
+            string.Create(CultureInfo.InvariantCulture, $"Version should increase after leave. Initial: {initialConfigId.Version}, Current: {newConfigId.Version}"));
         _harness.AssertNoWarningsOrErrors();
     }
 
@@ -401,7 +402,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         for (var i = 1; i < configIds.Count; i++)
         {
             Assert.True(configIds[i].Version > configIds[i - 1].Version,
-                $"Version at index {i} ({configIds[i].Version}) should be greater than at {i - 1} ({configIds[i - 1].Version})");
+                string.Create(CultureInfo.InvariantCulture, $"Version at index {i} ({configIds[i].Version}) should be greater than at {i - 1} ({configIds[i - 1].Version})"));
         }
         _harness.AssertNoWarningsOrErrors();
     }
@@ -758,7 +759,7 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         // This prevents the suspended node from being detected as failed during the test
         var options = new RapidClusterProtocolOptions
         {
-            FailureDetectorInterval = TimeSpan.FromMinutes(10)
+            FailureDetectorInterval = TimeSpan.FromMinutes(10),
         };
         var nodes = _harness.CreateCluster(size: 5, options);
         _harness.WaitForConvergence();
@@ -833,5 +834,4 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
         Assert.Equal(4, _harness.Nodes.Count);
         Assert.Contains(suspendedNode, _harness.Nodes);
     }
-
 }

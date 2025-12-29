@@ -96,7 +96,7 @@ public class RapidClusterUtilsTests
         {
             RapidClusterUtils.HostFromParts("10.0.0.1", 9000),
             RapidClusterUtils.HostFromParts("10.0.0.2", 9001),
-            RapidClusterUtils.HostFromParts("10.0.0.3", 9002)
+            RapidClusterUtils.HostFromParts("10.0.0.3", 9002),
         };
 
         var result = RapidClusterUtils.Loggable(endpoints);
@@ -119,7 +119,7 @@ public class RapidClusterUtilsTests
     {
         var endpoints = new List<Endpoint>
         {
-            RapidClusterUtils.HostFromParts("127.0.0.1", 1234)
+            RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
         };
 
         var result = RapidClusterUtils.Loggable(endpoints);
@@ -132,7 +132,7 @@ public class RapidClusterUtilsTests
     {
         var msg = new PreJoinMessage
         {
-            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234)
+            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -147,7 +147,7 @@ public class RapidClusterUtilsTests
         var msg = new JoinMessage
         {
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -166,7 +166,7 @@ public class RapidClusterUtilsTests
             EdgeSrc = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             EdgeDst = RapidClusterUtils.HostFromParts("127.0.0.1", 1235),
             EdgeStatus = EdgeStatus.Down,
-            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
         });
 
         var request = msg.ToRapidClusterRequest();
@@ -180,7 +180,7 @@ public class RapidClusterUtilsTests
     {
         var msg = new ProbeMessage
         {
-            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234)
+            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -202,7 +202,7 @@ public class RapidClusterUtilsTests
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 1, NodeIndex = 0 },
-            Proposal = proposal
+            Proposal = proposal,
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -220,7 +220,7 @@ public class RapidClusterUtilsTests
         {
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
-            Rank = new Rank { Round = 2, NodeIndex = 5 }
+            Rank = new Rank { Round = 2, NodeIndex = 5 },
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -237,7 +237,7 @@ public class RapidClusterUtilsTests
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 2, NodeIndex = 5 },
-            Vrnd = new Rank { Round = 1, NodeIndex = 3 }
+            Vrnd = new Rank { Round = 1, NodeIndex = 3 },
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -259,7 +259,7 @@ public class RapidClusterUtilsTests
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 2, NodeIndex = 5 },
-            Proposal = proposal
+            Proposal = proposal,
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -281,7 +281,7 @@ public class RapidClusterUtilsTests
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
             Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
             Rnd = new Rank { Round = 2, NodeIndex = 5 },
-            Proposal = proposal
+            Proposal = proposal,
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -295,7 +295,7 @@ public class RapidClusterUtilsTests
     {
         var msg = new LeaveMessage
         {
-            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234)
+            Sender = RapidClusterUtils.HostFromParts("127.0.0.1", 1234),
         };
 
         var request = msg.ToRapidClusterRequest();
@@ -310,7 +310,7 @@ public class RapidClusterUtilsTests
         var msg = new JoinResponse
         {
             StatusCode = JoinStatusCode.SafeToJoin,
-            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
         };
         msg.Endpoints.Add(RapidClusterUtils.HostFromParts("127.0.0.1", 1234));
 
@@ -340,5 +340,4 @@ public class RapidClusterUtilsTests
         Assert.NotNull(response.ProbeResponse);
         Assert.Equal(Pb.NodeStatus.Ok, response.ProbeResponse.Status);
     }
-
 }

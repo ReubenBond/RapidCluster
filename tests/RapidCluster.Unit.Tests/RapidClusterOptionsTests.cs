@@ -8,7 +8,6 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class RapidClusterOptionsTests
 {
-
     [Fact]
     public void ListenAddressDefaultIsNull()
     {
@@ -21,7 +20,7 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            ListenAddress = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 1234)
+            ListenAddress = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 1234),
         };
 
         Assert.NotNull(options.ListenAddress);
@@ -42,7 +41,7 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            SeedAddresses = [new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9000)]
+            SeedAddresses = [new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9000)],
         };
 
         Assert.NotNull(options.SeedAddresses);
@@ -59,7 +58,7 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             ListenAddress = address,
-            SeedAddresses = [address]
+            SeedAddresses = [address],
         };
 
         Assert.Equal(options.ListenAddress, options.SeedAddresses![0]);
@@ -78,8 +77,9 @@ public class RapidClusterOptionsTests
     public void MetadataCanBeSetDirectly()
     {
         var metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
         {
-            ["key"] = Encoding.UTF8.GetBytes("value")
+            ["key"] = Encoding.UTF8.GetBytes("value"),
         };
 
         var options = new RapidClusterOptions { Metadata = metadata };
@@ -94,10 +94,11 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
             {
                 ["role"] = Encoding.UTF8.GetBytes("leader"),
-                ["datacenter"] = Encoding.UTF8.GetBytes("us-west")
-            }
+                ["datacenter"] = Encoding.UTF8.GetBytes("us-west"),
+            },
         };
 
         Assert.Equal(2, options.Metadata.Count);
@@ -111,9 +112,10 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
             {
-                ["initial"] = Encoding.UTF8.GetBytes("value")
-            }
+                ["initial"] = Encoding.UTF8.GetBytes("value"),
+            },
         };
 
         options.Metadata.Clear();
@@ -127,14 +129,16 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
             {
-                ["old"] = Encoding.UTF8.GetBytes("value")
-            }
+                ["old"] = Encoding.UTF8.GetBytes("value"),
+            },
         };
 
         options.Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
         {
-            ["new"] = Encoding.UTF8.GetBytes("value")
+            ["new"] = Encoding.UTF8.GetBytes("value"),
         };
 
         Assert.Single(options.Metadata);
@@ -147,7 +151,7 @@ public class RapidClusterOptionsTests
     {
         var options = new RapidClusterOptions
         {
-            Metadata = null!
+            Metadata = null!,
         };
 
         Assert.Null(options.Metadata);
@@ -159,13 +163,14 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
             {
                 ["a"] = Encoding.UTF8.GetBytes("1"),
                 ["b"] = Encoding.UTF8.GetBytes("2"),
                 ["c"] = Encoding.UTF8.GetBytes("3"),
                 ["d"] = Encoding.UTF8.GetBytes("4"),
-                ["e"] = Encoding.UTF8.GetBytes("5")
-            }
+                ["e"] = Encoding.UTF8.GetBytes("5"),
+            },
         };
 
         Assert.Equal(5, options.Metadata.Count);
@@ -178,9 +183,10 @@ public class RapidClusterOptionsTests
         var options = new RapidClusterOptions
         {
             Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
             {
-                ["binary"] = binaryData
-            }
+                ["binary"] = binaryData,
+            },
         };
 
         var stored = options.Metadata["binary"];
@@ -198,10 +204,11 @@ public class RapidClusterOptionsTests
             ListenAddress = listenAddr,
             SeedAddresses = [seedAddr],
             Metadata = new Dictionary<string, byte[]>
+(StringComparer.Ordinal)
             {
                 ["role"] = Encoding.UTF8.GetBytes("worker"),
-                ["version"] = Encoding.UTF8.GetBytes("1.0.0")
-            }
+                ["version"] = Encoding.UTF8.GetBytes("1.0.0"),
+            },
         };
 
         Assert.Equal(listenAddr, options.ListenAddress);

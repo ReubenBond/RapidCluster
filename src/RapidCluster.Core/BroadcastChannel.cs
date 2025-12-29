@@ -22,15 +22,13 @@ public sealed class BroadcastChannel<T> : IDisposable
 {
     private readonly Lock _lock = new();
     private ImmutableList<IObserver<T>> _observers = [];
-    private Element _current;
-    private bool _isCompleted;
 
     /// <summary>
     /// Creates a new broadcast channel.
     /// </summary>
     public BroadcastChannel()
     {
-        _current = Element.CreateInitial();
+        Current = Element.CreateInitial();
         Reader = new BroadcastChannelReader<T>(this);
         Writer = new BroadcastChannelWriter<T>(this);
     }
@@ -49,12 +47,12 @@ public sealed class BroadcastChannel<T> : IDisposable
     /// <summary>
     /// Gets whether the channel has been completed.
     /// </summary>
-    internal bool IsCompleted => _isCompleted;
+    internal bool IsCompleted { get; private set; }
 
     /// <summary>
     /// Gets the current element for new enumerators.
     /// </summary>
-    internal Element Current => _current;
+    internal Element Current { get; private set; }
 
     /// <summary>
     /// Subscribes an observer to receive notifications.
@@ -66,21 +64,21 @@ public sealed class BroadcastChannel<T> : IDisposable
 
         lock (_lock)
         {
-            if (_isCompleted)
+            if (IsCompleted)
             {
                 // Channel is completed - replay last value if available and complete
-                if (_current.IsValid)
+                if (Current.IsValid)
                 {
-                    observer.OnNext(_current.Value);
+                    observer.OnNext(Current.Value);
                 }
                 observer.OnCompleted();
                 return EmptyDisposable.Instance;
             }
 
             // Replay last value if available
-            if (_current.IsValid)
+            if (Current.IsValid)
             {
-                observer.OnNext(_current.Value);
+                observer.OnNext(Current.Value);
             }
 
             _observers = _observers.Add(observer);
@@ -106,18 +104,18 @@ public sealed class BroadcastChannel<T> : IDisposable
     /// <returns>True if published successfully, false if completed.</returns>
     internal bool TryPublish(T item)
     {
-        if (_isCompleted) return false;
+        if (IsCompleted) return false;
 
         ImmutableList<IObserver<T>> observers;
 
         lock (_lock)
         {
-            if (_isCompleted) return false;
+            if (IsCompleted) return false;
 
             // Update the async enumerable chain (also stores for replay via _current)
             var newElement = new Element(item);
-            var prev = _current;
-            _current = newElement;
+            var prev = Current;
+            Current = newElement;
             prev.SetNext(newElement);
 
             // Get immutable snapshot of observers
@@ -160,20 +158,20 @@ public sealed class BroadcastChannel<T> : IDisposable
     /// </summary>
     internal void Complete()
     {
-        if (_isCompleted) return;
+        if (IsCompleted) return;
 
         ImmutableList<IObserver<T>> observers;
 
         lock (_lock)
         {
-            if (_isCompleted) return;
+            if (IsCompleted) return;
 
-            _isCompleted = true;
+            IsCompleted = true;
 
             // Complete the async enumerable chain
             var disposed = Element.CreateDisposed();
-            var prev = _current;
-            _current = disposed;
+            var prev = Current;
+            Current = disposed;
             prev.SetNext(disposed);
 
             // Get and clear observers
@@ -190,9 +188,11 @@ public sealed class BroadcastChannel<T> : IDisposable
             }
 #pragma warning disable CA1031 // Do not catch general exception types - per Rx contract, observer exceptions are ignored
             catch
+#pragma warning disable ERP022 // Unobserved exception in a generic exception handler
             {
                 // Ignore exceptions from observers per Rx contract
             }
+#pragma warning restore ERP022 // Unobserved exception in a generic exception handler
 #pragma warning restore CA1031
         }
     }
@@ -205,20 +205,20 @@ public sealed class BroadcastChannel<T> : IDisposable
     {
         ArgumentNullException.ThrowIfNull(error);
 
-        if (_isCompleted) return;
+        if (IsCompleted) return;
 
         ImmutableList<IObserver<T>> observers;
 
         lock (_lock)
         {
-            if (_isCompleted) return;
+            if (IsCompleted) return;
 
-            _isCompleted = true;
+            IsCompleted = true;
 
             // Complete the async enumerable chain
             var disposed = Element.CreateDisposed();
-            var prev = _current;
-            _current = disposed;
+            var prev = Current;
+            Current = disposed;
             prev.SetNext(disposed);
 
             // Get and clear observers
@@ -247,7 +247,7 @@ public sealed class BroadcastChannel<T> : IDisposable
     /// </summary>
     public void Dispose() => Complete();
 
-    private string DebuggerDisplay => $"BroadcastChannel<{typeof(T).Name}>({(_isCompleted ? "Completed" : "Active")})";
+    private string DebuggerDisplay => $"BroadcastChannel<{typeof(T).Name}>({(IsCompleted ? "Completed" : "Active")})";
 
     /// <summary>
     /// An empty disposable that does nothing when disposed.
@@ -262,22 +262,13 @@ public sealed class BroadcastChannel<T> : IDisposable
     /// <summary>
     /// Represents a subscription that removes the observer when disposed.
     /// </summary>
-    private sealed class ObserverSubscription : IDisposable
+    private sealed class ObserverSubscription(BroadcastChannel<T> channel, IObserver<T> observer) : IDisposable
     {
-        private BroadcastChannel<T>? _channel;
-        private IObserver<T>? _observer;
-
-        public ObserverSubscription(BroadcastChannel<T> channel, IObserver<T> observer)
-        {
-            _channel = channel;
-            _observer = observer;
-        }
+        private int _isDisposed;
 
         public void Dispose()
         {
-            var channel = Interlocked.Exchange(ref _channel, null);
-            var observer = Interlocked.Exchange(ref _observer, null);
-            if (channel is not null && observer is not null)
+            if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
             {
                 channel.Unsubscribe(observer);
             }
@@ -426,7 +417,7 @@ public sealed class BroadcastChannelReader<T> : IAsyncEnumerable<T>, IObservable
         {
             try
             {
-                _current = await nextTask.WaitAsync(_cancellationToken).ConfigureAwait(true);
+                _current = await nextTask.WaitAsync(_cancellationToken);
                 return _current.IsValid;
             }
             catch (OperationCanceledException)

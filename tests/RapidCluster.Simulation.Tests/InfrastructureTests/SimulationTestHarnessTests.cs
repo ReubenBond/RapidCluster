@@ -152,7 +152,6 @@ public sealed class SimulationTestHarnessTests : IAsyncLifetime
                     break;
                 }
             }
-
         }, TestContext.Current.CancellationToken);
 
         // Join a new node

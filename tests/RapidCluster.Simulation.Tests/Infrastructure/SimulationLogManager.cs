@@ -1,3 +1,4 @@
+using System.Globalization;
 using Clockwork;
 using Microsoft.Extensions.Logging;
 
@@ -76,8 +77,8 @@ internal sealed class SimulationLogManager : IDisposable
         {
             // Full log exceeds limit - warn and attach only Information and above
             testContext.TestOutputHelper?.WriteLine(
-                $"Warning: Full simulation log ({fullSizeBytes:N0} bytes) exceeds {MaxFullLogSizeBytes:N0} byte limit. " +
-                $"Attaching only Information level and above.");
+                string.Create(CultureInfo.InvariantCulture, $"Warning: Full simulation log ({fullSizeBytes:N0} bytes) exceeds {MaxFullLogSizeBytes:N0} byte limit. ") +
+                "Attaching only Information level and above.");
 
             var (filteredContent, _) = buffer.FormatEntriesWithSize(LogLevel.Information);
             logContent = filteredContent;
@@ -97,7 +98,7 @@ internal sealed class SimulationLogManager : IDisposable
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
         var suffix = filtered ? "_info_and_above" : "";
 
-        return $"rapid_sim_{sanitizedTestName}_{seed}_{uniqueId}{suffix}.log";
+        return string.Create(CultureInfo.InvariantCulture, $"rapid_sim_{sanitizedTestName}_{seed}_{uniqueId}{suffix}.log");
     }
 
     /// <summary>

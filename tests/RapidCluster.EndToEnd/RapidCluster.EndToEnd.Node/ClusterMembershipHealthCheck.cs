@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace RapidCluster.EndToEnd.Node;
@@ -36,13 +37,14 @@ internal sealed class ClusterMembershipHealthCheck(IRapidCluster cluster) : IHea
         }
 
         var data = new Dictionary<string, object>
+(StringComparer.Ordinal)
         {
             ["MemberCount"] = memberCount,
             ["ConfigurationId"] = configId,
         };
 
         return Task.FromResult(HealthCheckResult.Healthy(
-            $"Cluster member (size={memberCount}, configId={configId})",
+            string.Create(CultureInfo.InvariantCulture, $"Cluster member (size={memberCount}, configId={configId})"),
             data));
     }
 }

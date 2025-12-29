@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -98,7 +99,7 @@ internal sealed class FileLoggingOutput : IDisposable
             message = "!!!!!!!!!! " + message;
 
         var exc = exception != null ? PrintException(exception) : string.Empty;
-        var msg = $"[{timestamp:yyyy-MM-dd HH:mm:ss.fff} {Environment.CurrentManagedThreadId}\t{logLevel}\t{errorCode}\t{caller}]\t{message}\t{exc}";
+        var msg = string.Create(CultureInfo.InvariantCulture, $"[{timestamp:yyyy-MM-dd HH:mm:ss.fff} {Environment.CurrentManagedThreadId}\t{logLevel}\t{errorCode}\t{caller}]\t{message}\t{exc}");
 
         return msg;
     }
@@ -117,11 +118,11 @@ internal sealed class FileLoggingOutput : IDisposable
     {
         if (exception == null) return;
 
-        sb.Append($"{Environment.NewLine}Exc level {level}: {exception.GetType()}: {exception.Message}");
+        sb.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}Exc level {level}: {exception.GetType()}: {exception.Message}");
 
         if (exception.StackTrace is { } stack)
         {
-            sb.Append($"{Environment.NewLine}{stack}");
+            sb.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}{stack}");
         }
 
         if (exception is ReflectionTypeLoadException typeLoadException)

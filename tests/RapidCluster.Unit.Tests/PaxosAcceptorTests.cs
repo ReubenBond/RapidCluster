@@ -36,7 +36,7 @@ public sealed class PaxosAcceptorTests
         {
             Sender = sender,
             ConfigurationId = configId.ToProtobuf(),
-            Rank = new Rank { Round = 2, NodeIndex = 1 }
+            Rank = new Rank { Round = 2, NodeIndex = 1 },
         }, TestContext.Current.CancellationToken);
 
         Assert.Single(sent);
@@ -49,14 +49,14 @@ public sealed class PaxosAcceptorTests
         {
             Sender = sender,
             ConfigurationId = configId.ToProtobuf(),
-            Rank = new Rank { Round = 2, NodeIndex = 1 }
+            Rank = new Rank { Round = 2, NodeIndex = 1 },
         }, TestContext.Current.CancellationToken);
 
         acceptor.HandlePhase1aMessage(new Phase1aMessage
         {
             Sender = sender,
             ConfigurationId = configId.ToProtobuf(),
-            Rank = new Rank { Round = 1, NodeIndex = 99 }
+            Rank = new Rank { Round = 1, NodeIndex = 99 },
         }, TestContext.Current.CancellationToken);
 
         Assert.Equal(3, sent.Count);
@@ -90,7 +90,7 @@ public sealed class PaxosAcceptorTests
         {
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(),
-            Rank = new Rank { Round = 2, NodeIndex = 1 }
+            Rank = new Rank { Round = 2, NodeIndex = 1 },
         }, TestContext.Current.CancellationToken);
 
         Assert.Empty(sent);
@@ -125,7 +125,7 @@ public sealed class PaxosAcceptorTests
         {
             Sender = coordinator,
             ConfigurationId = configId.ToProtobuf(),
-            Rank = new Rank { Round = 2, NodeIndex = 1 }
+            Rank = new Rank { Round = 2, NodeIndex = 1 },
         }, TestContext.Current.CancellationToken);
 
         // Lower accept should be rejected (and send NACK).
@@ -134,7 +134,7 @@ public sealed class PaxosAcceptorTests
             Sender = coordinator,
             ConfigurationId = configId.ToProtobuf(),
             Rnd = new Rank { Round = 1, NodeIndex = 1 },
-            Proposal = proposal
+            Proposal = proposal,
         }, TestContext.Current.CancellationToken);
 
         Assert.Empty(broadcasted);
@@ -152,7 +152,7 @@ public sealed class PaxosAcceptorTests
             Sender = coordinator,
             ConfigurationId = configId.ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
-            Proposal = proposal
+            Proposal = proposal,
         }, TestContext.Current.CancellationToken);
 
         Assert.Single(broadcasted);
@@ -165,7 +165,7 @@ public sealed class PaxosAcceptorTests
             Sender = coordinator,
             ConfigurationId = configId.ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
-            Proposal = proposal
+            Proposal = proposal,
         }, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, broadcasted.Count);
@@ -201,7 +201,7 @@ public sealed class PaxosAcceptorTests
             Sender = coordinator,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(),
             Rnd = new Rank { Round = 1, NodeIndex = 1 },
-            Proposal = proposal
+            Proposal = proposal,
         }, TestContext.Current.CancellationToken);
 
         Assert.Empty(sent);
@@ -219,28 +219,16 @@ public sealed class PaxosAcceptorTests
     {
         public void SetMembership(IReadOnlyList<Endpoint> membership) { }
 
-        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            broadcasted.Add(request);
-        }
+        public void Broadcast(RapidClusterRequest request, CancellationToken cancellationToken) => broadcasted.Add(request);
 
-        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
-        {
-            broadcasted.Add(request);
-        }
+        public void Broadcast(RapidClusterRequest request, Rank? rank, BroadcastFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) => broadcasted.Add(request);
     }
 
     private sealed class CapturingMessagingClient(List<(Endpoint Remote, RapidClusterRequest Request)> sent) : IMessagingClient, IDisposable
     {
-        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
-        {
-            sent.Add((remote, request));
-        }
+        public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken) => sent.Add((remote, request));
 
-        public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new RapidClusterResponse());
-        }
+        public Task<RapidClusterResponse> SendMessageAsync(Endpoint remote, RapidClusterRequest request, CancellationToken cancellationToken) => Task.FromResult(new RapidClusterResponse());
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public void Dispose() { }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
@@ -30,7 +31,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         }
         _collectors.Clear();
 
-        await _harness.DisposeAsync().ConfigureAwait(true);
+        await _harness.DisposeAsync();
     }
 
     /// <summary>
@@ -79,8 +80,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         CollectViews(collector, callbackLog);
 
         // Seed should have received at least one callback for the join
-        Assert.True(callbackLog.Count >= 1,
-            $"Expected at least 1 callback after join, got {callbackLog.Count}");
+        Assert.False(callbackLog.IsEmpty, $"Expected at least 1 callback after join, got {callbackLog.Count}");
 
         // Verify the callback contains the expected membership size
         Assert.Contains(callbackLog, v => v.Size == 2);
@@ -105,15 +105,14 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.WaitForConvergence();
 
         // Trigger another membership change so joiner1 receives a callback
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
         _harness.WaitForConvergence();
 
         // Collect views after convergence
         CollectViews(collector, joinerCallbackLog);
 
         // Joiner1 should have received at least 1 callback for joiner2's join
-        Assert.True(joinerCallbackLog.Count >= 1,
-            $"Expected at least 1 callback for joiner, got {joinerCallbackLog.Count}");
+        Assert.False(joinerCallbackLog.IsEmpty, $"Expected at least 1 callback for joiner, got {joinerCallbackLog.Count}");
     }
 
     /// <summary>
@@ -130,8 +129,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         var collector2 = CreateViewCollector(seedNode);
 
         _harness.RunUntilIdle();
-
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         _harness.WaitForConvergence();
 
         // Collect views after convergence
@@ -139,8 +137,8 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         CollectViews(collector2, callbackLog2);
 
         // Both subscriptions should receive the same number of callbacks
-        Assert.True(callbackLog1.Count >= 1, "First subscription should receive callbacks");
-        Assert.True(callbackLog2.Count >= 1, "Second subscription should receive callbacks");
+        Assert.False(callbackLog1.IsEmpty, "First subscription should receive callbacks");
+        Assert.False(callbackLog2.IsEmpty, "Second subscription should receive callbacks");
         Assert.Equal(callbackLog1.Count, callbackLog2.Count);
     }
 
@@ -171,7 +169,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.WaitForConvergence();
 
         // Add a third joiner so that joiner1 and joiner2 both receive at least one callback
-        var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 3);
         _harness.WaitForConvergence();
 
         // Collect all views after final convergence
@@ -181,15 +179,14 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
 
         // Seed should have received callbacks for all three joins
         Assert.True(seedCallbackLog.Count >= seedInitialCount + 3,
-            $"Seed should receive at least 3 more callbacks after joins, got {seedCallbackLog.Count - seedInitialCount}");
+            string.Create(CultureInfo.InvariantCulture, $"Seed should receive at least 3 more callbacks after joins, got {seedCallbackLog.Count - seedInitialCount}"));
 
         // Joiner1 should have received callbacks for joiner2 and joiner3's joins
         Assert.True(joiner1CallbackLog.Count >= 2,
             $"Joiner1 should receive at least 2 callbacks (joiner2 join + joiner3 join), got {joiner1CallbackLog.Count}");
 
         // Joiner2 should have received callback for joiner3's join
-        Assert.True(joiner2CallbackLog.Count >= 1,
-            $"Joiner2 should receive at least 1 callback, got {joiner2CallbackLog.Count}");
+        Assert.False(joiner2CallbackLog.IsEmpty, $"Joiner2 should receive at least 1 callback, got {joiner2CallbackLog.Count}");
     }
 
     /// <summary>
@@ -247,7 +244,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         Assert.NotNull(twoNodeView);
 
         // Verify both endpoints are present
-        var hostnames = twoNodeView.Members.Select(e => e.Hostname.ToStringUtf8()).ToHashSet();
+        var hostnames = twoNodeView.Members.Select(e => e.Hostname.ToStringUtf8()).ToHashSet(StringComparer.Ordinal);
         Assert.Contains(seedNode.Address.Hostname.ToStringUtf8(), hostnames);
         Assert.Contains(joiner.Address.Hostname.ToStringUtf8(), hostnames);
     }
@@ -281,7 +278,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         // Verify we captured a view with size 3 that contains joiner2
         var joiner2Hostname = joiner2.Address.Hostname.ToStringUtf8();
         Assert.Contains(views, v => v.Size == 3 &&
-            v.Members.Any(e => e.Hostname.ToStringUtf8() == joiner2Hostname));
+            v.Members.Any(e => string.Equals(e.Hostname.ToStringUtf8(), joiner2Hostname, StringComparison.Ordinal)));
     }
 
     /// <summary>
@@ -314,8 +311,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         // Verify we captured a view without the crashed node (match by hostname AND port)
         Assert.Contains(callbackLog, v =>
             v.Size == 2 &&
-            !v.Members.Any(e =>
-                e.Hostname.ToStringUtf8() == joiner2Address.Hostname.ToStringUtf8() &&
+            !v.Members.Any(e => string.Equals(e.Hostname.ToStringUtf8(), joiner2Address.Hostname.ToStringUtf8(), StringComparison.Ordinal) &&
                 e.Port == joiner2Address.Port));
     }
 
@@ -460,7 +456,7 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
         _harness.RunUntilIdle();
 
         // Trigger a membership change to get a callback
-        var joiner = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         _harness.WaitForConvergence();
 
         // Collect views after convergence
@@ -477,5 +473,4 @@ public sealed class SubscriptionDetailTests : IAsyncLifetime
             Assert.True(view.Size > 0);
         }
     }
-
 }

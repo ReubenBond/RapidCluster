@@ -73,7 +73,7 @@ public readonly struct ConfigurationId(ClusterId clusterId, long version) : IEqu
     public Pb.ConfigurationId ToProtobuf() => new()
     {
         ClusterId = (ulong)ClusterId.Value,
-        Version = Version
+        Version = Version,
     };
 
     /// <summary>

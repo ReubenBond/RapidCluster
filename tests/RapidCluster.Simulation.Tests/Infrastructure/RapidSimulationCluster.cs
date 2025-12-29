@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Clockwork;
 using Microsoft.Extensions.Logging;
 using RapidCluster.Pb;
@@ -7,9 +8,11 @@ using RapidCluster.Simulation.Tests.Infrastructure.Logging;
 namespace RapidCluster.Simulation.Tests.Infrastructure;
 
 /// <summary>
+/// <para>
 /// Unified simulation harness for fully deterministic testing of Rapid clusters.
 /// Extends <see cref="SimulationCluster{TNode}"/> with RapidCluster-specific functionality.
-/// 
+/// </para>
+/// <para>
 /// Provides:
 /// - Deterministic task scheduling via per-node <see cref="SimulationTaskScheduler"/> instances
 /// - Controlled time via shared <see cref="SimulationClock"/>
@@ -18,6 +21,7 @@ namespace RapidCluster.Simulation.Tests.Infrastructure;
 /// - Node lifecycle management (create, join, crash, leave)
 /// - Per-node execution control (suspend, resume, step)
 /// - Simulation driving APIs (Step, RunUntil, Run)
+/// </para>
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSimulationNode>
@@ -97,7 +101,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
 
         // For seed nodes, initialization is synchronous (no network I/O needed),
         // but we still drive it through DriveToCompletion for consistency.
-        Run(() => node.InitializeAsync());
+        Run(() => node.InitializeAsync(TestContext.Current.CancellationToken));
 
         _log.SeedNodeCreated(nodeId);
         return node;
@@ -158,7 +162,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         _log.NodeJoining(nodeId);
 
         // Drive the initialization to completion
-        Run(() => node.InitializeAsync());
+        Run(() => node.InitializeAsync(TestContext.Current.CancellationToken));
 
         _log.NodeJoined(nodeId);
         return node;
@@ -277,7 +281,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
             // Drive the simulation until all joins in this batch complete.
             // IMPORTANT: Join tasks must be started inside DriveToCompletion so they
             // capture the simulation's SynchronizationContext for their continuations.
-            Run(() => Task.WhenAll(batchNodes.Select(node => node.InitializeAsync())), maxIterationsPerBatch);
+            Run(() => Task.WhenAll(batchNodes.Select(node => node.InitializeAsync(TestContext.Current.CancellationToken))), maxIterationsPerBatch);
 
             // Log completion
             foreach (var node in batchNodes)
@@ -299,7 +303,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
                 if (!converged)
                 {
                     throw new TimeoutException(
-                        $"Batch convergence failed. Expected size: {expectedSize}, " +
+                        string.Create(CultureInfo.InvariantCulture, $"Batch convergence failed. Expected size: {expectedSize}, ") +
                         $"Actual sizes: [{string.Join(", ", result.Select(n => n.MembershipSize))}]");
                 }
             }
@@ -342,12 +346,12 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
 
         // Drive the stop operation to completion (sends LeaveMessages to observers)
         // Node can still receive messages after this
-        Run(node.StopAsync);
+        Run(() => node.StopAsync(TestContext.Current.CancellationToken));
 
         // The leaving node must remain active to participate in consensus.
         // Run the simulation until all remaining nodes converge to the new size.
         var converged = RunUntil(
-            () => remainingNodes.All(n => n.MembershipSize == targetSize),
+            () => remainingNodes.TrueForAll(n => n.MembershipSize == targetSize),
             maxIterations: 100000);
 
         if (!converged)
@@ -370,12 +374,15 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     }
 
     /// <summary>
+    /// <para>
     /// Gracefully removes multiple nodes from the cluster in parallel.
     /// This allows the multi-node cut detection to batch multiple leaves into
     /// fewer consensus rounds, similar to how parallel joins work.
-    /// 
+    /// </para>
+    /// <para>
     /// All leaving nodes initiate their leave concurrently, enabling the
     /// batching mechanism to combine their alerts into single view changes.
+    /// </para>
     /// </summary>
     /// <param name="nodesToRemove">The nodes to remove from the cluster.</param>
     /// <returns>The number of configuration changes that occurred during the parallel leave.</returns>
@@ -405,13 +412,13 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         // StopAsync sends leave messages but keeps nodes alive to participate in consensus.
         Run(() =>
         {
-            var leaveTasks = nodesToRemove.Select(node => node.StopAsync());
+            var leaveTasks = nodesToRemove.Select(node => node.StopAsync(TestContext.Current.CancellationToken));
             return Task.WhenAll(leaveTasks);
         });
 
         // Wait for remaining nodes to converge to the new size
         var converged = RunUntil(
-            () => remainingNodes.All(n => n.MembershipSize == targetSize),
+            () => remainingNodes.TrueForAll(n => n.MembershipSize == targetSize),
             maxIterations: 500000);
 
         if (!converged)
@@ -510,7 +517,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     {
         ArgumentNullException.ThrowIfNull(nodes);
         var nodeList = nodes.ToList();
-        return RunUntil(() => nodeList.All(n => n.MembershipSize == expectedSize), maxIterations);
+        return RunUntil(() => nodeList.TrueForAll(n => n.MembershipSize == expectedSize), maxIterations);
     }
 
     /// <summary>
@@ -529,7 +536,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         if (!converged)
         {
             var suspendedNodes = Nodes.Where(n => n.IsSuspended).ToList();
-            throw new TimeoutException($"Nodes did not converge. " +
+            throw new TimeoutException("Nodes did not converge. " +
                 $"Active node count: {ActiveNodes.Count}, " +
                 $"Active node sizes: [{string.Join(", ", ActiveNodes.Select(n => n.MembershipSize))}], " +
                 $"Suspended nodes: {suspendedNodes.Count}");
@@ -544,7 +551,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         ArgumentNullException.ThrowIfNull(node);
         if (!RunUntil(() => node.MembershipSize == expectedSize, maxIterations))
         {
-            throw new TimeoutException($"Node did not reach size {expectedSize}. Current size: {node.MembershipSize}");
+            throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"Node did not reach size {expectedSize}. Current size: {node.MembershipSize}"));
         }
     }
 
@@ -572,16 +579,10 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     #region Override logging hooks from base class
 
     /// <inheritdoc />
-    protected override void OnConditionMet(int iterations)
-    {
-        _log.ConditionMet(iterations);
-    }
+    protected override void OnConditionMet(int iterations) => _log.ConditionMet(iterations);
 
     /// <inheritdoc />
-    protected override void OnSimulationIdleNoPendingWork(int iterations)
-    {
-        _log.SimulationIdleNoPendingWork(iterations, $"{TimeProvider.GetUtcNow():O}");
-    }
+    protected override void OnSimulationIdleNoPendingWork(int iterations) => _log.SimulationIdleNoPendingWork(iterations, $"{TimeProvider.GetUtcNow():O}");
 
     /// <inheritdoc />
     protected override void OnSimulationStuckMaxTime(TimeSpan timeDelta)
@@ -594,10 +595,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     }
 
     /// <inheritdoc />
-    protected override void OnSimulationStuckConsecutiveTimeAdvances(int count)
-    {
-        _log.SimulationStuckConsecutiveTimeAdvances(count);
-    }
+    protected override void OnSimulationStuckConsecutiveTimeAdvances(int count) => _log.SimulationStuckConsecutiveTimeAdvances(count);
 
     /// <inheritdoc />
     protected override void OnMaxIterationsReached(int maxIterations)
@@ -613,15 +611,15 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     private string BuildMaxIterationDiagnostics(int maxItemsPerQueue)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"SimulatedTime={TimeProvider.GetUtcNow():O}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"SimulatedTime={TimeProvider.GetUtcNow():O}");
 
-        sb.AppendLine($"ClusterQueue: Items={TaskQueue.ScheduledItems.Count}, NextWaiting={TaskQueue.NextWaitingDueTime:O}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"ClusterQueue: Items={TaskQueue.ScheduledItems.Count}, NextWaiting={TaskQueue.NextWaitingDueTime:O}");
         AppendQueueHead(sb, TaskQueue, maxItemsPerQueue);
 
         foreach (var node in Nodes)
         {
             var ctx = node.Context;
-            sb.AppendLine($"Node={node.NetworkAddress} State={ctx.State} Items={ctx.TaskQueue.ScheduledItems.Count} HasReady={ctx.HasReadyTasks} NextWaiting={ctx.NextWaitingDueTime:O}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Node={node.NetworkAddress} State={ctx.State} Items={ctx.TaskQueue.ScheduledItems.Count} HasReady={ctx.HasReadyTasks} NextWaiting={ctx.NextWaitingDueTime:O}");
             AppendQueueHead(sb, ctx.TaskQueue, maxItemsPerQueue);
         }
 
@@ -639,27 +637,18 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
                 break;
             }
 
-            sb.AppendLine($"  {item.GetType().Name} Due={item.DueTime:O}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"  {item.GetType().Name} Due={item.DueTime:O}");
         }
     }
 
     /// <inheritdoc />
-    protected override void OnTeardownCancellationRequested()
-    {
-        _log.TeardownCancellationRequested();
-    }
+    protected override void OnTeardownCancellationRequested() => _log.TeardownCancellationRequested();
 
     /// <inheritdoc />
-    protected override void OnSimulationReachedIdleState()
-    {
-        _log.SimulationReachedIdleState();
-    }
+    protected override void OnSimulationReachedIdleState() => _log.SimulationReachedIdleState();
 
     /// <inheritdoc />
-    protected override void OnTimeAdvancing(TimeSpan delta)
-    {
-        _log.TimeAdvancing($"{delta}");
-    }
+    protected override void OnTimeAdvancing(TimeSpan delta) => _log.TimeAdvancing($"{delta}");
 
     #endregion
 
@@ -675,7 +664,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         var nodes = Nodes.ToList();
         foreach (var node in nodes)
         {
-            await node.DisposeAsync().ConfigureAwait(true);
+            await node.DisposeAsync();
             UnregisterNode(node);
         }
 
@@ -686,5 +675,5 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         _logManager.Dispose();
     }
 
-    private string DebuggerDisplay => $"SimulationHarness(Seed={Seed}, Nodes={Nodes.Count}, Time={Clock.CurrentTime:hh\\:mm\\:ss\\.fff})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"SimulationHarness(Seed={Seed}, Nodes={Nodes.Count}, Time={Clock.CurrentTime:hh\\:mm\\:ss\\.fff})");
 }

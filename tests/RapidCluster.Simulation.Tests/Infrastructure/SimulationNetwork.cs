@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Clockwork;
 using Microsoft.Extensions.Logging;
 using RapidCluster.Simulation.Tests.Infrastructure.Logging;
@@ -29,60 +30,33 @@ internal sealed class SimulationNetwork : Clockwork.SimulationNetwork
     #region Override logging hooks for RapidCluster-specific logging
 
     /// <inheritdoc />
-    protected override void OnPartitionCreated(string source, string target)
-    {
-        _log.PartitionCreated(source, target);
-    }
+    protected override void OnPartitionCreated(string source, string target) => _log.PartitionCreated(source, target);
 
     /// <inheritdoc />
-    protected override void OnBidirectionalPartitionCreating(string node1, string node2)
-    {
-        _log.BidirectionalPartitionCreating(node1, node2);
-    }
+    protected override void OnBidirectionalPartitionCreating(string node1, string node2) => _log.BidirectionalPartitionCreating(node1, node2);
 
     /// <inheritdoc />
-    protected override void OnPartitionHealed(string source, string target)
-    {
-        _log.PartitionHealed(source, target);
-    }
+    protected override void OnPartitionHealed(string source, string target) => _log.PartitionHealed(source, target);
 
     /// <inheritdoc />
-    protected override void OnBidirectionalPartitionHealing(string node1, string node2)
-    {
-        _log.BidirectionalPartitionHealing(node1, node2);
-    }
+    protected override void OnBidirectionalPartitionHealing(string node1, string node2) => _log.BidirectionalPartitionHealing(node1, node2);
 
     /// <inheritdoc />
-    protected override void OnAllPartitionsHealed(int count)
-    {
-        _log.AllPartitionsHealed(count);
-    }
+    protected override void OnAllPartitionsHealed(int count) => _log.AllPartitionsHealed(count);
 
     /// <inheritdoc />
-    protected override void OnNodeIsolating(string nodeAddress)
-    {
-        _log.NodeIsolating(nodeAddress);
-    }
+    protected override void OnNodeIsolating(string nodeAddress) => _log.NodeIsolating(nodeAddress);
 
     /// <inheritdoc />
-    protected override void OnNodeReconnecting(string nodeAddress)
-    {
-        _log.NodeReconnecting(nodeAddress);
-    }
+    protected override void OnNodeReconnecting(string nodeAddress) => _log.NodeReconnecting(nodeAddress);
 
     /// <inheritdoc />
-    protected override void OnMessageBlockedByPartition(string source, string target)
-    {
-        _log.MessageBlockedByPartition(source, target);
-    }
+    protected override void OnMessageBlockedByPartition(string source, string target) => _log.MessageBlockedByPartition(source, target);
 
     /// <inheritdoc />
-    protected override void OnMessageDroppedRandom(string source, string target)
-    {
-        _log.MessageDroppedRandom(source, target);
-    }
+    protected override void OnMessageDroppedRandom(string source, string target) => _log.MessageDroppedRandom(source, target);
 
     #endregion
 
-    private string DebuggerDisplay => $"SimulationNetwork(DropRate={MessageDropRate:P0})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"SimulationNetwork(DropRate={MessageDropRate:P0})");
 }

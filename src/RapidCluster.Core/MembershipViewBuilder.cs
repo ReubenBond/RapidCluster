@@ -43,7 +43,7 @@ internal sealed class MembershipViewBuilder
         {
             var comparator = new AddressComparator(i);
             _addressComparators.Add(comparator);
-            _rings.Add(new List<MemberInfo>());
+            _rings.Add([]);
         }
     }
 
@@ -138,14 +138,11 @@ internal sealed class MembershipViewBuilder
     {
     }
 
-    private static int ComputeRingCount(int ringCount, int nodeCount)
-    {
+    private static int ComputeRingCount(int ringCount, int nodeCount) =>
         // There is no reason to have more rings than there are nodes.
         // For one or two nodes, there should be one ring.
         // For more nodes, there should be at most one less ring than there are nodes.
-        ringCount = Math.Clamp(ringCount, 1, Math.Max(1, nodeCount - 1));
-        return ringCount;
-    }
+        Math.Clamp(ringCount, 1, Math.Max(1, nodeCount - 1));
 
     /// <summary>
     /// Gets the maximum number of rings (K value) that could be in the built view.
@@ -259,10 +256,7 @@ internal sealed class MembershipViewBuilder
     /// <param name="node">The node to be added (must have NodeId set).</param>
     /// <exception cref="NodeAlreadyInRingException">Thrown if the node is already in the ring.</exception>
     /// <returns>This builder for method chaining.</returns>
-    public MembershipViewBuilder RingAdd(Endpoint node)
-    {
-        return RingAdd(new MemberInfo(node));
-    }
+    public MembershipViewBuilder RingAdd(Endpoint node) => RingAdd(new MemberInfo(node));
 
     /// <summary>
     /// Add a node to all K rings with the specified metadata.
@@ -272,10 +266,7 @@ internal sealed class MembershipViewBuilder
     /// <param name="metadata">The metadata for the node.</param>
     /// <exception cref="NodeAlreadyInRingException">Thrown if the node is already in the ring.</exception>
     /// <returns>This builder for method chaining.</returns>
-    public MembershipViewBuilder RingAdd(Endpoint node, Metadata metadata)
-    {
-        return RingAdd(new MemberInfo(node, metadata));
-    }
+    public MembershipViewBuilder RingAdd(Endpoint node, Metadata metadata) => RingAdd(new MemberInfo(node, metadata));
 
     /// <summary>
     /// Delete a host from all K rings.
@@ -388,10 +379,7 @@ internal sealed class MembershipViewBuilder
     /// <param name="previousConfigurationId">The previous configuration ID to increment from.</param>
     /// <returns>An immutable MembershipView instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the builder has already been sealed.</exception>
-    public MembershipView Build(ConfigurationId previousConfigurationId)
-    {
-        return BuildWithConfigurationId(previousConfigurationId.Next());
-    }
+    public MembershipView Build(ConfigurationId previousConfigurationId) => BuildWithConfigurationId(previousConfigurationId.Next());
 
     /// <summary>
     /// Builds and returns the immutable MembershipView with the exact configuration ID provided.
@@ -416,8 +404,8 @@ internal sealed class MembershipViewBuilder
     }
 
     /// <summary>
-    /// Builds K rings where each node has K unique successors (subjects) and K unique predecessors (observers).
-    /// 
+    /// <para>Builds K rings where each node has K unique successors (subjects) and K unique predecessors (observers).</para>
+    /// <para>
     /// Algorithm: Deterministic k-ring monitoring graph with offset-based construction
     /// 1. Create a single base permutation O of all nodes by sorting on xxhash scores.
     /// 2. Select K distinct offsets d_0, d_1, ..., d_{K-1} from {1, 2, ..., N-1}.
@@ -426,12 +414,14 @@ internal sealed class MembershipViewBuilder
     /// 3. For each ring r with offset d_r:
     ///    - successor_r(O[i]) = O[(i + d_r) mod N]
     ///    - predecessor_r(O[i]) = O[(i - d_r + N) mod N]
-    /// 
+    /// </para>
+    /// <para>
     /// This guarantees:
     /// - Each node has exactly K unique successors (monitors K unique nodes)
     /// - Each node has exactly K unique predecessors (is monitored by K unique nodes)
     /// - The construction is deterministic (same on all nodes)
     /// - No algorithmic deadlock (pure computation)
+    /// </para>
     /// </summary>
     private (ImmutableArray<ImmutableArray<MemberInfo>> rings, ImmutableArray<int> offsets) BuildUniqueMonitoringRings(int ringCount)
     {
@@ -471,11 +461,11 @@ internal sealed class MembershipViewBuilder
         // Build candidate offsets 1..N-1
         var candidates = new List<(int offset, bool isCoprime, ulong rank)>(n - 1);
 
+        Span<byte> rankInput = stackalloc byte[8];
         for (var d = 1; d < n; d++)
         {
             var isCoprime = Gcd(d, n) == 1;
             // Use xxhash to rank offsets deterministically
-            Span<byte> rankInput = stackalloc byte[8];
             BinaryPrimitives.WriteInt32LittleEndian(rankInput, d);
             BinaryPrimitives.WriteInt32LittleEndian(rankInput[4..], n);
             var rank = XxHash64.HashToUInt64(rankInput);
@@ -519,10 +509,7 @@ internal sealed class MembershipViewBuilder
     /// </summary>
     /// <returns>An immutable MembershipView instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the builder has already been sealed.</exception>
-    public MembershipView Build()
-    {
-        return Build(ConfigurationId.Empty);
-    }
+    public MembershipView Build() => Build(ConfigurationId.Empty);
 
     /// <summary>
     /// Computes the hash for an endpoint on a specific ring.
@@ -635,5 +622,4 @@ internal sealed class MembershipViewBuilder
             return hash;
         }
     }
-
 }

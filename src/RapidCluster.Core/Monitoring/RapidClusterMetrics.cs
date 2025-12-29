@@ -221,7 +221,7 @@ public sealed class RapidClusterMetrics
             description: "Time to reach consensus",
             advice: new InstrumentAdvice<double>
             {
-                HistogramBucketBoundaries = MediumOperationBuckets
+                HistogramBucketBoundaries = MediumOperationBuckets,
             });
 
         _joinLatency = _meter.CreateHistogram(
@@ -230,7 +230,7 @@ public sealed class RapidClusterMetrics
             description: "Time for a node to complete join",
             advice: new InstrumentAdvice<double>
             {
-                HistogramBucketBoundaries = SlowOperationBuckets
+                HistogramBucketBoundaries = SlowOperationBuckets,
             });
 
         _probeLatency = _meter.CreateHistogram(
@@ -239,7 +239,7 @@ public sealed class RapidClusterMetrics
             description: "Failure detection probe round-trip time",
             advice: new InstrumentAdvice<double>
             {
-                HistogramBucketBoundaries = FastOperationBuckets
+                HistogramBucketBoundaries = FastOperationBuckets,
             });
 
         _grpcCallDuration = _meter.CreateHistogram(
@@ -248,7 +248,7 @@ public sealed class RapidClusterMetrics
             description: "gRPC call duration",
             advice: new InstrumentAdvice<double>
             {
-                HistogramBucketBoundaries = MediumOperationBuckets
+                HistogramBucketBoundaries = MediumOperationBuckets,
             });
 
         // ========================================
@@ -278,18 +278,12 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a message sent.
     /// </summary>
-    public void RecordMessageSent(string messageType)
-    {
-        _messagesSent.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.MessageType, messageType));
-    }
+    public void RecordMessageSent(string messageType) => _messagesSent.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.MessageType, messageType));
 
     /// <summary>
     /// Records a message received.
     /// </summary>
-    public void RecordMessageReceived(string messageType)
-    {
-        _messagesReceived.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.MessageType, messageType));
-    }
+    public void RecordMessageReceived(string messageType) => _messagesReceived.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.MessageType, messageType));
 
     /// <summary>
     /// Records a dropped message.
@@ -318,18 +312,12 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a consensus proposal initiated.
     /// </summary>
-    public void RecordConsensusProposal(string protocol)
-    {
-        _consensusProposals.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Protocol, protocol));
-    }
+    public void RecordConsensusProposal(string protocol) => _consensusProposals.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Protocol, protocol));
 
     /// <summary>
     /// Records a consensus round started.
     /// </summary>
-    public void RecordConsensusRoundStarted(string protocol)
-    {
-        _consensusRoundsStarted.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Protocol, protocol));
-    }
+    public void RecordConsensusRoundStarted(string protocol) => _consensusRoundsStarted.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Protocol, protocol));
 
     /// <summary>
     /// Records a consensus round completed.
@@ -344,26 +332,17 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a fast path conflict requiring classic Paxos fallback.
     /// </summary>
-    public void RecordConsensusConflict()
-    {
-        _consensusConflicts.Add(1);
-    }
+    public void RecordConsensusConflict() => _consensusConflicts.Add(1);
 
     /// <summary>
     /// Records a vote sent in a consensus round.
     /// </summary>
-    public void RecordConsensusVoteSent(string voteType)
-    {
-        _consensusVotesSent.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.VoteType, voteType));
-    }
+    public void RecordConsensusVoteSent(string voteType) => _consensusVotesSent.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.VoteType, voteType));
 
     /// <summary>
     /// Records a vote received in a consensus round.
     /// </summary>
-    public void RecordConsensusVoteReceived(string voteType)
-    {
-        _consensusVotesReceived.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.VoteType, voteType));
-    }
+    public void RecordConsensusVoteReceived(string voteType) => _consensusVotesReceived.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.VoteType, voteType));
 
     /// <summary>
     /// Records consensus latency.
@@ -391,42 +370,27 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a membership view change.
     /// </summary>
-    public void RecordMembershipViewChange()
-    {
-        _membershipViewChanges.Add(1);
-    }
+    public void RecordMembershipViewChange() => _membershipViewChanges.Add(1);
 
     /// <summary>
     /// Records nodes added to the cluster.
     /// </summary>
-    public void RecordNodesAdded(int count = 1)
-    {
-        _membershipNodesAdded.Add(count);
-    }
+    public void RecordNodesAdded(int count = 1) => _membershipNodesAdded.Add(count);
 
     /// <summary>
     /// Records nodes removed from the cluster.
     /// </summary>
-    public void RecordNodesRemoved(int count, string reason)
-    {
-        _membershipNodesRemoved.Add(count, new KeyValuePair<string, object?>(MetricNames.Tags.Reason, reason));
-    }
+    public void RecordNodesRemoved(int count, string reason) => _membershipNodesRemoved.Add(count, new KeyValuePair<string, object?>(MetricNames.Tags.Reason, reason));
 
     /// <summary>
     /// Records a join request.
     /// </summary>
-    public void RecordJoinRequest(string result)
-    {
-        _membershipJoinRequests.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Result, result));
-    }
+    public void RecordJoinRequest(string result) => _membershipJoinRequests.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Result, result));
 
     /// <summary>
     /// Records join latency.
     /// </summary>
-    public void RecordJoinLatency(string result, double latencySeconds)
-    {
-        _joinLatency.Record(latencySeconds, new KeyValuePair<string, object?>(MetricNames.Tags.Result, result));
-    }
+    public void RecordJoinLatency(string result, double latencySeconds) => _joinLatency.Record(latencySeconds, new KeyValuePair<string, object?>(MetricNames.Tags.Result, result));
 
     /// <summary>
     /// Records join latency using a Stopwatch.
@@ -444,42 +408,27 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a failure detection probe sent.
     /// </summary>
-    public void RecordProbeSent()
-    {
-        _failureDetectionProbesSent.Add(1);
-    }
+    public void RecordProbeSent() => _failureDetectionProbesSent.Add(1);
 
     /// <summary>
     /// Records a successful probe response.
     /// </summary>
-    public void RecordProbeSuccess()
-    {
-        _failureDetectionProbeSuccesses.Add(1);
-    }
+    public void RecordProbeSuccess() => _failureDetectionProbeSuccesses.Add(1);
 
     /// <summary>
     /// Records a failed probe.
     /// </summary>
-    public void RecordProbeFailure(string reason)
-    {
-        _failureDetectionProbeFailures.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Reason, reason));
-    }
+    public void RecordProbeFailure(string reason) => _failureDetectionProbeFailures.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Reason, reason));
 
     /// <summary>
     /// Records a failure alert raised.
     /// </summary>
-    public void RecordFailureAlertRaised(string alertType)
-    {
-        _failureDetectionAlertsRaised.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.AlertType, alertType));
-    }
+    public void RecordFailureAlertRaised(string alertType) => _failureDetectionAlertsRaised.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.AlertType, alertType));
 
     /// <summary>
     /// Records probe latency.
     /// </summary>
-    public void RecordProbeLatency(string result, double latencySeconds)
-    {
-        _probeLatency.Record(latencySeconds, new KeyValuePair<string, object?>(MetricNames.Tags.Result, result));
-    }
+    public void RecordProbeLatency(string result, double latencySeconds) => _probeLatency.Record(latencySeconds, new KeyValuePair<string, object?>(MetricNames.Tags.Result, result));
 
     /// <summary>
     /// Records probe latency using a Stopwatch.
@@ -497,18 +446,12 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a report received by the cut detector.
     /// </summary>
-    public void RecordCutDetectorReportReceived(string reportType)
-    {
-        _cutDetectorReportsReceived.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.ReportType, reportType));
-    }
+    public void RecordCutDetectorReportReceived(string reportType) => _cutDetectorReportsReceived.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.ReportType, reportType));
 
     /// <summary>
     /// Records a stable cut detected.
     /// </summary>
-    public void RecordCutDetected()
-    {
-        _cutDetectorCutsDetected.Add(1);
-    }
+    public void RecordCutDetected() => _cutDetectorCutsDetected.Add(1);
 
     // ========================================
     // gRPC Recording Methods
@@ -517,10 +460,7 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a gRPC call started.
     /// </summary>
-    public void RecordGrpcCallStarted(string method)
-    {
-        _grpcCallsStarted.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Method, method));
-    }
+    public void RecordGrpcCallStarted(string method) => _grpcCallsStarted.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.Method, method));
 
     /// <summary>
     /// Records a gRPC call completed.
@@ -535,10 +475,7 @@ public sealed class RapidClusterMetrics
     /// <summary>
     /// Records a gRPC connection error.
     /// </summary>
-    public void RecordGrpcConnectionError(string errorType)
-    {
-        _grpcConnectionErrors.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.ErrorType, errorType));
-    }
+    public void RecordGrpcConnectionError(string errorType) => _grpcConnectionErrors.Add(1, new KeyValuePair<string, object?>(MetricNames.Tags.ErrorType, errorType));
 
     /// <summary>
     /// Records gRPC call duration.

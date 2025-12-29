@@ -1,3 +1,4 @@
+using System.Globalization;
 using CsCheck;
 using Google.Protobuf;
 using RapidCluster.Pb;
@@ -19,7 +20,7 @@ public class CutDetectorSimpleModeTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = status,
-            ConfigurationId = configurationId.ToProtobuf()
+            ConfigurationId = configurationId.ToProtobuf(),
         };
         msg.RingNumber.Add(ringNumber);
         return msg;
@@ -33,7 +34,7 @@ public class CutDetectorSimpleModeTests
         var builder = new MembershipViewBuilder(k);
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i);
+            var node = Utils.HostFromParts("127.0.0." + (i + 1).ToString(CultureInfo.InvariantCulture), 1000 + i);
             node.NodeId = Utils.GetNextNodeId();
             builder.RingAdd(node);
         }
@@ -70,13 +71,11 @@ public class CutDetectorSimpleModeTests
     }
 
     [Fact]
-    public void Constructor_K0_Throws()
-    {
+    public void Constructor_K0_Throws() =>
         // MembershipViewBuilder throws on creation with k <= 0
         // This test verifies that the validation happens at the MembershipViewBuilder level,
         // which prevents CutDetector from ever receiving a view with RingCount=0
         Assert.Throws<ArgumentOutOfRangeException>(() => new MembershipViewBuilder(0));
-    }
 
     [Fact]
     public void Constructor_K3_Succeeds()
@@ -285,7 +284,7 @@ public class CutDetectorSimpleModeTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = DefaultConfigId.ToProtobuf()
+            ConfigurationId = DefaultConfigId.ToProtobuf(),
         };
         // For K=1, only ring 0 is valid, but the message might contain it
         msg.RingNumber.Add(0);
@@ -384,10 +383,9 @@ public class CutDetectorSimpleModeTests
     private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
-            Gen.Select(
-                Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Count() == count),
+            Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
             ).Select((octets, ports, nodeIds) =>
             {
                 var result = new List<Endpoint>(count);
@@ -395,9 +393,9 @@ public class CutDetectorSimpleModeTests
                 {
                     var endpoint = new Endpoint
                     {
-                        Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
+                        Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{octets[i]}")),
                         Port = ports[i],
-                        NodeId = nodeIds[i]
+                        NodeId = nodeIds[i],
                     };
                     result.Add(endpoint);
                 }
@@ -409,7 +407,7 @@ public class CutDetectorSimpleModeTests
     public void Property_Single_Report_With_Required_Votes_Triggers_Cut()
     {
         // Use enough nodes (at least 3) to ensure we can have observersPerSubject rings
-        Gen.Select(Gen.Int[1, 2], GenUniqueNodes(3, 10))
+        Gen.Int[1, 2].Select(GenUniqueNodes(3, 10))
             .Sample((observersPerSubject, nodes) =>
             {
                 var builder = new MembershipViewBuilder(observersPerSubject);
@@ -436,13 +434,13 @@ public class CutDetectorSimpleModeTests
                             EdgeSrc = nodes[(i + 1) % nodes.Count],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                     proposals.Add(result);
                 }
 
                 // After required reports, there should be a proposal
-                var lastProposalHasSubject = proposals.Last().Contains(subject);
+                var lastProposalHasSubject = proposals[^1].Contains(subject);
                 return lastProposalHasSubject;
             });
     }
@@ -451,7 +449,7 @@ public class CutDetectorSimpleModeTests
     public void Property_Empty_For_Unknown_Subject()
     {
         // Use enough nodes (at least 3) to ensure we can have observersPerSubject rings
-        Gen.Select(Gen.Int[1, 2], GenUniqueNodes(3, 10))
+        Gen.Int[1, 2].Select(GenUniqueNodes(3, 10))
             .Sample((observersPerSubject, nodes) =>
             {
                 var builder = new MembershipViewBuilder(observersPerSubject);
@@ -470,7 +468,7 @@ public class CutDetectorSimpleModeTests
                 var unknownEndpoint = new Endpoint
                 {
                     Hostname = ByteString.CopyFromUtf8("192.168.1.1"),
-                    Port = 9999
+                    Port = 9999,
                 };
 
                 // Report once for unknown subject - should not trigger until threshold
@@ -480,7 +478,7 @@ public class CutDetectorSimpleModeTests
                         EdgeSrc = nodes[0],
                         EdgeDst = unknownEndpoint,
                         EdgeStatus = EdgeStatus.Up,
-                        RingNumber = { 0 }
+                        RingNumber = { 0 },
                     });
 
                 // With actualRingCount > 1, first report returns empty

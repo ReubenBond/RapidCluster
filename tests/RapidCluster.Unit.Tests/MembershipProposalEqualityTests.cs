@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Runtime.InteropServices;
 using CsCheck;
 using Google.Protobuf;
 using RapidCluster.Pb;
@@ -26,7 +28,7 @@ public class MembershipProposalEqualityTests
     {
         var proposal = CreateProposal([Utils.HostFromParts("10.0.0.1", 5001, 1)], configVersion: 1);
 
-        Assert.False(proposal.Equals(null));
+        Assert.False(proposal.Equals(other: null));
     }
 
     [Fact]
@@ -144,11 +146,11 @@ public class MembershipProposalEqualityTests
         {
             Utils.HostFromParts("10.0.0.1", 5001, 1),
             Utils.HostFromParts("10.0.0.2", 5002, 2),
-            Utils.HostFromParts("10.0.0.3", 5003, 3)
+            Utils.HostFromParts("10.0.0.3", 5003, 3),
         };
 
-        var proposal1 = CreateProposal(endpoints.Select(e => e.Clone()).ToArray(), configVersion: 1);
-        var proposal2 = CreateProposal(endpoints.Select(e => e.Clone()).ToArray(), configVersion: 1);
+        var proposal1 = CreateProposal([.. endpoints.Select(e => e.Clone())], configVersion: 1);
+        var proposal2 = CreateProposal([.. endpoints.Select(e => e.Clone())], configVersion: 1);
 
         Assert.True(proposal1.Equals(proposal2));
     }
@@ -288,22 +290,16 @@ public class MembershipProposalEqualityTests
         {
             Utils.HostFromParts("10.0.0.1", 5001, 1),
             Utils.HostFromParts("10.0.0.2", 5002, 2),
-            Utils.HostFromParts("10.0.0.3", 5003, 3)
+            Utils.HostFromParts("10.0.0.3", 5003, 3),
         };
 
         // Simulate receiving 3 identical votes from different nodes
         for (var i = 0; i < 3; i++)
         {
-            var proposal = CreateProposal(endpoints.Select(e => e.Clone()).ToArray(), configVersion: 1);
+            var proposal = CreateProposal([.. endpoints.Select(e => e.Clone())], configVersion: 1);
 
-            if (dict.TryGetValue(proposal, out var count))
-            {
-                dict[proposal] = count + 1;
-            }
-            else
-            {
-                dict[proposal] = 1;
-            }
+            ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, proposal, out var exists);
+            ++count;
         }
 
         Assert.Single(dict);
@@ -401,7 +397,7 @@ public class MembershipProposalEqualityTests
         var proposals = new List<MembershipProposal>();
         for (var i = 1; i <= 10; i++)
         {
-            var endpoint = Utils.HostFromParts($"10.0.0.{i}", 5000 + i, i);
+            var endpoint = Utils.HostFromParts(string.Create(CultureInfo.InvariantCulture, $"10.0.0.{i}"), 5000 + i, i);
             proposals.Add(CreateProposal([endpoint], configVersion: i, clusterId: i * 100));
         }
 
@@ -418,20 +414,18 @@ public class MembershipProposalEqualityTests
     #region Property-Based Tests
 
     private static Gen<Endpoint> GenEndpoint() =>
-        Gen.Select(
-            Gen.Int[1, 255],
+        Gen.Int[1, 255].Select(
             Gen.Int[1000, 65535],
             Gen.Long[1, 1000]
         ).Select((octet, port, nodeId) => new Endpoint
         {
-            Hostname = ByteString.CopyFromUtf8($"10.0.0.{octet}"),
+            Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"10.0.0.{octet}")),
             Port = port,
-            NodeId = nodeId
+            NodeId = nodeId,
         });
 
     private static Gen<MembershipProposal> GenProposal(int minMembers, int maxMembers) =>
-        Gen.Select(
-            Gen.Int[minMembers, maxMembers],
+        Gen.Int[minMembers, maxMembers].Select(
             Gen.Long[1, 100],
             Gen.Long[1, 1000]
         ).SelectMany((count, configVersion, clusterId) =>
@@ -440,25 +434,19 @@ public class MembershipProposalEqualityTests
                 var proposal = new MembershipProposal
                 {
                     ConfigurationId = new ConfigurationId(new ClusterId(clusterId), configVersion).ToProtobuf(),
-                    MaxNodeId = endpoints.Length > 0 ? endpoints.Max(e => e.NodeId) : 0
+                    MaxNodeId = endpoints.Length > 0 ? endpoints.Max(e => e.NodeId) : 0,
                 };
                 proposal.Members.AddRange(endpoints);
                 return proposal;
             }));
 
     [Fact]
-    public void Property_Reflexive_ProposalEqualsItself()
-    {
-        GenProposal(1, 5).Sample(proposal =>
-        {
-            return proposal.Equals(proposal);
-        });
-    }
+    public void Property_Reflexive_ProposalEqualsItself() => GenProposal(1, 5).Sample(proposal => proposal.Equals(proposal));
 
     [Fact]
     public void Property_Symmetric_EqualsIsSymmetric()
     {
-        Gen.Select(GenProposal(1, 5), GenProposal(1, 5))
+        GenProposal(1, 5).Select(GenProposal(1, 5))
             .Sample((p1, p2) =>
             {
                 var p1EqualsP2 = p1.Equals(p2);
@@ -505,7 +493,7 @@ public class MembershipProposalEqualityTests
         var proposal = new MembershipProposal
         {
             ConfigurationId = new ConfigurationId(new ClusterId(clusterId), configVersion).ToProtobuf(),
-            MaxNodeId = maxNodeId ?? (endpoints.Length > 0 ? endpoints.Max(e => e.NodeId) : 0)
+            MaxNodeId = maxNodeId ?? (endpoints.Length > 0 ? endpoints.Max(e => e.NodeId) : 0),
         };
         proposal.Members.AddRange(endpoints);
         return proposal;
@@ -521,7 +509,7 @@ public class MembershipProposalEqualityTests
         var proposal = new MembershipProposal
         {
             ConfigurationId = new ConfigurationId(new ClusterId(clusterId), configVersion).ToProtobuf(),
-            MaxNodeId = maxNodeId ?? (endpoints.Length > 0 ? endpoints.Max(e => e.NodeId) : 0)
+            MaxNodeId = maxNodeId ?? (endpoints.Length > 0 ? endpoints.Max(e => e.NodeId) : 0),
         };
         proposal.Members.AddRange(endpoints);
         proposal.MemberMetadata.AddRange(metadata);

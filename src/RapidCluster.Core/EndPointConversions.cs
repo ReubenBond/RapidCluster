@@ -23,14 +23,14 @@ internal static class EndPointConversions
             DnsEndPoint dns => new Endpoint
             {
                 Hostname = ByteString.CopyFromUtf8(dns.Host),
-                Port = dns.Port
+                Port = dns.Port,
             },
             IPEndPoint ip => new Endpoint
             {
                 Hostname = ByteString.CopyFromUtf8(ip.Address.ToString()),
-                Port = ip.Port
+                Port = ip.Port,
             },
-            _ => throw new ArgumentException($"Unsupported EndPoint type: {endPoint.GetType()}", nameof(endPoint))
+            _ => throw new ArgumentException($"Unsupported EndPoint type: {endPoint.GetType()}", nameof(endPoint)),
         };
     }
 
@@ -79,7 +79,7 @@ internal static class MetadataConversions
         var dict = metadata.Metadata_
             .ToDictionary(
                 kvp => kvp.Key,
-                kvp => (ReadOnlyMemory<byte>)kvp.Value.ToByteArray());
+                kvp => (ReadOnlyMemory<byte>)kvp.Value.ToByteArray(), StringComparer.Ordinal);
         return new ClusterNodeMetadata(dict);
     }
 

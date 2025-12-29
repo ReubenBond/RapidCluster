@@ -17,7 +17,7 @@ public class RapidClusterProtocolOptionsTests
     {
         var options = new RapidClusterProtocolOptions
         {
-            FailureDetectorInterval = TimeSpan.FromMilliseconds(500)
+            FailureDetectorInterval = TimeSpan.FromMilliseconds(500),
         };
         Assert.Equal(TimeSpan.FromMilliseconds(500), options.FailureDetectorInterval);
     }
@@ -34,7 +34,7 @@ public class RapidClusterProtocolOptionsTests
     {
         var options = new RapidClusterProtocolOptions
         {
-            UnstableModeTimeout = TimeSpan.FromSeconds(10)
+            UnstableModeTimeout = TimeSpan.FromSeconds(10),
         };
         Assert.Equal(TimeSpan.FromSeconds(10), options.UnstableModeTimeout);
     }

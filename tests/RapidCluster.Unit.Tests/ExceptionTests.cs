@@ -8,7 +8,6 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class ExceptionTests
 {
-
     [Fact]
     public void JoinExceptionDefaultConstructorWorks()
     {
@@ -112,21 +111,21 @@ public class ExceptionTests
     public void JoinExceptionInheritsFromException()
     {
         var ex = new JoinException("test");
-        Assert.IsAssignableFrom<Exception>(ex);
+        Assert.IsType<Exception>(ex, exactMatch: false);
     }
 
     [Fact]
     public void NodeAlreadyInRingExceptionInheritsFromException()
     {
         var ex = new NodeAlreadyInRingException("test");
-        Assert.IsAssignableFrom<Exception>(ex);
+        Assert.IsType<Exception>(ex, exactMatch: false);
     }
 
     [Fact]
     public void NodeNotInRingExceptionInheritsFromException()
     {
         var ex = new NodeNotInRingException("test");
-        Assert.IsAssignableFrom<Exception>(ex);
+        Assert.IsType<Exception>(ex, exactMatch: false);
     }
 
     [Fact]
@@ -173,5 +172,4 @@ public class ExceptionTests
         }
         Assert.True(thrown);
     }
-
 }

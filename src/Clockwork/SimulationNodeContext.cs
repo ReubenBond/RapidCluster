@@ -19,16 +19,19 @@ public enum SimulationNodeState
     /// Messages sent to the node will be queued but not processed until resumed.
     /// Timers will accumulate and fire when the node is resumed if their due time has passed.
     /// </summary>
-    Suspended
+    Suspended,
 }
 
 /// <summary>
+/// <para>
 /// Encapsulates all per-node simulation state, including the node's task queue,
 /// task scheduler, synchronization context, time provider, and random number generator.
-/// 
+/// </para>
+/// <para>
 /// Each simulated node has its own context, allowing fine-grained control
 /// over individual node execution (pause, resume, step) while sharing a unified
 /// <see cref="SimulationClock"/> for time synchronization.
+/// </para>
 /// </summary>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed partial class SimulationNodeContext

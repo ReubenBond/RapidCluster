@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Clockwork;
 
@@ -6,17 +7,16 @@ namespace Clockwork;
 /// Base class for all scheduled items in the queue.
 /// Implements IDisposable for cancellation support.
 /// </summary>
-/// <remarks>
-/// This class intentionally does not implement comparison operators because
-/// instances are compared by reference identity in the sorted set, and the
-/// CompareTo implementation is only used for ordering purposes.
-/// </remarks>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
-[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1036:Override methods on comparable types", Justification = "Comparison operators not needed - used only for ordering in SortedSet")]
-public abstract class ScheduledItem : IDisposable, IComparable<ScheduledItem>
+public abstract class ScheduledItem : IDisposable
 {
     private SimulationTaskQueue? _queue;
     private bool _disposed;
+
+    /// <summary>
+    /// Gets the comparer for ordering scheduled items.
+    /// </summary>
+    public static IComparer<ScheduledItem> Comparer { get; } = ScheduledItemComparer.Instance;
 
     /// <summary>
     /// The absolute time when this item is due.
@@ -59,7 +59,7 @@ public abstract class ScheduledItem : IDisposable, IComparable<ScheduledItem>
     /// </summary>
     public void Dispose()
     {
-        Dispose(true);
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 
@@ -79,19 +79,29 @@ public abstract class ScheduledItem : IDisposable, IComparable<ScheduledItem>
         }
     }
 
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"Due={DueTime:HH:mm:ss.fff} Seq={SequenceNumber}");
+
     /// <summary>
-    /// Compares this item to another by due time, then by sequence number.
+    /// Comparer for ordering <see cref="ScheduledItem"/> instances by due time, then by sequence number.
     /// </summary>
-    public int CompareTo(ScheduledItem? other)
+    private sealed class ScheduledItemComparer : IComparer<ScheduledItem>
     {
-        if (other is null) return 1;
-        if (ReferenceEquals(this, other)) return 0;
+        /// <summary>
+        /// Gets the singleton instance of the comparer.
+        /// </summary>
+        public static ScheduledItemComparer Instance { get; } = new();
 
-        var dueTimeComparison = DueTime.CompareTo(other.DueTime);
-        if (dueTimeComparison != 0)
-            return dueTimeComparison;
-        return SequenceNumber.CompareTo(other.SequenceNumber);
+        private ScheduledItemComparer() { }
+
+        /// <inheritdoc />
+        public int Compare(ScheduledItem? x, ScheduledItem? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+
+            var dueTimeComparison = x.DueTime.CompareTo(y.DueTime);
+            return dueTimeComparison != 0 ? dueTimeComparison : x.SequenceNumber.CompareTo(y.SequenceNumber);
+        }
     }
-
-    private string DebuggerDisplay => $"Due={DueTime:HH:mm:ss.fff} Seq={SequenceNumber}";
 }

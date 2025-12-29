@@ -127,7 +127,7 @@ public sealed class ChaosInjectorTests : IAsyncLifetime
     [Fact]
     public void MinimumAliveNodesIsRespected()
     {
-        var node = _harness.CreateSeedNode();
+        _ = _harness.CreateSeedNode();
 
         _chaos.NodeCrashRate = 1.0; // 100% crash rate
         _chaos.MinimumAliveNodes = 1;

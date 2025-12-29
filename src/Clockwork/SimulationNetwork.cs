@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -15,7 +16,7 @@ public enum DeliveryStatus
     /// <summary>Message was randomly dropped (transient failure, should retry).</summary>
     Dropped,
     /// <summary>Message blocked by network partition (persistent failure).</summary>
-    Partitioned
+    Partitioned,
 }
 
 /// <summary>
@@ -27,7 +28,7 @@ public class SimulationNetwork
 {
     private readonly Func<IReadOnlyList<SimulationNode>> _getNodes;
     private readonly SimulationRandom _random;
-    private readonly ConcurrentDictionary<string, HashSet<string>> _partitions = new();
+    private readonly ConcurrentDictionary<string, HashSet<string>> _partitions = new(StringComparer.Ordinal);
     private readonly Lock _lock = new();
     private ILogger _logger;
 
@@ -228,10 +229,7 @@ public class SimulationNetwork
     /// Checks if a message can be delivered from source to target.
     /// This is a convenience method that returns true only if delivery would succeed.
     /// </summary>
-    public bool CanDeliver(string sourceAddress, string targetAddress)
-    {
-        return CheckDelivery(sourceAddress, targetAddress) == DeliveryStatus.Success;
-    }
+    public bool CanDeliver(string sourceAddress, string targetAddress) => CheckDelivery(sourceAddress, targetAddress) == DeliveryStatus.Success;
 
     /// <summary>
     /// Gets the simulated delay for a message.
@@ -253,63 +251,35 @@ public class SimulationNetwork
 #pragma warning disable CA1873 // Logging message template - these are virtual hooks, override for high-performance logging
 
     /// <summary>Called when a unidirectional partition is created.</summary>
-    protected virtual void OnPartitionCreated(string source, string target)
-    {
-        _logger.LogDebug("Partition created: {Source} -> {Target}", source, target);
-    }
+    protected virtual void OnPartitionCreated(string source, string target) => _logger.LogDebug("Partition created: {Source} -> {Target}", source, target);
 
     /// <summary>Called when a bidirectional partition is about to be created.</summary>
-    protected virtual void OnBidirectionalPartitionCreating(string node1, string node2)
-    {
-        _logger.LogDebug("Creating bidirectional partition: {Node1} <-> {Node2}", node1, node2);
-    }
+    protected virtual void OnBidirectionalPartitionCreating(string node1, string node2) => _logger.LogDebug("Creating bidirectional partition: {Node1} <-> {Node2}", node1, node2);
 
     /// <summary>Called when a unidirectional partition is healed.</summary>
-    protected virtual void OnPartitionHealed(string source, string target)
-    {
-        _logger.LogDebug("Partition healed: {Source} -> {Target}", source, target);
-    }
+    protected virtual void OnPartitionHealed(string source, string target) => _logger.LogDebug("Partition healed: {Source} -> {Target}", source, target);
 
     /// <summary>Called when a bidirectional partition is about to be healed.</summary>
-    protected virtual void OnBidirectionalPartitionHealing(string node1, string node2)
-    {
-        _logger.LogDebug("Healing bidirectional partition: {Node1} <-> {Node2}", node1, node2);
-    }
+    protected virtual void OnBidirectionalPartitionHealing(string node1, string node2) => _logger.LogDebug("Healing bidirectional partition: {Node1} <-> {Node2}", node1, node2);
 
     /// <summary>Called when all partitions are healed.</summary>
-    protected virtual void OnAllPartitionsHealed(int count)
-    {
-        _logger.LogDebug("All partitions healed: {Count} partitions", count);
-    }
+    protected virtual void OnAllPartitionsHealed(int count) => _logger.LogDebug("All partitions healed: {Count} partitions", count);
 
     /// <summary>Called when a node is about to be isolated.</summary>
-    protected virtual void OnNodeIsolating(string nodeAddress)
-    {
-        _logger.LogDebug("Isolating node: {Node}", nodeAddress);
-    }
+    protected virtual void OnNodeIsolating(string nodeAddress) => _logger.LogDebug("Isolating node: {Node}", nodeAddress);
 
     /// <summary>Called when a node is about to be reconnected.</summary>
-    protected virtual void OnNodeReconnecting(string nodeAddress)
-    {
-        _logger.LogDebug("Reconnecting node: {Node}", nodeAddress);
-    }
+    protected virtual void OnNodeReconnecting(string nodeAddress) => _logger.LogDebug("Reconnecting node: {Node}", nodeAddress);
 
     /// <summary>Called when a message is blocked by a partition.</summary>
-    protected virtual void OnMessageBlockedByPartition(string source, string target)
-    {
-        _logger.LogTrace("Message blocked by partition: {Source} -> {Target}", source, target);
-    }
+    protected virtual void OnMessageBlockedByPartition(string source, string target) => _logger.LogTrace("Message blocked by partition: {Source} -> {Target}", source, target);
 
     /// <summary>Called when a message is randomly dropped.</summary>
-    protected virtual void OnMessageDroppedRandom(string source, string target)
-    {
-        _logger.LogTrace("Message randomly dropped: {Source} -> {Target}", source, target);
-    }
+    protected virtual void OnMessageDroppedRandom(string source, string target) => _logger.LogTrace("Message randomly dropped: {Source} -> {Target}", source, target);
 
-#pragma warning restore CA1873
-#pragma warning restore CA1848
+#pragma warning restore CA1873, CA1848
 
     #endregion
 
-    private string DebuggerDisplay => $"SimulationNetwork(Partitions={_partitions.Count}, DropRate={MessageDropRate:P0})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"SimulationNetwork(Partitions={_partitions.Count}, DropRate={MessageDropRate:P0})");
 }

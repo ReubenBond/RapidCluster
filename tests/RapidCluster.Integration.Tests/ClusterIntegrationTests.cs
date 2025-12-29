@@ -23,7 +23,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         }
         _subscriptionCts.Clear();
 
-        await _cluster.DisposeAsync().ConfigureAwait(true);
+        await _cluster.DisposeAsync();
         GC.SuppressFinalize(this);
     }
 
@@ -63,8 +63,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     public async Task SingleSeedNodeStarts()
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (app, cluster) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, cluster) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         // Give it a moment to initialize
         await Task.Delay(500, TestContext.Current.CancellationToken);
@@ -80,16 +79,14 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         Assert.Single(seed.CurrentView.Members);
-
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         // Wait for cluster convergence
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner, 2, TimeSpan.FromSeconds(10));
 
         Assert.Equal(2, seed.CurrentView.Members.Length);
         Assert.Equal(2, joiner.CurrentView.Members.Length);
@@ -104,15 +101,14 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joiner1Address = CreateAddress(_cluster.GetNextPort());
         var joiner2Address = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
-        var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
 
         // Wait for cluster convergence
-        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10));
 
         Assert.Equal(3, seed.CurrentView.Members.Length);
         Assert.Equal(3, joiner1.CurrentView.Members.Length);
@@ -131,19 +127,18 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         var viewUpdates = new ConcurrentBag<ClusterMembershipView>();
 
         // Create seed and start collecting view updates
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         StartViewUpdateConsumer(seed, viewUpdates);
-
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+        var (_, _) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
         // Wait for cluster convergence
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // Give some time for events to be collected
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Should have received at least one view update
-        Assert.True(viewUpdates.Count > 0, $"Expected at least 1 view update, got {viewUpdates.Count}");
+        Assert.False(viewUpdates.IsEmpty, $"Expected at least 1 view update, got {viewUpdates.Count}");
     }
 
     /// <summary>
@@ -170,7 +165,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         }, TestContext.Current.CancellationToken);
 
         // Wait for cluster convergence
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // Verify metadata is available
         var members = seed.CurrentView.Members;
@@ -185,9 +180,6 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         Assert.Equal("worker", Encoding.UTF8.GetString(joinerMember.Metadata["role"].Span));
     }
 
-    // TODO: NodeCanLeaveGracefully test removed - LeaveGracefullyAsync is no longer on public API
-    // Graceful leave can be achieved by stopping the hosted service
-
     /// <summary>
     /// Test that multiple nodes can join concurrently
     /// Reduced from 5 to 3 concurrent joins to avoid consensus timeout issues
@@ -196,8 +188,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     public async Task MultipleNodesConcurrentJoin()
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         const int numJoiners = 3;
         var joinTasks = new List<Task<(WebApplication App, IRapidCluster Cluster)>>();
@@ -208,16 +199,15 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
             joinTasks.Add(_cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken));
         }
 
-        var joiners = await Task.WhenAll(joinTasks).ConfigureAwait(true);
+        var joiners = await Task.WhenAll(joinTasks);
 
         // Wait for cluster convergence - increased timeout for concurrent joins
-        await TestCluster.WaitForClusterSizeAsync(seed, numJoiners + 1, TimeSpan.FromSeconds(30)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, numJoiners + 1, TimeSpan.FromSeconds(30));
 
         Assert.Equal(numJoiners + 1, seed.CurrentView.Members.Length);
-
-        foreach (var (app, joiner) in joiners)
+        foreach (var (_, joiner) in joiners)
         {
-            await TestCluster.WaitForClusterSizeAsync(joiner, numJoiners + 1, TimeSpan.FromSeconds(30)).ConfigureAwait(true);
+            await TestCluster.WaitForClusterSizeAsync(joiner, numJoiners + 1, TimeSpan.FromSeconds(30));
             Assert.Equal(numJoiners + 1, joiner.CurrentView.Members.Length);
         }
     }
@@ -226,21 +216,20 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     public async Task SequentialJoinsFiveNodesAllConverge()
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         var nodes = new List<IRapidCluster> { seed };
         for (var i = 0; i < 4; i++)
         {
             var joinerAddress = CreateAddress(_cluster.GetNextPort());
-            var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
-            await TestCluster.WaitForClusterSizeAsync(joiner, nodes.Count + 1, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+            var (_, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
+            await TestCluster.WaitForClusterSizeAsync(joiner, nodes.Count + 1, TimeSpan.FromSeconds(10));
             nodes.Add(joiner);
         }
 
         foreach (var node in nodes)
         {
-            await TestCluster.WaitForClusterSizeAsync(node, 5, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+            await TestCluster.WaitForClusterSizeAsync(node, 5, TimeSpan.FromSeconds(10));
             Assert.Equal(5, node.CurrentView.Members.Length);
         }
     }
@@ -251,17 +240,15 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joiner1Address = CreateAddress(_cluster.GetNextPort());
         var joiner2Address = CreateAddress(_cluster.GetNextPort());
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
 
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
+        var (_, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, joiner1Address, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-
-        var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, joiner1Address, TestContext.Current.CancellationToken);
-
-        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10));
 
         Assert.Equal(3, seed.CurrentView.Members.Length);
         Assert.Equal(3, joiner1.CurrentView.Members.Length);
@@ -277,7 +264,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         var members = seed.CurrentView.Members;
 
@@ -297,13 +284,13 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
         var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 3, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner1, 3, TimeSpan.FromSeconds(10));
+        await TestCluster.WaitForClusterSizeAsync(joiner2, 3, TimeSpan.FromSeconds(10));
 
-        var seedList = seed.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).OrderBy(p => p).ToList();
-        var joiner1List = joiner1.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).OrderBy(p => p).ToList();
-        var joiner2List = joiner2.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).OrderBy(p => p).ToList();
+        var seedList = seed.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).Order().ToList();
+        var joiner1List = joiner1.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).Order().ToList();
+        var joiner2List = joiner2.CurrentView.Members.Select(m => ((IPEndPoint)m.EndPoint).Port).Order().ToList();
 
         Assert.Equal(seedList.Count, joiner1List.Count);
         Assert.Equal(seedList.Count, joiner2List.Count);
@@ -339,7 +326,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
             options.Metadata["version"] = Encoding.UTF8.GetBytes("1.0.0");
         }, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         var members = seed.CurrentView.Members;
 
@@ -362,7 +349,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         var members = seed.CurrentView.Members;
 
@@ -378,8 +365,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         // Start three separate view update consumers
         var bag1 = new ConcurrentBag<ClusterMembershipView>();
@@ -388,18 +374,17 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         StartViewUpdateConsumer(seed, bag1);
         StartViewUpdateConsumer(seed, bag2);
         StartViewUpdateConsumer(seed, bag3);
+        var (_, _) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
-
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // Give some time for events to be collected
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // All three consumers should have received view updates
-        Assert.True(bag1.Count > 0);
-        Assert.True(bag2.Count > 0);
-        Assert.True(bag3.Count > 0);
+        Assert.False(bag1.IsEmpty);
+        Assert.False(bag2.IsEmpty);
+        Assert.False(bag3.IsEmpty);
     }
 
     [Fact]
@@ -415,7 +400,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // Give some time for events to be collected
         await Task.Delay(500, TestContext.Current.CancellationToken);
@@ -438,7 +423,7 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
 
         var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // Give some time for events to be collected
         await Task.Delay(500, TestContext.Current.CancellationToken);
@@ -456,16 +441,15 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
         var joiner1Address = CreateAddress(_cluster.GetNextPort());
         var joiner2Address = CreateAddress(_cluster.GetNextPort());
         var joiner3Address = CreateAddress(_cluster.GetNextPort());
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
+        var (_, joiner3) = await _cluster.CreateJoinerNodeAsync(joiner3Address, seedAddress, TestContext.Current.CancellationToken);
 
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
-        var (joiner1App, joiner1) = await _cluster.CreateJoinerNodeAsync(joiner1Address, seedAddress, TestContext.Current.CancellationToken);
-        var (joiner2App, joiner2) = await _cluster.CreateJoinerNodeAsync(joiner2Address, seedAddress, TestContext.Current.CancellationToken);
-        var (joiner3App, joiner3) = await _cluster.CreateJoinerNodeAsync(joiner3Address, seedAddress, TestContext.Current.CancellationToken);
-
-        await TestCluster.WaitForClusterSizeAsync(seed, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner1, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner2, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
-        await TestCluster.WaitForClusterSizeAsync(joiner3, 4, TimeSpan.FromSeconds(15)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 4, TimeSpan.FromSeconds(15));
+        await TestCluster.WaitForClusterSizeAsync(joiner1, 4, TimeSpan.FromSeconds(15));
+        await TestCluster.WaitForClusterSizeAsync(joiner2, 4, TimeSpan.FromSeconds(15));
+        await TestCluster.WaitForClusterSizeAsync(joiner3, 4, TimeSpan.FromSeconds(15));
 
         Assert.Equal(4, seed.CurrentView.Members.Length);
         Assert.Equal(4, joiner1.CurrentView.Members.Length);
@@ -478,20 +462,18 @@ public sealed class ClusterIntegrationTests(ITestOutputHelper outputHelper) : IA
     {
         var seedAddress = CreateAddress(_cluster.GetNextPort());
         var joinerAddress = CreateAddress(_cluster.GetNextPort());
-
-        var (seedApp, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
+        var (_, seed) = await _cluster.CreateSeedNodeAsync(seedAddress, TestContext.Current.CancellationToken);
 
         var viewUpdates = new ConcurrentBag<ClusterMembershipView>();
         StartViewUpdateConsumer(seed, viewUpdates);
+        var (_, _) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
 
-        var (joinerApp, joiner) = await _cluster.CreateJoinerNodeAsync(joinerAddress, seedAddress, TestContext.Current.CancellationToken);
-
-        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await TestCluster.WaitForClusterSizeAsync(seed, 2, TimeSpan.FromSeconds(10));
 
         // Give some time for events to be collected
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Count view updates
-        Assert.True(viewUpdates.Count > 0);
+        Assert.False(viewUpdates.IsEmpty);
     }
 }

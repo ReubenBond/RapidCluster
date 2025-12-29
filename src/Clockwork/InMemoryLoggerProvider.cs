@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -20,32 +21,24 @@ public readonly record struct LogEntry(
 /// The in-memory log buffer which all <see cref="InMemoryLogger"/> instances share.
 /// Useful for simulation testing where logs need to be captured and inspected.
 /// </summary>
-public sealed class InMemoryLogBuffer
+/// <remarks>
+/// Creates a new in-memory log buffer.
+/// </remarks>
+/// <param name="timeProvider">Optional time provider for timestamps. Defaults to system time.</param>
+public sealed class InMemoryLogBuffer(TimeProvider? timeProvider = null)
 {
     private readonly ConcurrentQueue<LogEntry> _entries = new();
-    private readonly TimeProvider _timeProvider;
-
-    /// <summary>
-    /// Creates a new in-memory log buffer.
-    /// </summary>
-    /// <param name="timeProvider">Optional time provider for timestamps. Defaults to system time.</param>
-    public InMemoryLogBuffer(TimeProvider? timeProvider = null)
-    {
-        _timeProvider = timeProvider ?? TimeProvider.System;
-    }
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     /// <summary>
     /// Gets all log entries currently buffered.
     /// </summary>
-    public IReadOnlyList<LogEntry> AllEntries => _entries.ToArray();
+    public IReadOnlyList<LogEntry> AllEntries => [.. _entries];
 
     /// <summary>
     /// Gets log entries filtered by minimum log level.
     /// </summary>
-    public IEnumerable<LogEntry> GetEntries(LogLevel minimumLevel)
-    {
-        return _entries.Where(e => e.LogLevel >= minimumLevel);
-    }
+    public IEnumerable<LogEntry> GetEntries(LogLevel minimumLevel) => _entries.Where(e => e.LogLevel >= minimumLevel);
 
     /// <summary>
     /// Logs a message to the buffer.
@@ -73,26 +66,17 @@ public sealed class InMemoryLogBuffer
     /// <summary>
     /// Clears all buffered log entries.
     /// </summary>
-    public void Clear()
-    {
-        _entries.Clear();
-    }
+    public void Clear() => _entries.Clear();
 
     /// <summary>
     /// Formats all log entries as a string.
     /// </summary>
-    public string FormatAllEntries()
-    {
-        return FormatEntries(_entries);
-    }
+    public string FormatAllEntries() => FormatEntries(_entries);
 
     /// <summary>
     /// Formats log entries at or above the specified minimum level as a string.
     /// </summary>
-    public string FormatEntries(LogLevel minimumLevel)
-    {
-        return FormatEntries(GetEntries(minimumLevel));
-    }
+    public string FormatEntries(LogLevel minimumLevel) => FormatEntries(GetEntries(minimumLevel));
 
     /// <summary>
     /// Gets the approximate size in bytes of all formatted log entries.
@@ -157,13 +141,13 @@ public sealed class InMemoryLogBuffer
             LogLevel.Warning => "WARN",
             LogLevel.Error => "FAIL",
             LogLevel.Critical => "CRIT",
-            _ => "NONE"
+            _ => "NONE",
         };
 
         var prefix = entry.LogLevel == LogLevel.Error ? "!!!!!!!!!! " : string.Empty;
         var exc = entry.Exception != null ? $"\n{PrintException(entry.Exception)}" : string.Empty;
 
-        return $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Environment.CurrentManagedThreadId}\t{levelStr}\t{entry.EventId}\t{entry.Category}]\t{prefix}{entry.Message}{exc}";
+        return string.Create(CultureInfo.InvariantCulture, $"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Environment.CurrentManagedThreadId}\t{levelStr}\t{entry.EventId}\t{entry.Category}]\t{prefix}{entry.Message}{exc}");
     }
 
     private static string PrintException(Exception? exception)
@@ -180,11 +164,11 @@ public sealed class InMemoryLogBuffer
     {
         if (exception == null) return;
 
-        sb.Append($"Exc level {level}: {exception.GetType()}: {exception.Message}");
+        sb.Append(CultureInfo.InvariantCulture, $"Exc level {level}: {exception.GetType()}: {exception.Message}");
 
         if (exception.StackTrace is { } stack)
         {
-            sb.Append($"{Environment.NewLine}{stack}");
+            sb.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}{stack}");
         }
 
         if (exception is ReflectionTypeLoadException typeLoadException)
@@ -226,27 +210,21 @@ public sealed class InMemoryLogBuffer
 /// A logger provider that buffers log messages in-memory for later retrieval.
 /// Useful for tests where logs need to be attached to test results conditionally.
 /// </summary>
-public sealed class InMemoryLoggerProvider : ILoggerProvider
+/// <remarks>
+/// Creates a new in-memory logger provider.
+/// </remarks>
+/// <param name="timeProvider">Optional time provider for timestamps. Defaults to system time.</param>
+public sealed class InMemoryLoggerProvider(TimeProvider? timeProvider = null) : ILoggerProvider
 {
-    private readonly InMemoryLogBuffer _buffer;
     private bool _disposed;
-
-    /// <summary>
-    /// Creates a new in-memory logger provider.
-    /// </summary>
-    /// <param name="timeProvider">Optional time provider for timestamps. Defaults to system time.</param>
-    public InMemoryLoggerProvider(TimeProvider? timeProvider = null)
-    {
-        _buffer = new InMemoryLogBuffer(timeProvider);
-    }
 
     /// <summary>
     /// Gets the shared log buffer containing all logged entries.
     /// </summary>
-    public InMemoryLogBuffer Buffer => _buffer;
+    public InMemoryLogBuffer Buffer { get; } = new InMemoryLogBuffer(timeProvider);
 
     /// <inheritdoc />
-    public ILogger CreateLogger(string categoryName) => new InMemoryLogger(categoryName, _buffer);
+    public ILogger CreateLogger(string categoryName) => new InMemoryLogger(categoryName, Buffer);
 
     /// <inheritdoc />
     public void Dispose()
@@ -254,7 +232,7 @@ public sealed class InMemoryLoggerProvider : ILoggerProvider
         if (_disposed) return;
         _disposed = true;
         // No resources to dispose, but clear the buffer to release memory
-        _buffer.Clear();
+        Buffer.Clear();
     }
 }
 

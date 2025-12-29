@@ -463,10 +463,7 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
         // Waiting for size 5 when only 1 node exists should timeout
         // Using WaitForNodeSize since parameterless WaitForConvergence would succeed
         // with a single node (active count = 1, node sees 1)
-        Assert.Throws<TimeoutException>(() =>
-        {
-            _harness.WaitForNodeSize(seedNode, expectedSize: 5, maxIterations: 100);
-        });
+        Assert.Throws<TimeoutException>(() => _harness.WaitForNodeSize(seedNode, expectedSize: 5, maxIterations: 100));
     }
 
     [Fact]
@@ -475,10 +472,6 @@ public sealed class SimulationHarnessTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
 
         // Waiting for size 5 when only 1 node exists should timeout
-        Assert.Throws<TimeoutException>(() =>
-        {
-            _harness.WaitForNodeSize(seedNode, expectedSize: 5, maxIterations: 100);
-        });
+        Assert.Throws<TimeoutException>(() => _harness.WaitForNodeSize(seedNode, expectedSize: 5, maxIterations: 100));
     }
-
 }

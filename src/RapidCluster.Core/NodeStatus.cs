@@ -13,5 +13,5 @@ public enum NodeStatus
     /// <summary>
     /// The node has left or been removed from the cluster.
     /// </summary>
-    Unavailable
+    Unavailable,
 }

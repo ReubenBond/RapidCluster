@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace RapidCluster.Pb;
 
@@ -71,7 +72,7 @@ public partial class Endpoint : IComparable<Endpoint>
     /// <summary>
     /// Returns the network address as a string in "hostname:port" format.
     /// </summary>
-    public string GetNetworkAddressString() => $"{Hostname.ToStringUtf8()}:{Port}";
+    public string GetNetworkAddressString() => string.Create(CultureInfo.InvariantCulture, $"{Hostname.ToStringUtf8()}:{Port}");
 
-    private string DebuggerDisplay => $"{GetNetworkAddressString()} (id={NodeId})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"{GetNetworkAddressString()} (id={NodeId})");
 }

@@ -26,7 +26,7 @@ public sealed class SimulationSchedulerTests
         task.Start(scheduler);
 
         Assert.False(executed);
-        Assert.Single(scheduler.Tasks);
+        _ = Assert.Single(scheduler.Tasks);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class SimulationSchedulerTests
         var syncContext = taskQueue.SynchronizationContext;
         var executed = false;
 
-        syncContext.Post(_ => executed = true, null);
+        syncContext.Post(_ => executed = true, state: null);
 
         Assert.False(executed);
         taskQueue.RunOnce();
@@ -126,7 +126,7 @@ public sealed class SimulationSchedulerTests
         var syncContext = taskQueue.SynchronizationContext;
         var executed = false;
 
-        Assert.Throws<InvalidOperationException>(() => syncContext.Send(_ => executed = true, null));
+        Assert.Throws<InvalidOperationException>(() => syncContext.Send(_ => executed = true, state: null));
 
         Assert.False(executed);
     }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using RapidCluster.Pb;
 
 namespace RapidCluster;
@@ -22,5 +23,5 @@ public sealed class NodeStatusChange
 
     public override string ToString() => $"{Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port}:{Status}:{Metadata}";
 
-    private string DebuggerDisplay => $"{Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port} {Status}";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"{Endpoint.Hostname.ToStringUtf8()}:{Endpoint.Port} {Status}");
 }

@@ -26,12 +26,11 @@ public static class HostAddressResolver
     /// <returns>The resolved IP address, or null if no suitable address is found.</returns>
     public static IPAddress? ResolveIPAddressOrDefault(byte[]? subnet, AddressFamily family)
     {
-        IList<IPAddress> nodeIps = NetworkInterface.GetAllNetworkInterfaces()
+        IList<IPAddress> nodeIps = [.. NetworkInterface.GetAllNetworkInterfaces()
             .Where(iface => iface.OperationalStatus == OperationalStatus.Up)
             .SelectMany(iface => iface.GetIPProperties().UnicastAddresses)
             .Select(addr => addr.Address)
-            .Where(addr => addr.AddressFamily == family && !IPAddress.IsLoopback(addr))
-            .ToList();
+            .Where(addr => addr.AddressFamily == family && !IPAddress.IsLoopback(addr)),];
 
         return PickIPAddress(nodeIps, subnet, family);
     }
@@ -116,7 +115,7 @@ public static class HostAddressResolver
     public static IPAddress GetLocalIPAddress(AddressFamily family = AddressFamily.InterNetwork, string? interfaceName = null)
     {
         var loopback = family == AddressFamily.InterNetwork ? IPAddress.Loopback : IPAddress.IPv6Loopback;
-        NetworkInterface[] netInterfaces = NetworkInterface.GetAllNetworkInterfaces();
+        var netInterfaces = NetworkInterface.GetAllNetworkInterfaces();
 
         var candidates = new List<IPAddress>();
 
@@ -133,9 +132,9 @@ public static class HostAddressResolver
                 continue;
             }
 
-            bool isLoopbackInterface = netInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback;
+            var isLoopbackInterface = netInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback;
 
-            foreach (UnicastIPAddressInformation ip in netInterface.GetIPProperties().UnicastAddresses)
+            foreach (var ip in netInterface.GetIPProperties().UnicastAddresses)
             {
                 if (ip.Address.AddressFamily == family)
                 {
@@ -170,8 +169,8 @@ public static class HostAddressResolver
             {
                 // Check if the address matches the subnet prefix
                 var ipBytes = nodeIp.GetAddressBytes();
-                bool matches = true;
-                for (int i = 0; i < subnet.Length && i < ipBytes.Length; i++)
+                var matches = true;
+                for (var i = 0; i < subnet.Length && i < ipBytes.Length; i++)
                 {
                     if (ipBytes[i] != subnet[i])
                     {
@@ -193,7 +192,7 @@ public static class HostAddressResolver
     private static IPAddress? PickIPAddress(IReadOnlyList<IPAddress> candidates)
     {
         IPAddress? chosen = null;
-        foreach (IPAddress addr in candidates)
+        foreach (var addr in candidates)
         {
             if (chosen == null)
             {
@@ -218,8 +217,8 @@ public static class HostAddressResolver
     /// </summary>
     private static bool CompareIPAddresses(IPAddress lhs, IPAddress rhs)
     {
-        byte[] lbytes = lhs.GetAddressBytes();
-        byte[] rbytes = rhs.GetAddressBytes();
+        var lbytes = lhs.GetAddressBytes();
+        var rbytes = rhs.GetAddressBytes();
 
         if (lbytes.Length != rbytes.Length)
         {
@@ -228,7 +227,7 @@ public static class HostAddressResolver
 
         // Compare starting from most significant octet
         // e.g., 10.68.20.21 < 10.98.05.04
-        for (int i = 0; i < lbytes.Length; i++)
+        for (var i = 0; i < lbytes.Length; i++)
         {
             if (lbytes[i] != rbytes[i])
             {

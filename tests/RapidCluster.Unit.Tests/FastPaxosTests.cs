@@ -16,7 +16,7 @@ public sealed class FastRoundConsensusCoordinatorTests
     [Fact]
     public async Task Decides_WhenThresholdVotesReceived()
     {
-        var membershipSize = 5;
+        const int membershipSize = 5;
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
@@ -40,7 +40,7 @@ public sealed class FastRoundConsensusCoordinatorTests
             NullLogger<ConsensusCoordinator>.Instance);
 
         var proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001));
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         var threshold = membershipSize - (int)Math.Floor((membershipSize - 1) / 4.0);
         for (var i = 0; i < threshold; i++)
@@ -52,8 +52,8 @@ public sealed class FastRoundConsensusCoordinatorTests
                     ConfigurationId = configId.ToProtobuf(),
                     Sender = Utils.HostFromParts("127.0.0.1", 2000 + i, nodeId: Utils.GetNextNodeId()),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposal
-                }
+                    Proposal = proposal,
+                },
             }, TestContext.Current.CancellationToken);
         }
 
@@ -64,7 +64,7 @@ public sealed class FastRoundConsensusCoordinatorTests
     [Fact]
     public async Task DoesNotDecide_BeforeThreshold()
     {
-        var membershipSize = 5;
+        const int membershipSize = 5;
         var configId = new ConfigurationId(new ClusterId(888), version: 1);
 
         var myAddr = Utils.HostFromParts("127.0.0.1", 1000);
@@ -88,7 +88,7 @@ public sealed class FastRoundConsensusCoordinatorTests
             NullLogger<ConsensusCoordinator>.Instance);
 
         var proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001));
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         var threshold = membershipSize - (int)Math.Floor((membershipSize - 1) / 4.0);
 
@@ -106,8 +106,8 @@ public sealed class FastRoundConsensusCoordinatorTests
                     ConfigurationId = configId.ToProtobuf(),
                     Sender = Utils.HostFromParts("127.0.0.1", 2000 + i, nodeId: Utils.GetNextNodeId()),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposal
-                }
+                    Proposal = proposal,
+                },
             }, TestContext.Current.CancellationToken);
         }
 
@@ -149,7 +149,7 @@ public sealed class FastRoundConsensusCoordinatorTests
             NullLogger<ConsensusCoordinator>.Instance);
 
         var proposal = CreateProposal(configId, Utils.HostFromParts("10.0.0.1", 5001));
-        coordinator.Propose(proposal, TestContext.Current.CancellationToken);
+        coordinator.Propose(proposal);
 
         var threshold = membershipSize - (int)Math.Floor((membershipSize - 1) / 4.0);
 
@@ -168,8 +168,8 @@ public sealed class FastRoundConsensusCoordinatorTests
                     ConfigurationId = configId.ToProtobuf(),
                     Sender = Utils.HostFromParts("127.0.0.1", 2000 + i, nodeId: Utils.GetNextNodeId()),
                     Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                    Proposal = proposal
-                }
+                    Proposal = proposal,
+                },
             }, TestContext.Current.CancellationToken);
         }
 
@@ -189,12 +189,11 @@ public sealed class FastRoundConsensusCoordinatorTests
                 ConfigurationId = configId.ToProtobuf(),
                 Sender = Utils.HostFromParts("127.0.0.1", 4000, nodeId: Utils.GetNextNodeId()),
                 Rnd = new Rank { Round = 1, NodeIndex = 0 },
-                Proposal = proposal
-            }
+                Proposal = proposal,
+            },
         }, TestContext.Current.CancellationToken);
 
         _ = await coordinator.Decided.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
-
     }
 
     private static MembershipProposal CreateProposal(ConfigurationId configId, params Endpoint[] endpoints)
@@ -238,17 +237,10 @@ public sealed class FastRoundConsensusCoordinatorTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class TestMembershipViewAccessor : IMembershipViewAccessor
+    private sealed class TestMembershipViewAccessor(int membershipSize) : IMembershipViewAccessor
     {
-        private readonly MembershipView _view;
-
-        public TestMembershipViewAccessor(int membershipSize)
-        {
-            _view = Utils.CreateMembershipView(membershipSize);
-        }
-
-        public MembershipView CurrentView => _view;
-        public BroadcastChannelReader<MembershipView> Updates => throw new NotImplementedException();
+        public MembershipView CurrentView { get; } = Utils.CreateMembershipView(membershipSize);
+        public BroadcastChannelReader<MembershipView> Updates => throw new NotSupportedException();
     }
 
     private sealed class TestMeterFactory : IMeterFactory

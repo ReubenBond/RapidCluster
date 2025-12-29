@@ -21,10 +21,7 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     #region Basic Multiple Seed Functionality
 
@@ -61,7 +58,7 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
-        var joiner3 = _harness.CreateJoinerNode(seedNode, nodeId: 3);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 3);
 
         _harness.WaitForConvergence();
 
@@ -172,10 +169,7 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         // Attempt to join with limited retries - should fail since all seeds are suspended
         var options = new RapidClusterProtocolOptions { MaxJoinRetries = 3 };
 
-        var ex = Assert.Throws<JoinException>(() =>
-        {
-            _harness.CreateJoinerNodeWithMultipleSeeds([seedNode, joiner1, joiner2], nodeId: 3, options);
-        });
+        var ex = Assert.Throws<JoinException>(() => _harness.CreateJoinerNodeWithMultipleSeeds([seedNode, joiner1, joiner2], nodeId: 3, options));
 
         // The exception message should mention timeout since all seeds are unresponsive
         Assert.Contains("Timeout", ex.Message, StringComparison.Ordinal);
@@ -195,7 +189,7 @@ public sealed class MultipleSeedTests : IAsyncLifetime
         // Create a 3-node cluster
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
 

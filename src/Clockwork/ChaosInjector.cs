@@ -14,7 +14,7 @@ public enum FaultType
     /// <summary>Isolate a node from all other nodes.</summary>
     Isolation,
     /// <summary>Reconnect an isolated node.</summary>
-    Reconnect
+    Reconnect,
 }
 
 /// <summary>
@@ -33,34 +33,26 @@ public readonly record struct ScheduledFault<TNode>(
 /// </summary>
 /// <typeparam name="TNode">The concrete simulation node type.</typeparam>
 /// <typeparam name="TCluster">The concrete simulation cluster type.</typeparam>
-public abstract class ChaosInjector<TNode, TCluster>
+/// <remarks>
+/// Creates a new chaos injector.
+/// </remarks>
+/// <param name="cluster">The simulation cluster.</param>
+public abstract class ChaosInjector<TNode, TCluster>(TCluster cluster)
     where TNode : SimulationNode
     where TCluster : SimulationCluster<TNode>
 {
-    private readonly TCluster _cluster;
-    private readonly SimulationRandom _random;
     private readonly List<ScheduledFault<TNode>> _scheduledFaults = [];
     private readonly Lock _lock = new();
 
     /// <summary>
-    /// Creates a new chaos injector.
-    /// </summary>
-    /// <param name="cluster">The simulation cluster.</param>
-    protected ChaosInjector(TCluster cluster)
-    {
-        _cluster = cluster ?? throw new ArgumentNullException(nameof(cluster));
-        _random = cluster.Random.Fork();
-    }
-
-    /// <summary>
     /// Gets the simulation cluster.
     /// </summary>
-    protected TCluster Cluster => _cluster;
+    protected TCluster Cluster { get; } = cluster ?? throw new ArgumentNullException(nameof(cluster));
 
     /// <summary>
     /// Gets the deterministic random generator.
     /// </summary>
-    protected SimulationRandom Random => _random;
+    protected SimulationRandom Random { get; } = cluster.Random.Fork();
 
     /// <summary>
     /// Gets or sets the probability of a random node crash per step (0.0 to 1.0).
@@ -93,7 +85,7 @@ public abstract class ChaosInjector<TNode, TCluster>
         ProcessScheduledFaults();
 
         // Maybe crash a node
-        if (NodeCrashRate > 0 && _random.Chance(NodeCrashRate))
+        if (NodeCrashRate > 0 && Random.Chance(NodeCrashRate))
         {
             if (TryCrashRandomNode())
             {
@@ -102,7 +94,7 @@ public abstract class ChaosInjector<TNode, TCluster>
         }
 
         // Maybe create a partition
-        if (PartitionRate > 0 && _random.Chance(PartitionRate))
+        if (PartitionRate > 0 && Random.Chance(PartitionRate))
         {
             if (TryCreateRandomPartition())
             {
@@ -111,7 +103,7 @@ public abstract class ChaosInjector<TNode, TCluster>
         }
 
         // Maybe heal a partition
-        if (PartitionHealRate > 0 && _random.Chance(PartitionHealRate))
+        if (PartitionHealRate > 0 && Random.Chance(PartitionHealRate))
         {
             HealAllPartitions();
         }
@@ -125,7 +117,7 @@ public abstract class ChaosInjector<TNode, TCluster>
     public void ScheduleNodeCrash(TNode node, TimeSpan delay)
     {
         ArgumentNullException.ThrowIfNull(node);
-        var executeAt = _cluster.TimeProvider.GetUtcNow() + delay;
+        var executeAt = Cluster.TimeProvider.GetUtcNow() + delay;
 
         lock (_lock)
         {
@@ -140,7 +132,7 @@ public abstract class ChaosInjector<TNode, TCluster>
     {
         ArgumentNullException.ThrowIfNull(node1);
         ArgumentNullException.ThrowIfNull(node2);
-        var executeAt = _cluster.TimeProvider.GetUtcNow() + delay;
+        var executeAt = Cluster.TimeProvider.GetUtcNow() + delay;
 
         lock (_lock)
         {
@@ -155,7 +147,7 @@ public abstract class ChaosInjector<TNode, TCluster>
     {
         ArgumentNullException.ThrowIfNull(node1);
         ArgumentNullException.ThrowIfNull(node2);
-        var executeAt = _cluster.TimeProvider.GetUtcNow() + delay;
+        var executeAt = Cluster.TimeProvider.GetUtcNow() + delay;
 
         lock (_lock)
         {
@@ -169,7 +161,7 @@ public abstract class ChaosInjector<TNode, TCluster>
     public void ScheduleIsolation(TNode node, TimeSpan delay)
     {
         ArgumentNullException.ThrowIfNull(node);
-        var executeAt = _cluster.TimeProvider.GetUtcNow() + delay;
+        var executeAt = Cluster.TimeProvider.GetUtcNow() + delay;
 
         lock (_lock)
         {
@@ -183,7 +175,7 @@ public abstract class ChaosInjector<TNode, TCluster>
     public void ScheduleReconnect(TNode node, TimeSpan delay)
     {
         ArgumentNullException.ThrowIfNull(node);
-        var executeAt = _cluster.TimeProvider.GetUtcNow() + delay;
+        var executeAt = Cluster.TimeProvider.GetUtcNow() + delay;
 
         lock (_lock)
         {
@@ -205,7 +197,7 @@ public abstract class ChaosInjector<TNode, TCluster>
         for (var i = 0; i < steps; i++)
         {
             // Execute pending tasks
-            _cluster.TaskQueue.RunUntilIdle();
+            Cluster.TaskQueue.RunUntilIdle();
 
             // Maybe inject a fault
             if (MaybeInjectFault())
@@ -214,7 +206,7 @@ public abstract class ChaosInjector<TNode, TCluster>
             }
 
             // Advance time and run simulation until idle
-            _cluster.RunForDuration(interval);
+            Cluster.RunForDuration(interval);
         }
 
         return faultsInjected;
@@ -233,7 +225,7 @@ public abstract class ChaosInjector<TNode, TCluster>
 
     private void ProcessScheduledFaults()
     {
-        var now = _cluster.TimeProvider.GetUtcNow();
+        var now = Cluster.TimeProvider.GetUtcNow();
         List<ScheduledFault<TNode>>? toExecute = null;
 
         lock (_lock)
@@ -256,7 +248,7 @@ public abstract class ChaosInjector<TNode, TCluster>
         switch (fault.Type)
         {
             case FaultType.NodeCrash:
-                if (fault.Node1 != null && _cluster.Nodes.Contains(fault.Node1))
+                if (fault.Node1 != null && Cluster.Nodes.Contains(fault.Node1))
                 {
                     CrashNode(fault.Node1);
                 }
@@ -277,14 +269,14 @@ public abstract class ChaosInjector<TNode, TCluster>
                 break;
 
             case FaultType.Isolation:
-                if (fault.Node1 != null && _cluster.Nodes.Contains(fault.Node1))
+                if (fault.Node1 != null && Cluster.Nodes.Contains(fault.Node1))
                 {
                     IsolateNode(fault.Node1);
                 }
                 break;
 
             case FaultType.Reconnect:
-                if (fault.Node1 != null && _cluster.Nodes.Contains(fault.Node1))
+                if (fault.Node1 != null && Cluster.Nodes.Contains(fault.Node1))
                 {
                     ReconnectNode(fault.Node1);
                 }
@@ -294,29 +286,29 @@ public abstract class ChaosInjector<TNode, TCluster>
 
     private bool TryCrashRandomNode()
     {
-        var nodes = _cluster.Nodes;
+        var nodes = Cluster.Nodes;
         if (nodes.Count <= MinimumAliveNodes)
         {
             return false;
         }
 
-        var node = _random.Choose(nodes.ToList());
+        var node = Random.Choose(nodes.ToList());
         CrashNode(node);
         return true;
     }
 
     private bool TryCreateRandomPartition()
     {
-        var nodes = _cluster.Nodes;
+        var nodes = Cluster.Nodes;
         if (nodes.Count < 2)
         {
             return false;
         }
 
         var nodeList = nodes.ToList();
-        var node1 = _random.Choose(nodeList);
+        var node1 = Random.Choose(nodeList);
         nodeList.Remove(node1);
-        var node2 = _random.Choose(nodeList);
+        var node2 = Random.Choose(nodeList);
 
         PartitionNodes(node1, node2);
         return true;

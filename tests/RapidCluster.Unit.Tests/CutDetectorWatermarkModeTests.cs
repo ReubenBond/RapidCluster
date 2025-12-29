@@ -1,3 +1,4 @@
+using System.Globalization;
 using CsCheck;
 using Google.Protobuf;
 using RapidCluster.Pb;
@@ -33,7 +34,7 @@ public class CutDetectorWatermarkModeTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = status,
-            ConfigurationId = configurationId.ToProtobuf()
+            ConfigurationId = configurationId.ToProtobuf(),
         };
         msg.RingNumber.Add(ringNumber);
         return msg;
@@ -47,7 +48,7 @@ public class CutDetectorWatermarkModeTests
         var builder = new MembershipViewBuilder(k);
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i, Utils.GetNextNodeId());
+            var node = Utils.HostFromParts("127.0.0." + (i + 1).ToString(CultureInfo.InvariantCulture), 1000 + i, Utils.GetNextNodeId());
             builder.RingAdd(node);
         }
         return builder.Build();
@@ -545,7 +546,7 @@ public class CutDetectorWatermarkModeTests
             EdgeSrc = src,
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = DefaultConfigId.ToProtobuf()
+            ConfigurationId = DefaultConfigId.ToProtobuf(),
         };
         for (var i = 0; i < K; i++)
         {
@@ -696,12 +697,12 @@ public class CutDetectorWatermarkModeTests
 
         for (var d = 0; d < numDestinations; d++)
         {
-            var dst = Utils.HostFromParts("10.0.0." + d, 5000);
+            var dst = Utils.HostFromParts("10.0.0." + d.ToString(CultureInfo.InvariantCulture), 5000);
 
             for (var i = 0; i < K; i++)
             {
                 var result = detector.AggregateForProposal(CreateAlertMessage(
-                    Utils.HostFromParts("192.168.0." + (i + 1), 1000 + d), dst, EdgeStatus.Up, DefaultConfigId, i));
+                    Utils.HostFromParts("192.168.0." + (i + 1).ToString(CultureInfo.InvariantCulture), 1000 + d), dst, EdgeStatus.Up, DefaultConfigId, i));
 
                 if (result.Count > 0)
                 {
@@ -762,7 +763,7 @@ public class CutDetectorWatermarkModeTests
             EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = DefaultConfigId.ToProtobuf()
+            ConfigurationId = DefaultConfigId.ToProtobuf(),
         };
         for (var i = 0; i < K; i++)
         {
@@ -841,7 +842,7 @@ public class CutDetectorWatermarkModeTests
             EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
             EdgeDst = dst,
             EdgeStatus = EdgeStatus.Up,
-            ConfigurationId = DefaultConfigId.ToProtobuf()
+            ConfigurationId = DefaultConfigId.ToProtobuf(),
         };
         for (var i = 0; i < H; i++)
         {
@@ -922,7 +923,7 @@ public class CutDetectorWatermarkModeTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = DefaultConfigId.ToProtobuf()
+                ConfigurationId = DefaultConfigId.ToProtobuf(),
             };
             for (var r = 0; r < K; r++)
             {
@@ -967,26 +968,26 @@ public class CutDetectorWatermarkModeTests
 
         // Simulate 10 nodes joining simultaneously
         var joiningNodes = Enumerable.Range(0, 10)
-            .Select(i => Utils.HostFromParts("10.0.0." + i, 5000 + i))
+            .Select(i => Utils.HostFromParts("10.0.0." + i.ToString(CultureInfo.InvariantCulture), 5000 + i))
             .ToList();
 
         // Create alert messages from a single observer for all joining nodes
         var observer = Utils.HostFromParts("127.0.0.1", 1);
-        var messages = joiningNodes.Select(dst =>
+        var messages = joiningNodes.ConvertAll(dst =>
         {
             var msg = new AlertMessage
             {
                 EdgeSrc = observer,
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = DefaultConfigId.ToProtobuf()
+                ConfigurationId = DefaultConfigId.ToProtobuf(),
             };
             for (var r = 0; r < K; r++)
             {
                 msg.RingNumber.Add(r);
             }
             return msg;
-        }).ToList();
+        });
 
         var proposalEvents = 0;
         var nodesProposed = new HashSet<Endpoint>();
@@ -1108,7 +1109,7 @@ public class CutDetectorWatermarkModeTests
         {
             Utils.HostFromParts("10.0.0.1", 1),
             Utils.HostFromParts("10.0.0.2", 2),
-            Utils.HostFromParts("10.0.0.3", 3)
+            Utils.HostFromParts("10.0.0.3", 3),
         };
 
         var messages1 = batch1.Select(dst =>
@@ -1118,7 +1119,7 @@ public class CutDetectorWatermarkModeTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = DefaultConfigId.ToProtobuf()
+                ConfigurationId = DefaultConfigId.ToProtobuf(),
             };
             for (var r = 0; r < K; r++)
             {
@@ -1145,7 +1146,7 @@ public class CutDetectorWatermarkModeTests
         var batch2 = new[]
         {
             Utils.HostFromParts("10.0.0.4", 4),
-            Utils.HostFromParts("10.0.0.5", 5)
+            Utils.HostFromParts("10.0.0.5", 5),
         };
 
         var messages2 = batch2.Select(dst =>
@@ -1155,7 +1156,7 @@ public class CutDetectorWatermarkModeTests
                 EdgeSrc = Utils.HostFromParts("127.0.0.1", 1),
                 EdgeDst = dst,
                 EdgeStatus = EdgeStatus.Up,
-                ConfigurationId = DefaultConfigId.ToProtobuf()
+                ConfigurationId = DefaultConfigId.ToProtobuf(),
             };
             for (var r = 0; r < K; r++)
             {
@@ -1271,7 +1272,7 @@ public class CutDetectorWatermarkModeTests
 
         for (var i = 0; i < numNodes; i++)
         {
-            var node = Utils.HostFromParts("127.0.0." + (i + 1), 1000 + i, Utils.GetNextNodeId());
+            var node = Utils.HostFromParts("127.0.0." + (i + 1).ToString(CultureInfo.InvariantCulture), 1000 + i, Utils.GetNextNodeId());
             endpoints.Add(node);
             builder.RingAdd(node);
         }
@@ -1300,10 +1301,9 @@ public class CutDetectorWatermarkModeTests
     private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
-            Gen.Select(
-                Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Count() == count),
+            Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
             ).Select((octets, ports, nodeIds) =>
             {
                 var result = new List<Endpoint>(count);
@@ -1311,9 +1311,9 @@ public class CutDetectorWatermarkModeTests
                 {
                     var endpoint = new Endpoint
                     {
-                        Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
+                        Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{octets[i]}")),
                         Port = ports[i],
-                        NodeId = nodeIds[i]
+                        NodeId = nodeIds[i],
                     };
                     result.Add(endpoint);
                 }
@@ -1330,7 +1330,7 @@ public class CutDetectorWatermarkModeTests
     public void Property_Respects_H_Threshold()
     {
         // Generate enough nodes so that k rings can actually be created (need k+1 nodes minimum)
-        Gen.Select(GenK.Where(k => k >= 4), GenUniqueNodes(10, 20))
+        GenK.Where(k => k >= 4).Select(GenUniqueNodes(10, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1361,20 +1361,20 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = nodes[i + 1],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                     proposals.Add(result);
                 }
 
                 // Should not have proposals yet (H threshold not reached)
-                return proposals.All(p => !p.Contains(subject));
+                return proposals.TrueForAll(p => !p.Contains(subject));
             });
     }
 
     [Fact]
     public void Property_Does_Not_Duplicate_Reports_From_Same_Ring()
     {
-        Gen.Select(GenK.Where(k => k >= 4), GenUniqueNodes(10, 20))
+        GenK.Where(k => k >= 4).Select(GenUniqueNodes(10, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1403,7 +1403,7 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = observer,
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { 0 }  // Same ring each time
+                            RingNumber = { 0 },  // Same ring each time
                         });
                     results.Add(result);
                 }
@@ -1411,7 +1411,7 @@ public class CutDetectorWatermarkModeTests
                 // Multiple reports from same observer/ring should not accumulate
                 // (only the first one counts)
                 // All results should be empty since we only have 1 unique ring report
-                return results.All(r => r.Count == 0);
+                return results.TrueForAll(r => r.Count == 0);
             });
     }
 
@@ -1422,7 +1422,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_H_Reports_Triggers_Single_Proposal()
     {
-        Gen.Select(GenK.Where(k => k >= 4), GenUniqueNodes(10, 20))
+        GenK.Where(k => k >= 4).Select(GenUniqueNodes(10, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1436,7 +1436,7 @@ public class CutDetectorWatermarkModeTests
                 if (actualK < 4) return true; // Skip if not enough rings
 
                 var h = actualK - 1;
-                var l = 1;
+                const int l = 1;
 
                 var detector = CreateDetector(view, h, l);
                 var subject = nodes[0];
@@ -1451,7 +1451,7 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = nodes[i % (nodes.Count - 1) + 1],
                             EdgeDst = subject,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                 }
 
@@ -1468,7 +1468,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_PreProposal_Blocks_Proposal()
     {
-        Gen.Select(GenK.Where(k => k >= 5), GenUniqueNodes(10, 20))
+        GenK.Where(k => k >= 5).Select(GenUniqueNodes(10, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1483,7 +1483,7 @@ public class CutDetectorWatermarkModeTests
 
                 // Use H=actualK-1 and L=2 so we have a meaningful range
                 var h = actualK - 1;
-                var l = 2;
+                const int l = 2;
 
                 var detector = CreateDetector(view, h, l);
                 var subject1 = nodes[0];
@@ -1498,7 +1498,7 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject1,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                 }
 
@@ -1511,7 +1511,7 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject2,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                 }
 
@@ -1522,7 +1522,7 @@ public class CutDetectorWatermarkModeTests
                         EdgeSrc = nodes[2],
                         EdgeDst = subject1,
                         EdgeStatus = EdgeStatus.Up,
-                        RingNumber = { h - 1 }
+                        RingNumber = { h - 1 },
                     });
 
                 // subject2 is still in preProposal (L <= reports < H), so no proposal yet
@@ -1537,7 +1537,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_Batches_Multiple_Nodes()
     {
-        Gen.Select(GenK.Where(k => k >= 5), GenUniqueNodes(15, 25))
+        GenK.Where(k => k >= 5).Select(GenUniqueNodes(15, 25))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1568,7 +1568,7 @@ public class CutDetectorWatermarkModeTests
                                 EdgeSrc = nodes[i % (nodes.Count - 3) + 3],
                                 EdgeDst = subject,
                                 EdgeStatus = EdgeStatus.Up,
-                                RingNumber = { i }
+                                RingNumber = { i },
                             });
                     }
                 }
@@ -1580,7 +1580,7 @@ public class CutDetectorWatermarkModeTests
                         EdgeSrc = nodes[3],
                         EdgeDst = subject1,
                         EdgeStatus = EdgeStatus.Up,
-                        RingNumber = { h - 1 }
+                        RingNumber = { h - 1 },
                     });
 
                 var result2 = detector.AggregateForProposal(
@@ -1589,7 +1589,7 @@ public class CutDetectorWatermarkModeTests
                         EdgeSrc = nodes[3],
                         EdgeDst = subject2,
                         EdgeStatus = EdgeStatus.Up,
-                        RingNumber = { h - 1 }
+                        RingNumber = { h - 1 },
                     });
 
                 // Still blocked by subject3
@@ -1603,7 +1603,7 @@ public class CutDetectorWatermarkModeTests
                         EdgeSrc = nodes[3],
                         EdgeDst = subject3,
                         EdgeStatus = EdgeStatus.Up,
-                        RingNumber = { h - 1 }
+                        RingNumber = { h - 1 },
                     });
 
                 // All three should be in the proposal
@@ -1622,7 +1622,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_RingInterleaving_Enables_Batching()
     {
-        Gen.Select(GenK.Where(k => k >= 5), GenUniqueNodes(15, 25))
+        GenK.Where(k => k >= 5).Select(GenUniqueNodes(15, 25))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1646,7 +1646,7 @@ public class CutDetectorWatermarkModeTests
                     {
                         EdgeSrc = nodes[3],
                         EdgeDst = subject,
-                        EdgeStatus = EdgeStatus.Up
+                        EdgeStatus = EdgeStatus.Up,
                     };
                     for (var r = 0; r < actualK; r++)
                     {
@@ -1691,7 +1691,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_SingleRing_Equivalent_To_Full_When_Sequential()
     {
-        Gen.Select(GenK.Where(k => k >= 4), GenUniqueNodes(10, 20))
+        GenK.Where(k => k >= 4).Select(GenUniqueNodes(10, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1713,7 +1713,7 @@ public class CutDetectorWatermarkModeTests
                 {
                     EdgeSrc = nodes[1],
                     EdgeDst = subject,
-                    EdgeStatus = EdgeStatus.Up
+                    EdgeStatus = EdgeStatus.Up,
                 };
                 for (var r = 0; r < h; r++)
                 {
@@ -1734,7 +1734,7 @@ public class CutDetectorWatermarkModeTests
 
                 // Both methods should produce the same final result
                 return result1.Count == result2.Count &&
-                       result1.All(e => result2.Contains(e)) &&
+                       result1.TrueForAll(e => result2.Contains(e)) &&
                        detector1.GetNumProposals() == detector2.GetNumProposals();
             });
     }
@@ -1745,7 +1745,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_Below_L_Does_Not_Block()
     {
-        Gen.Select(GenK.Where(k => k >= 5), GenUniqueNodes(15, 25))
+        GenK.Where(k => k >= 5).Select(GenUniqueNodes(15, 25))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1775,7 +1775,7 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject2,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                 }
 
@@ -1789,7 +1789,7 @@ public class CutDetectorWatermarkModeTests
                             EdgeSrc = nodes[i % (nodes.Count - 2) + 2],
                             EdgeDst = subject1,
                             EdgeStatus = EdgeStatus.Up,
-                            RingNumber = { i }
+                            RingNumber = { i },
                         });
                 }
 
@@ -1804,7 +1804,7 @@ public class CutDetectorWatermarkModeTests
     [Fact]
     public void Property_ProposalCount_Increments()
     {
-        Gen.Select(GenK.Where(k => k >= 4), GenUniqueNodes(15, 25))
+        GenK.Where(k => k >= 4).Select(GenUniqueNodes(15, 25))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1834,7 +1834,7 @@ public class CutDetectorWatermarkModeTests
                                 EdgeSrc = nodes[i % (nodes.Count - 3) + 3],
                                 EdgeDst = subject,
                                 EdgeStatus = EdgeStatus.Up,
-                                RingNumber = { i }
+                                RingNumber = { i },
                             });
                         if (result.Count > 0)
                             expectedProposals++;

@@ -51,4 +51,3 @@ internal static class GuidUtility
         return unchecked((int)System.IO.Hashing.XxHash32.HashToUInt32(bytes));
     }
 }
-

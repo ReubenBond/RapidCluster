@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Clockwork;
 
@@ -28,9 +29,9 @@ public sealed class SingleThreadedGuard
         {
             var ownerStack = _ownerStackTrace ?? "(unknown)";
             throw new InvalidOperationException(
-                $"Concurrent access detected in single-threaded simulation code. " +
-                $"Thread {currentThreadId} attempted to enter while thread {existingOwner} is inside. " +
-                $"This indicates a bug - simulation code must not be accessed concurrently.\n" +
+                "Concurrent access detected in single-threaded simulation code. " +
+                string.Create(CultureInfo.InvariantCulture, $"Thread {currentThreadId} attempted to enter while thread {existingOwner} is inside. ") +
+                "This indicates a bug - simulation code must not be accessed concurrently.\n" +
                 $"Owner thread stack trace:\n{ownerStack}");
         }
 

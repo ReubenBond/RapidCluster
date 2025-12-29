@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace RapidCluster.Simulation.Tests.Infrastructure;
 
 /// <summary>
@@ -122,7 +124,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
                 {
                     RecordViolation(
                         InvariantType.NoSplitBrain,
-                        $"Split-brain detected: Node views have no overlap");
+                        "Split-brain detected: Node views have no overlap");
                     return false;
                 }
             }
@@ -176,7 +178,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
                 {
                     RecordViolation(
                         InvariantType.NodeIdValidity,
-                        $"Node {RapidClusterUtils.Loggable(node.Address)} has member {RapidClusterUtils.Loggable(member)} with invalid NodeId={member.NodeId}");
+                        string.Create(CultureInfo.InvariantCulture, $"Node {RapidClusterUtils.Loggable(node.Address)} has member {RapidClusterUtils.Loggable(member)} with invalid NodeId={member.NodeId}"));
                     return false;
                 }
             }
@@ -203,7 +205,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
             if (nodeIds.Count != uniqueIds.Count)
             {
                 var duplicates = nodeIds.GroupBy(id => id)
-                    .Where(g => g.Count() > 1)
+                    .Where(g => g.Skip(1).Any())
                     .Select(g => g.Key);
                 RecordViolation(
                     InvariantType.NodeIdUniqueness,
@@ -233,7 +235,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
             {
                 RecordViolation(
                     InvariantType.MaxNodeIdConsistency,
-                    $"Node {RapidClusterUtils.Loggable(node.Address)} has MaxNodeId={view.MaxNodeId} but has member with NodeId={maxMemberId}");
+                    string.Create(CultureInfo.InvariantCulture, $"Node {RapidClusterUtils.Loggable(node.Address)} has MaxNodeId={view.MaxNodeId} but has member with NodeId={maxMemberId}"));
                 return false;
             }
         }
@@ -267,7 +269,7 @@ internal sealed class InvariantChecker(RapidSimulationCluster harness)
 
         RecordViolation(
             InvariantType.Liveness,
-            $"No progress made in {maxSteps} steps");
+            string.Create(CultureInfo.InvariantCulture, $"No progress made in {maxSteps} steps"));
         return false;
     }
 
@@ -320,7 +322,7 @@ internal enum InvariantType
     ConsensusSafety,
     NodeIdValidity,
     NodeIdUniqueness,
-    MaxNodeIdConsistency
+    MaxNodeIdConsistency,
 }
 
 /// <summary>

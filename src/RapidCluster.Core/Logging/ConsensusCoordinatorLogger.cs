@@ -5,12 +5,10 @@ namespace RapidCluster.Logging;
 
 internal sealed partial class ConsensusCoordinatorLogger(ILogger<ConsensusCoordinator> logger)
 {
-    private readonly ILogger _logger = logger;
-
     /// <summary>
     /// Gets the underlying logger instance.
     /// </summary>
-    public ILogger Logger => _logger;
+    public ILogger Logger { get; } = logger;
 
     [LoggerMessage(EventName = nameof(Initialized), Level = LogLevel.Debug, Message = "ConsensusCoordinator initialized: myAddr={MyAddr}, configId={ConfigId}, membershipSize={MembershipSize}")]
     private partial void InitializedCore(LoggableEndpoint myAddr, ConfigurationId configId, int membershipSize);

@@ -7,12 +7,10 @@ namespace RapidCluster.Simulation.Tests.Infrastructure.Logging;
 /// </summary>
 internal sealed partial class SimulationHarnessLogger(ILogger<RapidSimulationCluster> logger)
 {
-    private readonly ILogger _logger = logger;
-
     /// <summary>
     /// Gets the underlying logger instance.
     /// </summary>
-    public ILogger Logger => _logger;
+    public ILogger Logger { get; } = logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Harness created with seed {Seed}")]
     public partial void HarnessCreated(int seed);

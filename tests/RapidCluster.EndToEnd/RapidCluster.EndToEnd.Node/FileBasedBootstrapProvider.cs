@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using RapidCluster.Discovery;
@@ -23,11 +24,10 @@ namespace RapidCluster.EndToEnd.Node;
 /// </remarks>
 internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDisposable
 {
-    private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly string _filePath;
     private readonly int _nodeIndex;
-    private readonly int _clusterSize;
     private readonly ILogger<FileBasedBootstrapProvider> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _startupTimeout;
@@ -39,14 +39,12 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     /// </summary>
     /// <param name="filePath">Path to the shared bootstrap file.</param>
     /// <param name="nodeIndex">This node's index (0-based). Node 0 becomes bootstrap coordinator.</param>
-    /// <param name="clusterSize">Expected number of nodes in the cluster.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="pollInterval">How often to poll the file for updates. Default: 500ms.</param>
     /// <param name="startupTimeout">How long to wait for bootstrap coordinator to appear. Default: 60s.</param>
     public FileBasedBootstrapProvider(
         string filePath,
         int nodeIndex,
-        int clusterSize,
         ILogger<FileBasedBootstrapProvider> logger,
         TimeSpan? pollInterval = null,
         TimeSpan? startupTimeout = null)
@@ -54,11 +52,9 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentOutOfRangeException.ThrowIfNegative(nodeIndex);
-        ArgumentOutOfRangeException.ThrowIfLessThan(clusterSize, 1);
 
         _filePath = filePath;
         _nodeIndex = nodeIndex;
-        _clusterSize = clusterSize;
         _logger = logger;
         _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(500);
         _startupTimeout = startupTimeout ?? TimeSpan.FromSeconds(60);
@@ -67,10 +63,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     /// <summary>
     /// Sets this node's listen address. Must be called before GetSeedsAsync.
     /// </summary>
-    public void SetMyAddress(EndPoint address)
-    {
-        _myAddress = address;
-    }
+    public void SetMyAddress(EndPoint address) => _myAddress = address;
 
     /// <inheritdoc/>
     public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
@@ -115,7 +108,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         var endpointStr = EndpointToString(_myAddress!);
         LogRegisteringNode(_logger, _nodeIndex, endpointStr, _filePath);
 
-        var maxRetries = 10;
+        const int maxRetries = 10;
         for (var retry = 0; retry < maxRetries; retry++)
         {
             try
@@ -135,7 +128,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
                     FileShare.None);
 
                 var entries = await ReadEntriesAsync(stream, cancellationToken);
-                entries[_nodeIndex.ToString()] = endpointStr;
+                entries[_nodeIndex.ToString(CultureInfo.InvariantCulture)] = endpointStr;
                 await WriteEntriesAsync(stream, entries, cancellationToken);
 
                 LogNodeRegistered(_logger, _nodeIndex, entries.Count);
@@ -223,7 +216,7 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     {
         stream.Position = 0;
         stream.SetLength(0);
-        await JsonSerializer.SerializeAsync(stream, entries, s_jsonOptions, cancellationToken);
+        await JsonSerializer.SerializeAsync(stream, entries, JsonOptions, cancellationToken);
         await stream.FlushAsync(cancellationToken);
     }
 
@@ -231,9 +224,9 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     {
         return endpoint switch
         {
-            IPEndPoint ip => $"{ip.Address}:{ip.Port}",
-            DnsEndPoint dns => $"{dns.Host}:{dns.Port}",
-            _ => endpoint.ToString() ?? ""
+            IPEndPoint ip => string.Create(CultureInfo.InvariantCulture, $"{ip.Address}:{ip.Port}"),
+            DnsEndPoint dns => string.Create(CultureInfo.InvariantCulture, $"{dns.Host}:{dns.Port}"),
+            _ => endpoint.ToString() ?? "",
         };
     }
 

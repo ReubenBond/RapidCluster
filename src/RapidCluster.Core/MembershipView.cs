@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Globalization;
 using RapidCluster.Exceptions;
 using RapidCluster.Pb;
 
@@ -131,10 +132,7 @@ public sealed class MembershipView
     /// </summary>
     /// <param name="endpoint">The endpoint to look up.</param>
     /// <returns>The metadata for the endpoint, or null if not found.</returns>
-    public Metadata? GetMetadata(Endpoint endpoint)
-    {
-        return GetMemberInfo(endpoint)?.Metadata;
-    }
+    public Metadata? GetMetadata(Endpoint endpoint) => GetMemberInfo(endpoint)?.Metadata;
 
     /// <summary>
     /// Gets all metadata as a dictionary keyed by endpoint.
@@ -371,7 +369,7 @@ public sealed class MembershipView
         return FindIndex(ring, endpoint);
     }
 
-    private string DebuggerDisplay => $"MembershipView(Size={Size}, Config={ConfigurationId}, Rings={RingCount})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"MembershipView(Size={Size}, Config={ConfigurationId}, Rings={RingCount})");
 
     private static int FindIndex(ImmutableArray<MemberInfo> ring, Endpoint node)
     {
@@ -446,7 +444,7 @@ public sealed class MembershipViewConfiguration
     /// </summary>
     public ConfigurationId ConfigurationId => new(ConfigurationId.Empty.ClusterId, 0);
 
-    private string DebuggerDisplay => $"MembershipViewConfiguration(Members={Members.Length}, MaxNodeId={MaxNodeId})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"MembershipViewConfiguration(Members={Members.Length}, MaxNodeId={MaxNodeId})");
 }
 
 internal sealed class MembershipViewDebugView(MembershipView view)

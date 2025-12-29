@@ -17,7 +17,7 @@ public class SeedProviderTests
         var seeds = new List<EndPoint>
         {
             new DnsEndPoint("192.168.1.1", 5000),
-            new DnsEndPoint("192.168.1.2", 5001)
+            new DnsEndPoint("192.168.1.2", 5001),
         };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
@@ -62,10 +62,7 @@ public class SeedProviderTests
     }
 
     [Fact]
-    public void ConfigurationSeedProvider_WithNullOptionsMonitor_ThrowsArgumentNullException()
-    {
-        Assert.Throws<ArgumentNullException>(() => new ConfigurationSeedProvider(null!));
-    }
+    public void ConfigurationSeedProvider_WithNullOptionsMonitor_ThrowsArgumentNullException() => Assert.Throws<ArgumentNullException>(() => new ConfigurationSeedProvider(null!));
 
     [Fact]
     public async Task ConfigurationSeedProvider_MultipleCalls_ReturnsSameSeeds()
@@ -89,7 +86,7 @@ public class SeedProviderTests
         var seeds2 = new List<EndPoint>
         {
             new DnsEndPoint("192.168.1.1", 5000),
-            new DnsEndPoint("192.168.1.2", 5000)
+            new DnsEndPoint("192.168.1.2", 5000),
         };
 
         var options = new RapidClusterOptions { SeedAddresses = seeds1 };
@@ -127,7 +124,7 @@ public class SeedProviderTests
         var seeds = new List<EndPoint>
         {
             new IPEndPoint(IPAddress.IPv6Loopback, 5000),
-            new IPEndPoint(IPAddress.Parse("2001:db8::1"), 5001)
+            new IPEndPoint(IPAddress.Parse("2001:db8::1"), 5001),
         };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);
@@ -151,7 +148,7 @@ public class SeedProviderTests
         var seeds = new List<EndPoint>
         {
             new DnsEndPoint("node1.example.com", 5000),
-            new DnsEndPoint("node-2.cluster.local", 5001)
+            new DnsEndPoint("node-2.cluster.local", 5001),
         };
         var options = new RapidClusterOptions { SeedAddresses = seeds };
         var optionsMonitor = new TestOptionsMonitor<RapidClusterOptions>(options);

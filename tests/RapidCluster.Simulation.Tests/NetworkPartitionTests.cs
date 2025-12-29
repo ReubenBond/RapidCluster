@@ -19,10 +19,7 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void BidirectionalPartitionBlocksMessages()
@@ -247,5 +244,4 @@ public sealed class NetworkPartitionTests : IAsyncLifetime
         Assert.True(_harness.Network.CanDeliver(seedAddr, "fake:2"));
         Assert.True(_harness.Network.CanDeliver(seedAddr, "fake:3"));
     }
-
 }

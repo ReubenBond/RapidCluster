@@ -3,14 +3,18 @@ using System.Globalization;
 namespace Clockwork;
 
 /// <summary>
+/// <para>
 /// A time provider for simulation testing that integrates with <see cref="SimulationTaskQueue"/>
 /// for deterministic timer execution.
-/// 
+/// </para>
+/// <para>
 /// Timer callbacks are scheduled through the queue instead of being executed immediately.
 /// This enables fully deterministic simulation testing where task execution order is controlled.
-/// 
+/// </para>
+/// <para>
 /// Time is tracked centrally by the <see cref="SimulationClock"/> - this provider
 /// delegates all time queries to the clock.
+/// </para>
 /// </summary>
 public sealed class SimulationTimeProvider : TimeProvider
 {

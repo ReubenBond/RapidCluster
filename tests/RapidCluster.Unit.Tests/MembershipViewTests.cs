@@ -1,3 +1,4 @@
+using System.Globalization;
 using CsCheck;
 using Google.Protobuf;
 using RapidCluster.Exceptions;
@@ -441,8 +442,8 @@ public class MembershipViewTests
         {
             var numSubjects = view.GetSubjectsOf(list[i]).Length;
             var numObservers = view.GetObserversOf(list[i]).Length;
-            Assert.True(K == numSubjects, $"NumSubjects: {numSubjects}");
-            Assert.True(K == numObservers, $"NumObservers: {numObservers}");
+            Assert.True(K == numSubjects, string.Create(CultureInfo.InvariantCulture, $"NumSubjects: {numSubjects}"));
+            Assert.True(K == numObservers, string.Create(CultureInfo.InvariantCulture, $"NumObservers: {numObservers}"));
         }
     }
 
@@ -654,10 +655,9 @@ public class MembershipViewTests
     private static Gen<List<Endpoint>> GenUniqueNodes(int minCount, int maxCount)
     {
         return Gen.Int[minCount, maxCount].SelectMany(count =>
-            Gen.Select(
-                Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Count() == count),
+            Gen.Int[1, 255].Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count).Select(
                 Gen.Int[1000, 65535].Array[count],
-                Gen.Long.Array[count].Where(a => a.Distinct().Count() == count)
+                Gen.Long.Array[count].Where(a => a.Distinct().Take(count + 1).Count() == count)
             ).Select((octets, ports, nodeIds) =>
             {
                 var result = new List<Endpoint>(count);
@@ -665,9 +665,9 @@ public class MembershipViewTests
                 {
                     var endpoint = new Endpoint
                     {
-                        Hostname = ByteString.CopyFromUtf8($"127.0.0.{octets[i]}"),
+                        Hostname = ByteString.CopyFromUtf8(string.Create(CultureInfo.InvariantCulture, $"127.0.0.{octets[i]}")),
                         Port = ports[i],
-                        NodeId = nodeIds[i]
+                        NodeId = nodeIds[i],
                     };
                     result.Add(endpoint);
                 }
@@ -683,7 +683,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_RingCount_Is_Clamped_Correctly()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -702,7 +702,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_Size_Equals_AddedNodes()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -719,7 +719,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_GetRing_Returns_Correct_Size()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -743,7 +743,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_IsHostPresent_Returns_True_For_Added_Nodes()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -754,14 +754,14 @@ public class MembershipViewTests
                 var view = builder.Build();
 
                 // All added nodes should be present
-                return nodes.All(n => view.IsHostPresent(n));
+                return nodes.TrueForAll(n => view.IsHostPresent(n));
             });
     }
 
     [Fact]
     public void Property_GetObserversOf_Returns_Up_To_K_Observers()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 20))
+        GenK.Select(GenUniqueNodes(3, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -782,7 +782,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_GetExpectedObserversOf_Does_Not_Include_Self()
     {
-        Gen.Select(GenK, GenUniqueNodes(2, 20))
+        GenK.Select(GenUniqueNodes(2, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -803,7 +803,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_IsMember_And_IsHostPresent_Are_Equivalent()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -829,7 +829,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_GetSubjectsOf_Returns_RingCount_Subjects()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 20))
+        GenK.Select(GenUniqueNodes(3, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -850,7 +850,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_Observers_And_Subjects_Are_All_Members()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 20))
+        GenK.Select(GenUniqueNodes(3, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -872,7 +872,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_GetRingNumbers_Returns_Valid_Ring_Indices()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 20))
+        GenK.Select(GenUniqueNodes(3, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -899,7 +899,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_Members_Contains_All_Added_Endpoints()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -911,14 +911,14 @@ public class MembershipViewTests
 
                 // All added endpoints should be in Members
                 var members = view.Members.ToHashSet();
-                return nodes.All(n => members.Contains(n));
+                return nodes.TrueForAll(n => members.Contains(n));
             });
     }
 
     [Fact]
     public void Property_Configuration_Roundtrip_Preserves_Data()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -938,7 +938,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_IsSafeToJoin_Rejects_Existing_Hosts()
     {
-        Gen.Select(GenK, GenUniqueNodes(2, 20))
+        GenK.Select(GenUniqueNodes(2, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -957,7 +957,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_IsSafeToJoin_Allows_New_Host()
     {
-        Gen.Select(GenK, GenUniqueNodes(1, 20))
+        GenK.Select(GenUniqueNodes(1, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -976,7 +976,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_ToBuilder_Creates_Independent_Copy()
     {
-        Gen.Select(GenK, GenUniqueNodes(2, 20))
+        GenK.Select(GenUniqueNodes(2, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1000,7 +1000,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_Delete_Removes_Node_From_View()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 20))
+        GenK.Select(GenUniqueNodes(3, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1026,7 +1026,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_All_Rings_Have_Same_Nodes()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 20))
+        GenK.Select(GenUniqueNodes(3, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1051,7 +1051,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_GetExpectedObserversOf_Returns_RingCount_Observers()
     {
-        Gen.Select(GenK, GenUniqueNodes(2, 20))
+        GenK.Select(GenUniqueNodes(2, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1084,7 +1084,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_ConfigurationId_Increments_On_Build()
     {
-        Gen.Select(GenK, GenUniqueNodes(2, 10))
+        GenK.Select(GenUniqueNodes(2, 10))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1102,7 +1102,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_GetRing_Throws_For_Invalid_Index()
     {
-        Gen.Select(GenK, GenUniqueNodes(2, 20))
+        GenK.Select(GenUniqueNodes(2, 20))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);
@@ -1129,7 +1129,7 @@ public class MembershipViewTests
     [Fact]
     public void Property_Observer_Subject_Relationship_Is_Symmetric()
     {
-        Gen.Select(GenK, GenUniqueNodes(3, 15))
+        GenK.Select(GenUniqueNodes(3, 15))
             .Sample((k, nodes) =>
             {
                 var builder = new MembershipViewBuilder(k);

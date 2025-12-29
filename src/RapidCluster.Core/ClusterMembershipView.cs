@@ -40,23 +40,12 @@ public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, I
 
     /// <inheritdoc/>
     /// <exception cref="InvalidOperationException">
-    /// Thrown if the two views have different <see cref="RapidCluster.ClusterId"/>s.
+    /// Thrown if the two views have different <see cref="ClusterId"/>s.
     /// </exception>
-    public int CompareTo(ClusterMembershipView? other)
-    {
-        return other is null ? 1 : ConfigurationId.CompareTo(other.ConfigurationId);
-    }
+    public int CompareTo(ClusterMembershipView? other) => other is null ? 1 : ConfigurationId.CompareTo(other.ConfigurationId);
 
     /// <inheritdoc/>
-    public bool Equals(ClusterMembershipView? other)
-    {
-        if (other is null)
-        {
-            return false;
-        }
-
-        return ReferenceEquals(this, other) ? true : ConfigurationId.Equals(other.ConfigurationId);
-    }
+    public bool Equals(ClusterMembershipView? other) => other is not null && (ReferenceEquals(this, other) || ConfigurationId.Equals(other.ConfigurationId));
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as ClusterMembershipView);
@@ -82,12 +71,12 @@ public sealed class ClusterMembershipView : IEquatable<ClusterMembershipView>, I
     /// <summary>
     /// Determines whether one <see cref="ClusterMembershipView"/> is less than or equal to another.
     /// </summary>
-    public static bool operator <=(ClusterMembershipView? left, ClusterMembershipView? right) => left is null ? true : left.CompareTo(right) <= 0;
+    public static bool operator <=(ClusterMembershipView? left, ClusterMembershipView? right) => left is null || left.CompareTo(right) <= 0;
 
     /// <summary>
     /// Determines whether one <see cref="ClusterMembershipView"/> is greater than another.
     /// </summary>
-    public static bool operator >(ClusterMembershipView? left, ClusterMembershipView? right) => left is null ? false : left.CompareTo(right) > 0;
+    public static bool operator >(ClusterMembershipView? left, ClusterMembershipView? right) => left?.CompareTo(right) > 0;
 
     /// <summary>
     /// Determines whether one <see cref="ClusterMembershipView"/> is greater than or equal to another.

@@ -10,20 +10,20 @@ public class RankComparerTests
     private static readonly RankComparer Comparer = RankComparer.Instance;
 
     [Fact]
-    public void EqualsBothNullReturnsTrue() => Assert.True(Comparer.Equals(null, null));
+    public void EqualsBothNullReturnsTrue() => Assert.True(Comparer.Equals(x: null, y: null));
 
     [Fact]
     public void EqualsFirstNullReturnsFalse()
     {
         var rank = new Rank { Round = 1, NodeIndex = 1 };
-        Assert.False(Comparer.Equals(null, rank));
+        Assert.False(Comparer.Equals(x: null, rank));
     }
 
     [Fact]
     public void EqualsSecondNullReturnsFalse()
     {
         var rank = new Rank { Round = 1, NodeIndex = 1 };
-        Assert.False(Comparer.Equals(rank, null));
+        Assert.False(Comparer.Equals(rank, y: null));
     }
 
     [Fact]
@@ -99,20 +99,20 @@ public class RankComparerTests
     }
 
     [Fact]
-    public void CompareBothNullReturnsZero() => Assert.Equal(0, Comparer.Compare(null, null));
+    public void CompareBothNullReturnsZero() => Assert.Equal(0, Comparer.Compare(x: null, y: null));
 
     [Fact]
     public void CompareFirstNullReturnsNegative()
     {
         var rank = new Rank { Round = 1, NodeIndex = 1 };
-        Assert.True(Comparer.Compare(null, rank) < 0);
+        Assert.True(Comparer.Compare(x: null, rank) < 0);
     }
 
     [Fact]
     public void CompareSecondNullReturnsPositive()
     {
         var rank = new Rank { Round = 1, NodeIndex = 1 };
-        Assert.True(Comparer.Compare(rank, null) > 0);
+        Assert.True(Comparer.Compare(rank, y: null) > 0);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public class RankComparerTests
             new() { Round = 3, NodeIndex = 1 },
             new() { Round = 1, NodeIndex = 5 },
             new() { Round = 2, NodeIndex = 3 },
-            new() { Round = 1, NodeIndex = 2 }
+            new() { Round = 1, NodeIndex = 2 },
         };
 
         ranks.Sort(Comparer);
@@ -219,10 +219,10 @@ public class RankComparerTests
         {
             new() { Round = 1, NodeIndex = 1 },
             new() { Round = 3, NodeIndex = 1 },
-            new() { Round = 2, NodeIndex = 1 }
+            new() { Round = 2, NodeIndex = 1 },
         };
 
-        var ordered = ranks.OrderByDescending(r => r, Comparer).ToList();
+        var ordered = ranks.OrderDescending(Comparer).ToList();
 
         Assert.Equal(3, ordered[0].Round);
         Assert.Equal(2, ordered[1].Round);
@@ -237,5 +237,4 @@ public class RankComparerTests
 
         Assert.Same(instance1, instance2);
     }
-
 }

@@ -25,4 +25,3 @@ internal sealed class RankComparer : IEqualityComparer<Rank>, IComparer<Rank>
         return x.CompareTo(y);
     }
 }
-

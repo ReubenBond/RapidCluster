@@ -8,7 +8,6 @@ namespace RapidCluster.Unit.Tests;
 /// </summary>
 public class RankTests
 {
-
     [Fact]
     public void CompareToHigherRoundReturnsPositive()
     {
@@ -59,7 +58,7 @@ public class RankTests
     {
         var rank = new Rank { Round = 1, NodeIndex = 1 };
 
-        Assert.True(rank.CompareTo(null) > 0);
+        Assert.True(rank.CompareTo(other: null) > 0);
     }
 
     [Fact]
@@ -305,7 +304,7 @@ public class RankTests
             new() { Round = 1, NodeIndex = 5 },
             new() { Round = 2, NodeIndex = 3 },
             new() { Round = 1, NodeIndex = 2 },
-            new() { Round = 2, NodeIndex = 1 }
+            new() { Round = 2, NodeIndex = 1 },
         };
 
         ranks.Sort();
@@ -323,7 +322,7 @@ public class RankTests
     [Fact]
     public void Property_CompareTo_Is_Transitive()
     {
-        Gen.Select(Gen.Int[0, 100], Gen.Int[0, 100], Gen.Int[0, 100],
+        Gen.Int[0, 100].Select(Gen.Int[0, 100], Gen.Int[0, 100],
                    Gen.Int[0, 100], Gen.Int[0, 100], Gen.Int[0, 100])
             .Sample((r1, n1, r2, n2, r3, n3) =>
             {
@@ -343,25 +342,21 @@ public class RankTests
     [Fact]
     public void Property_CompareTo_Is_Antisymmetric()
     {
-        Gen.Select(Gen.Int[0, 100], Gen.Int[0, 100], Gen.Int[0, 100], Gen.Int[0, 100])
+        Gen.Int[0, 100].Select(Gen.Int[0, 100], Gen.Int[0, 100], Gen.Int[0, 100])
             .Sample((r1, n1, r2, n2) =>
             {
                 var rank1 = new Rank { Round = r1, NodeIndex = n1 };
                 var rank2 = new Rank { Round = r2, NodeIndex = n2 };
 
                 // If rank1 <= rank2 and rank2 <= rank1, then rank1 == rank2
-                if (rank1.CompareTo(rank2) <= 0 && rank2.CompareTo(rank1) <= 0)
-                {
-                    return rank1.CompareTo(rank2) == 0;
-                }
-                return true;
+                return rank1.CompareTo(rank2) > 0 || rank2.CompareTo(rank1) > 0 || rank1.CompareTo(rank2) == 0;
             });
     }
 
     [Fact]
     public void Property_Higher_Round_Means_Higher_Rank()
     {
-        Gen.Select(Gen.Int[0, 100], Gen.Int[0, 100], Gen.Int[0, 100])
+        Gen.Int[0, 100].Select(Gen.Int[0, 100], Gen.Int[0, 100])
             .Where(t => t.Item1 != t.Item2)
             .Sample((round1, round2, nodeIndex) =>
             {
@@ -373,10 +368,8 @@ public class RankTests
                 {
                     return rank1.CompareTo(rank2) > 0;
                 }
-                else
-                {
-                    return rank1.CompareTo(rank2) < 0;
-                }
+
+                return rank1.CompareTo(rank2) < 0;
             });
     }
 

@@ -71,7 +71,7 @@ public static class ServerAddressResolver
         var host = ResolveAdvertisedHost(uri.Host, preferredHost);
         var builder = new UriBuilder(uri)
         {
-            Host = host
+            Host = host,
         };
 
         return builder.Uri;

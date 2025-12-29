@@ -1,3 +1,4 @@
+using System.Globalization;
 using RapidCluster.Pb;
 
 namespace RapidCluster.Unit.Tests;
@@ -62,7 +63,7 @@ public class PaxosTests
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = rnd,
-            Vrnd = vrnd
+            Vrnd = vrnd,
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -86,7 +87,7 @@ public class PaxosTests
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = rnd,
-            Proposal = CreateProposal(value)
+            Proposal = CreateProposal(value),
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -112,7 +113,7 @@ public class PaxosTests
         {
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
-            Rank = rank
+            Rank = rank,
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -127,7 +128,7 @@ public class PaxosTests
         var msg = new Phase1aMessage
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
-            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf()
+            ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
         };
 
         Assert.Null(msg.Rank);
@@ -140,7 +141,7 @@ public class PaxosTests
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
-            Rank = new Rank { Round = 5, NodeIndex = 10 }
+            Rank = new Rank { Round = 5, NodeIndex = 10 },
         };
 
         var clone = original.Clone();
@@ -166,7 +167,7 @@ public class PaxosTests
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = rnd,
             Vrnd = vrnd,
-            Proposal = CreateProposal(vval)
+            Proposal = CreateProposal(vval),
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -186,7 +187,7 @@ public class PaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 1 },
-            Vrnd = new Rank { Round = 0, NodeIndex = 0 }
+            Vrnd = new Rank { Round = 0, NodeIndex = 0 },
         };
 
         Assert.Null(msg.Proposal);
@@ -206,7 +207,7 @@ public class PaxosTests
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 1 },
             Vrnd = new Rank { Round = 1, NodeIndex = 0 },
-            Proposal = proposal
+            Proposal = proposal,
         };
 
         Assert.Equal(3, msg.Proposal.Members.Count);
@@ -223,7 +224,7 @@ public class PaxosTests
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = rnd,
-            Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
+            Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678)),
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -243,7 +244,7 @@ public class PaxosTests
             Proposal = CreateProposal(
                 Utils.HostFromParts("10.0.0.1", 5001),
                 Utils.HostFromParts("10.0.0.2", 5002),
-                Utils.HostFromParts("10.0.0.3", 5003))
+                Utils.HostFromParts("10.0.0.3", 5003)),
         };
 
         Assert.Equal(3, msg.Proposal.Members.Count);
@@ -260,7 +261,7 @@ public class PaxosTests
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = rnd,
-            Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
+            Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678)),
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -275,7 +276,7 @@ public class PaxosTests
         var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf() };
         for (var i = 0; i < 10; i++)
         {
-            proposal.Members.Add(Utils.HostFromParts("192.168.1." + i, 5000 + i, Utils.GetNextNodeId()));
+            proposal.Members.Add(Utils.HostFromParts("192.168.1." + i.ToString(CultureInfo.InvariantCulture), 5000 + i, Utils.GetNextNodeId()));
         }
 
         var msg = new Phase2bMessage
@@ -283,7 +284,7 @@ public class PaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
-            Proposal = proposal
+            Proposal = proposal,
         };
 
         Assert.Equal(10, msg.Proposal.Members.Count);
@@ -299,7 +300,7 @@ public class PaxosTests
             Sender = sender,
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 1, NodeIndex = 0 },
-            Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678))
+            Proposal = CreateProposal(Utils.HostFromParts("127.0.0.1", 5678)),
         };
 
         Assert.Equal(sender, msg.Sender);
@@ -316,7 +317,7 @@ public class PaxosTests
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf(),
-            Rnd = new Rank { Round = 1, NodeIndex = 0 }
+            Rnd = new Rank { Round = 1, NodeIndex = 0 },
         };
 
         Assert.Null(msg.Proposal);
@@ -328,7 +329,7 @@ public class PaxosTests
         var proposal = new MembershipProposal { ConfigurationId = new ConfigurationId(new ClusterId(888), 1).ToProtobuf() };
         for (var i = 0; i < 100; i++)
         {
-            proposal.Members.Add(Utils.HostFromParts("10.0.0." + i, 5000, Utils.GetNextNodeId()));
+            proposal.Members.Add(Utils.HostFromParts("10.0.0." + i.ToString(CultureInfo.InvariantCulture), 5000, Utils.GetNextNodeId()));
         }
 
         var msg = new Phase2bMessage
@@ -336,7 +337,7 @@ public class PaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 1, NodeIndex = 0 },
-            Proposal = proposal
+            Proposal = proposal,
         };
 
         Assert.Equal(100, msg.Proposal.Members.Count);
@@ -382,8 +383,8 @@ public class PaxosTests
     public void RankQuorumThresholdCalculation()
     {
         // Threshold = n - f for Fast Paxos
-        int n = 5;
-        int f = (int)Math.Floor((n - 1) / 4.0);
+        var n = 5;
+        var f = (int)Math.Floor((n - 1) / 4.0);
         Assert.Equal(4, n - f);
 
         n = 10;
@@ -410,7 +411,7 @@ public class PaxosTests
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 999).ToProtobuf(),
-            Rank = new Rank { Round = 10, NodeIndex = 20 }
+            Rank = new Rank { Round = 10, NodeIndex = 20 },
         };
 
         var bytes = Google.Protobuf.MessageExtensions.ToByteArray(original);
@@ -431,7 +432,7 @@ public class PaxosTests
             Rnd = new Rank { Round = 5, NodeIndex = 10 },
             Proposal = CreateProposal(
                 Utils.HostFromParts("10.0.0.1", 5001),
-                Utils.HostFromParts("10.0.0.2", 5002))
+                Utils.HostFromParts("10.0.0.2", 5002)),
         };
 
         var bytes = Google.Protobuf.MessageExtensions.ToByteArray(original);
@@ -459,7 +460,7 @@ public class PaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 5, NodeIndex = 10 },
-            Vrnd = new Rank { Round = 5, NodeIndex = 10 }
+            Vrnd = new Rank { Round = 5, NodeIndex = 10 },
         };
 
         Assert.Equal(msg.Rnd.Round, msg.Vrnd.Round);
@@ -472,7 +473,7 @@ public class PaxosTests
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), -1).ToProtobuf(),
-            Rank = new Rank { Round = 1, NodeIndex = 1 }
+            Rank = new Rank { Round = 1, NodeIndex = 1 },
         };
 
         Assert.Equal(-1, msg.ConfigurationId.ToConfigurationId().Version);
@@ -485,7 +486,7 @@ public class PaxosTests
         {
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), long.MaxValue).ToProtobuf(),
-            Rank = new Rank { Round = 1, NodeIndex = 1 }
+            Rank = new Rank { Round = 1, NodeIndex = 1 },
         };
 
         Assert.Equal(long.MaxValue, msg.ConfigurationId.ToConfigurationId().Version);
@@ -519,7 +520,7 @@ public class PaxosTests
             Sender = Utils.HostFromParts("127.0.0.1", 1234),
             ConfigurationId = new ConfigurationId(new ClusterId(888), 100).ToProtobuf(),
             Rnd = new Rank { Round = 2, NodeIndex = 1 },
-            Vrnd = new Rank { Round = vrndRound, NodeIndex = vrndNodeIndex }
+            Vrnd = new Rank { Round = vrndRound, NodeIndex = vrndNodeIndex },
         };
 
         if (endpoints.Length > 0)
@@ -537,7 +538,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(0, 0),  // empty proposal
             CreatePhase1bMessage(0, 0),  // empty proposal
-            CreatePhase1bMessage(0, 0)   // empty proposal
+            CreatePhase1bMessage(0, 0),   // empty proposal
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -553,7 +554,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(1, 1, node1),
             CreatePhase1bMessage(1, 1, node1),
-            CreatePhase1bMessage(1, 1, node1)
+            CreatePhase1bMessage(1, 1, node1),
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -574,7 +575,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(0, 0, node2),  // lower vrnd - should be ignored
             CreatePhase1bMessage(1, 1, node1),  // higher vrnd - should be chosen
-            CreatePhase1bMessage(1, 1, node1)   // higher vrnd - should be chosen
+            CreatePhase1bMessage(1, 1, node1),   // higher vrnd - should be chosen
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -596,7 +597,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(1, 1, node1),
             CreatePhase1bMessage(1, 1, node1),  // 2 votes for node1 - exceeds N/4
-            CreatePhase1bMessage(1, 1, node2)   // 1 vote for node2
+            CreatePhase1bMessage(1, 1, node2),   // 1 vote for node2
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -620,7 +621,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(1, 1, node1),
             CreatePhase1bMessage(1, 1, node2),
-            CreatePhase1bMessage(1, 1, node3)
+            CreatePhase1bMessage(1, 1, node3),
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 20);
@@ -645,7 +646,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(0, 0, node1),  // lower vrnd with value
             CreatePhase1bMessage(1, 1),          // higher vrnd, empty proposal
-            CreatePhase1bMessage(1, 1)           // higher vrnd, empty proposal
+            CreatePhase1bMessage(1, 1),           // higher vrnd, empty proposal
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -725,7 +726,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(1, 1, node1, node2),  // proposal with 2 endpoints
             CreatePhase1bMessage(1, 1, node1, node2),
-            CreatePhase1bMessage(1, 1, node1, node2)
+            CreatePhase1bMessage(1, 1, node1, node2),
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -759,7 +760,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(1, 1, node2),   // vrnd (1,1) - lower
             CreatePhase1bMessage(1, 2, node1),   // vrnd (1,2) - higher
-            CreatePhase1bMessage(1, 2, node1)    // vrnd (1,2) - higher
+            CreatePhase1bMessage(1, 2, node1),    // vrnd (1,2) - higher
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 5);
@@ -787,7 +788,7 @@ public class PaxosTests
             {
                 CreatePhase1bMessage(1, 1, node3), // node3 first
                 CreatePhase1bMessage(1, 1, node1), // node1 second
-                CreatePhase1bMessage(1, 1, node2)  // node2 third
+                CreatePhase1bMessage(1, 1, node2),  // node2 third
             };
 
             // Shuffle messages on each iteration using a seeded approach for deterministic test behavior
@@ -828,7 +829,7 @@ public class PaxosTests
         {
             CreatePhase1bMessage(1, 1, nodeC), // Largest first (would be picked by non-deterministic FirstOrDefault)
             CreatePhase1bMessage(1, 1, nodeB),
-            CreatePhase1bMessage(1, 1, nodeA)  // Smallest last
+            CreatePhase1bMessage(1, 1, nodeA),  // Smallest last
         };
 
         var result = ConsensusCoordinator.ChooseValue(messages, n: 20);

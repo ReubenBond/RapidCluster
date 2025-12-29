@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.ServiceDiscovery;
 using RapidCluster.Discovery;
@@ -20,45 +21,37 @@ namespace RapidCluster.Aspire.Node;
 /// configuration determines which services to resolve.
 /// </para>
 /// </remarks>
+/// <remarks>
+/// Initializes a new instance of the <see cref="ServiceDiscoverySeedProvider"/> class.
+/// </remarks>
+/// <param name="resolver">The service endpoint resolver for discovering service endpoints.</param>
+/// <param name="configuration">The configuration to read cluster size from.</param>
+/// <param name="logger">The logger.</param>
+/// <param name="serviceNamePrefix">The prefix for service names (e.g., "cluster" for cluster-0, cluster-1, etc.).</param>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Available for use but not currently instantiated")]
-internal sealed partial class ServiceDiscoverySeedProvider : ISeedProvider
+internal sealed partial class ServiceDiscoverySeedProvider(
+    ServiceEndpointResolver resolver,
+    IConfiguration configuration,
+    ILogger<ServiceDiscoverySeedProvider> logger,
+    string serviceNamePrefix = "cluster") : ISeedProvider
 {
-    private readonly ServiceEndpointResolver _resolver;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<ServiceDiscoverySeedProvider> _logger;
-    private readonly string _serviceNamePrefix;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ServiceDiscoverySeedProvider"/> class.
-    /// </summary>
-    /// <param name="resolver">The service endpoint resolver for discovering service endpoints.</param>
-    /// <param name="configuration">The configuration to read cluster size from.</param>
-    /// <param name="logger">The logger.</param>
-    /// <param name="serviceNamePrefix">The prefix for service names (e.g., "cluster" for cluster-0, cluster-1, etc.).</param>
-    public ServiceDiscoverySeedProvider(
-        ServiceEndpointResolver resolver,
-        IConfiguration configuration,
-        ILogger<ServiceDiscoverySeedProvider> logger,
-        string serviceNamePrefix = "cluster")
-    {
-        _resolver = resolver;
-        _configuration = configuration;
-        _logger = logger;
-        _serviceNamePrefix = serviceNamePrefix;
-    }
+    private readonly ServiceEndpointResolver _resolver = resolver;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<ServiceDiscoverySeedProvider> _logger = logger;
+    private readonly string _serviceNamePrefix = serviceNamePrefix;
 
     /// <inheritdoc/>
     public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
         var endpoints = new List<EndPoint>();
-        var clusterSize = _configuration.GetValue<int>("CLUSTER_SIZE", 1);
+        var clusterSize = _configuration.GetValue("CLUSTER_SIZE", 1);
 
         LogDiscoveringNodes(_logger, clusterSize, _serviceNamePrefix);
 
         // Resolve each cluster node service (cluster-0, cluster-1, etc.)
         for (var i = 0; i < clusterSize; i++)
         {
-            var serviceName = $"{_serviceNamePrefix}-{i}";
+            var serviceName = string.Create(CultureInfo.InvariantCulture, $"{_serviceNamePrefix}-{i}");
             var serviceUri = $"http://{serviceName}";
 
             try
@@ -100,14 +93,19 @@ internal sealed partial class ServiceDiscoverySeedProvider : ISeedProvider
             // Already a standard endpoint type
             IPEndPoint or DnsEndPoint => endpoint,
             // Unknown type - skip it
-            _ => null
+            _ => null,
         };
     }
 
     private static EndPoint ConvertUriEndPoint(UriEndPoint uriEndPoint)
     {
         var uri = uriEndPoint.Uri;
-        var port = uri.Port > 0 ? uri.Port : (uri.Scheme == "https" ? 443 : 80);
+        var port = uri.Port switch
+        {
+            > 0 => uri.Port,
+            _ when string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase) => 443,
+            _ => 80,
+        };
 
         // Try to parse as IP address first
         if (IPAddress.TryParse(uri.Host, out var ipAddress))

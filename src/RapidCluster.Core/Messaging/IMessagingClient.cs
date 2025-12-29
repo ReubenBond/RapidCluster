@@ -62,11 +62,13 @@ public interface IMessagingClient : IAsyncDisposable
 #pragma warning disable CA1031
         try
         {
-            return await SendMessageAsync(remote, request, cancellationToken).ConfigureAwait(true);
+            return await SendMessageAsync(remote, request, cancellationToken);
         }
         catch
         {
+#pragma warning disable ERP022 // Unobserved exception in a generic exception handler
             return RapidClusterResponse.Parser.ParseFrom([]);
+#pragma warning restore ERP022 // Unobserved exception in a generic exception handler
         }
 #pragma warning restore CA1031
     }

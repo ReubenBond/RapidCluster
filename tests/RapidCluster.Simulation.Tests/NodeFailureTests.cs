@@ -20,10 +20,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     [Fact]
     public void NodeCrashRemovesFromCluster()
@@ -173,10 +170,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
 
         // Attempting to join through crashed seed should fail with JoinException
         // The underlying cause is a timeout, but JoinException is the public contract for join failures
-        var ex = Assert.Throws<JoinException>(() =>
-        {
-            _harness.CreateJoinerNode(seedNode, nodeId: 1, options: options);
-        });
+        var ex = Assert.Throws<JoinException>(() => _harness.CreateJoinerNode(seedNode, nodeId: 1, options: options));
         Assert.Contains("Timeout", ex.Message, StringComparison.Ordinal);
     }
 
@@ -187,7 +181,7 @@ public sealed class NodeFailureTests : IAsyncLifetime
         // the remaining 2 nodes can still reach quorum for consensus
         var seedNode = _harness.CreateSeedNode();
         var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
 
@@ -211,16 +205,6 @@ public sealed class NodeFailureTests : IAsyncLifetime
         Assert.Equal(3, joiner1.MembershipSize);
     }
 
-    [Fact(Skip = "Complex race condition test requiring mid-join node crash injection - not supported by simulation harness")]
-    public void NodeCrashDuringJoinProtocol()
-    {
-        var seedNode = _harness.CreateSeedNode();
-
-        // This test would require the ability to crash a node in the middle of the join protocol,
-        // which requires async operation interleaving that the synchronous simulation harness
-        // doesn't easily support
-    }
-
     [Fact]
     public void NodeCrashDuringLeave()
     {
@@ -234,5 +218,4 @@ public sealed class NodeFailureTests : IAsyncLifetime
 
         Assert.DoesNotContain(joiner, _harness.Nodes);
     }
-
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Google.Protobuf;
 using RapidCluster.Pb;
 
@@ -8,7 +9,7 @@ namespace RapidCluster.Integration.Tests;
 /// </summary>
 internal static class Utils
 {
-    private static long s_nodeIdCounter;
+    private static long _nodeIdCounter;
 
     /// <summary>
     /// Creates an Endpoint from hostname and port.
@@ -18,7 +19,7 @@ internal static class Utils
         return new Endpoint
         {
             Hostname = ByteString.CopyFromUtf8(hostname),
-            Port = port
+            Port = port,
         };
     }
 
@@ -31,7 +32,7 @@ internal static class Utils
         {
             Hostname = ByteString.CopyFromUtf8(hostname),
             Port = port,
-            NodeId = nodeId
+            NodeId = nodeId,
         };
     }
 
@@ -39,7 +40,7 @@ internal static class Utils
     /// Gets a unique node ID for testing purposes.
     /// Thread-safe via Interlocked.
     /// </summary>
-    public static long GetNextNodeId() => Interlocked.Increment(ref s_nodeIdCounter);
+    public static long GetNextNodeId() => Interlocked.Increment(ref _nodeIdCounter);
 
     /// <summary>
     /// Creates a MembershipView with the specified number of nodes and K value.
@@ -50,7 +51,7 @@ internal static class Utils
         var builder = new MembershipViewBuilder(k);
         for (var i = 0; i < numNodes; i++)
         {
-            var node = HostFromParts("127.0.0." + (i + 1), 1000 + i, GetNextNodeId());
+            var node = HostFromParts("127.0.0." + (i + 1).ToString(CultureInfo.InvariantCulture), 1000 + i, GetNextNodeId());
             builder.RingAdd(node);
         }
         return builder.Build();
@@ -59,8 +60,5 @@ internal static class Utils
     /// <summary>
     /// Creates an empty MembershipView with the specified K value.
     /// </summary>
-    public static MembershipView CreateEmptyMembershipView(int k = 10)
-    {
-        return new MembershipViewBuilder(k).Build();
-    }
+    public static MembershipView CreateEmptyMembershipView(int k = 10) => new MembershipViewBuilder(k).Build();
 }

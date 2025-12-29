@@ -29,8 +29,5 @@ internal sealed class MembershipViewAccessor : IMembershipViewAccessor, IDisposa
         _viewChangeChannel.Publish(view);
     }
 
-    public void Dispose()
-    {
-        _viewChangeChannel.Dispose();
-    }
+    public void Dispose() => _viewChangeChannel.Dispose();
 }

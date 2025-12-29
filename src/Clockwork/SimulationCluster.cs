@@ -1,14 +1,16 @@
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Clockwork;
 
 /// <summary>
+/// <para>
 /// Abstract base class for simulation clusters that orchestrate deterministic testing
 /// of distributed systems. Provides generic task scheduling, time management, and
 /// node lifecycle management independent of any specific application domain.
-/// 
-/// Derived classes implement application-specific node creation and cluster operations.
+/// </para>
+/// <para>Derived classes implement application-specific node creation and cluster operations.</para>
 /// </summary>
 /// <typeparam name="TNode">The concrete simulation node type.</typeparam>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
@@ -382,7 +384,7 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
         {
             if (!task.IsCompleted || !task.GetAwaiter().GetResult().IsCompleted)
             {
-                throw new TimeoutException($"Task did not complete within {maxIterations} iterations");
+                throw new TimeoutException(string.Create(CultureInfo.InvariantCulture, $"Task did not complete within {maxIterations} iterations"));
             }
         }
 
@@ -429,7 +431,7 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
             return false;
         }
 
-        return RunUntilIdleCore(null, remainingIterations) < remainingIterations;
+        return RunUntilIdleCore(maxSimulatedTime: null, remainingIterations) < remainingIterations;
     }
 
     #region Logging hooks for derived classes
@@ -498,12 +500,12 @@ public abstract class SimulationCluster<TNode> : IAsyncDisposable
         Run(async () =>
         {
             SafeCancel(_teardownCts);
-            await DisposeAsyncCore().ConfigureAwait(true);
+            await DisposeAsyncCore();
         });
 
         _teardownCts.Dispose();
         GC.SuppressFinalize(this);
     }
 
-    private string DebuggerDisplay => $"SimulationCluster(Seed={Seed}, Nodes={Nodes.Count}, Time={Clock.CurrentTime:hh\\:mm\\:ss\\.fff})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"SimulationCluster(Seed={Seed}, Nodes={Nodes.Count}, Time={Clock.CurrentTime:hh\\:mm\\:ss\\.fff})");
 }

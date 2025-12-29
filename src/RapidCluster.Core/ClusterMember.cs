@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 
 namespace RapidCluster;
@@ -12,5 +13,5 @@ namespace RapidCluster;
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 public sealed record ClusterMember(EndPoint EndPoint, long Id, ClusterNodeMetadata Metadata)
 {
-    private string DebuggerDisplay => $"{EndPoint} (Id={Id})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"{EndPoint} (Id={Id})");
 }

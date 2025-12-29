@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using RapidCluster.Exceptions;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
@@ -21,10 +22,7 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _harness.DisposeAsync();
-    }
+    public async ValueTask DisposeAsync() => await _harness.DisposeAsync();
 
     /// <summary>
     /// Tests that a basic join succeeds in normal conditions.
@@ -56,10 +54,10 @@ public sealed class JoinProtocolTests : IAsyncLifetime
 
         // Verify membership contains both endpoints
         var joinerView = joiner.CurrentView;
-        var addresses = joinerView.Members.Select(m => $"{m.Hostname.ToStringUtf8()}:{m.Port}").ToHashSet();
+        var addresses = joinerView.Members.Select(m => string.Create(CultureInfo.InvariantCulture, $"{m.Hostname.ToStringUtf8()}:{m.Port}")).ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains($"{seedNode.Address.Hostname.ToStringUtf8()}:{seedNode.Address.Port}", addresses);
-        Assert.Contains($"{joiner.Address.Hostname.ToStringUtf8()}:{joiner.Address.Port}", addresses);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{seedNode.Address.Hostname.ToStringUtf8()}:{seedNode.Address.Port}"), addresses);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"{joiner.Address.Hostname.ToStringUtf8()}:{joiner.Address.Port}"), addresses);
     }
 
     /// <summary>
@@ -129,8 +127,8 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         _harness.Network.MessageDropRate = 0.1;
 
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
-        var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
     }
@@ -189,7 +187,7 @@ public sealed class JoinProtocolTests : IAsyncLifetime
     public void JoinAfterNodeFailureSucceeds()
     {
         var seedNode = _harness.CreateSeedNode();
-        var joiner1 = _harness.CreateJoinerNode(seedNode, nodeId: 1);
+        _ = _harness.CreateJoinerNode(seedNode, nodeId: 1);
         var joiner2 = _harness.CreateJoinerNode(seedNode, nodeId: 2);
 
         _harness.WaitForConvergence();
@@ -280,12 +278,9 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         // would cause the simulation to hit its iteration limit and throw TimeoutException.
         var limitedRetryOptions = new RapidClusterProtocolOptions
         {
-            MaxJoinRetries = 3
+            MaxJoinRetries = 3,
         };
-        Assert.Throws<JoinException>(() =>
-        {
-            _harness.CreateJoinerNode(seedNode, nodeId: 2, limitedRetryOptions);
-        });
+        Assert.Throws<JoinException>(() => _harness.CreateJoinerNode(seedNode, nodeId: 2, limitedRetryOptions));
     }
 
     /// <summary>
@@ -469,5 +464,4 @@ public sealed class JoinProtocolTests : IAsyncLifetime
         Assert.True(joiner4.IsInitialized);
         Assert.All(_harness.Nodes, n => Assert.Equal(3, n.MembershipSize));
     }
-
 }

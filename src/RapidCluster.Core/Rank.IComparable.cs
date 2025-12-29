@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 
 namespace RapidCluster.Pb;
 
@@ -46,5 +47,5 @@ public partial class Rank : IComparable<Rank>
         return left.CompareTo(right) >= 0;
     }
 
-    private string DebuggerDisplay => $"Rank({Round}:{NodeIndex})";
+    private string DebuggerDisplay => string.Create(CultureInfo.InvariantCulture, $"Rank({Round}:{NodeIndex})");
 }

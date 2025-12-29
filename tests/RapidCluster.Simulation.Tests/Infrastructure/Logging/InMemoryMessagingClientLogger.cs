@@ -7,12 +7,10 @@ namespace RapidCluster.Simulation.Tests.Infrastructure.Logging;
 /// </summary>
 internal sealed partial class InMemoryMessagingClientLogger(ILogger<InMemoryMessagingClient> logger)
 {
-    private readonly ILogger _logger = logger;
-
     /// <summary>
     /// Gets the underlying logger instance.
     /// </summary>
-    public ILogger Logger => _logger;
+    public ILogger Logger { get; } = logger;
 
     [LoggerMessage(Level = LogLevel.Trace, Message = "Attempting to send {MessageType} from {Local} to {Remote}")]
     public partial void AttemptingSend(object messageType, string local, string remote);

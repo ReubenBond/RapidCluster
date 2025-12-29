@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
@@ -11,12 +12,15 @@ using RapidCluster.Pb;
 namespace RapidCluster;
 
 /// <summary>
+/// <para>
 /// Coordinates consensus for a single configuration change decision.
 /// Manages the progression from fast round (round 1) through multiple
 /// classic Paxos rounds (rounds 2, 3, ...) until a decision is reached.
-///
+/// </para>
+/// <para>
 /// This coordinator is event-driven: inbound messages and timeouts are serialized
 /// through an internal event loop.
+/// </para>
 /// </summary>
 /// <remarks>
 /// Conflicting proposals during the fast round are handled by the Classic Paxos
@@ -61,7 +65,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     {
         SingleReader = true,
         SingleWriter = false,
-        AllowSynchronousContinuations = true
+        AllowSynchronousContinuations = true,
     });
 
     private readonly OneShotTimer _timer = new();
@@ -146,7 +150,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _log.Initialized(myAddr, configurationId, membershipSize);
     }
 
-    public void Propose(MembershipProposal proposal, CancellationToken cancellationToken = default)
+    public void Propose(MembershipProposal proposal)
     {
         _log.Propose(proposal);
 
@@ -191,7 +195,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
             StartFastRound(proposal, cancellationToken);
 
-            while (await _events.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(true))
+            while (await _events.Reader.WaitToReadAsync(cancellationToken))
             {
                 while (_events.Reader.TryRead(out var @event))
                 {
@@ -235,7 +239,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
             Proposal = proposal,
-            Rnd = _currentRank
+            Rnd = _currentRank,
         };
 
         var proposalMessage = consensusMessage.ToRapidClusterRequest();
@@ -285,15 +289,13 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         RegisterClassicNegativeVote(
             failedEndpoint,
             nackRound: failedRank.Round,
-            highestRoundSeen: null,
-            cancellationToken);
+            highestRoundSeen: null);
     }
 
     private void RegisterClassicNegativeVote(
         Endpoint endpoint,
         int nackRound,
-        int? highestRoundSeen,
-        CancellationToken cancellationToken)
+        int? highestRoundSeen)
     {
         if (nackRound != _currentRank.Round)
         {
@@ -314,17 +316,27 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             return;
         }
 
-        ScheduleClassicRoundRestart(cancellationToken);
+        ScheduleClassicRoundRestart();
     }
 
-    private void ScheduleClassicRoundRestart(CancellationToken cancellationToken)
+    private void ScheduleClassicRoundRestart()
     {
         if (_currentRank.Round < 2 && _currentRank.Round != 1)
         {
-            throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
+            throw new UnreachableException(string.Create(CultureInfo.InvariantCulture, $"Unexpected round: {_currentRank.Round}"));
         }
 
-        var nextRound = GetNextClassicRoundNumber();
+        int nextRound;
+        if (_currentRank.Round == 1)
+        {
+            nextRound = 2;
+        }
+        else
+        {
+            _highestRoundSeen = Math.Max(_highestRoundSeen, _currentRank.Round);
+            nextRound = _highestRoundSeen + 1;
+        }
+
         var delay = _scheduledClassicRoundDelay ?? GetRetryDelay(nextRound);
 
         if (_scheduledClassicRoundStart is { } scheduledRound)
@@ -349,17 +361,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             _sharedResources.TimeProvider,
             delay,
             () => _events.Writer.TryWrite(new ConsensusEvent.ClassicRestart(expectedRound, delay)));
-
-        int GetNextClassicRoundNumber()
-        {
-            if (_currentRank.Round == 1)
-            {
-                return 2;
-            }
-
-            _highestRoundSeen = Math.Max(_highestRoundSeen, _currentRank.Round);
-            return _highestRoundSeen + 1;
-        }
     }
 
     private void HandleEvent(
@@ -392,11 +393,11 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                 {
                     _log.ClassicRoundTimeout(timedOutRound, delay);
                     _metricsScope.RecordRoundCompleted(_metrics, MetricNames.Results.Timeout);
-                    ScheduleClassicRoundRestart(cancellationToken);
+                    ScheduleClassicRoundRestart();
                     return;
                 }
 
-                throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
+                throw new UnreachableException(string.Create(CultureInfo.InvariantCulture, $"Unexpected round: {_currentRank.Round}"));
 
             case ConsensusEvent.ClassicRestart(var expectedRound, _):
                 if (_currentRank.Round != expectedRound)
@@ -422,7 +423,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                     return;
                 }
 
-                throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
+                throw new UnreachableException(string.Create(CultureInfo.InvariantCulture, $"Unexpected round: {_currentRank.Round}"));
 
             case ConsensusEvent.DeliveryFailure(var failedEndpoint, var failedRank):
                 HandleDeliveryFailure(failedEndpoint, failedRank, cancellationToken);
@@ -459,7 +460,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                 return;
 
             default:
-                throw new ArgumentException($"Unexpected message case: {request.ContentCase}");
+                throw new ArgumentException($"Unexpected message case: {request.ContentCase}", nameof(request));
         }
     }
 
@@ -521,10 +522,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         return true;
     }
 
-    private void StartClassicRound(CancellationToken cancellationToken)
-    {
-        StartClassicRound(targetRound: null, cancellationToken);
-    }
+    private void StartClassicRound(CancellationToken cancellationToken) => StartClassicRound(targetRound: null, cancellationToken);
 
     private void StartClassicRound(int? targetRound, CancellationToken cancellationToken)
     {
@@ -561,7 +559,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
         else
         {
-            throw new UnreachableException($"Unexpected round: {_currentRank.Round}");
+            throw new UnreachableException(string.Create(CultureInfo.InvariantCulture, $"Unexpected round: {_currentRank.Round}"));
         }
 
         _scheduledClassicRoundStart = null;
@@ -587,7 +585,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         {
             ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
-            Rank = _currentRank
+            Rank = _currentRank,
         };
 
         var request = prepare.ToRapidClusterRequest();
@@ -619,7 +617,6 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
 
                 _events.Writer.TryWrite(new ConsensusEvent.Timeout(timedOutRound, delay));
             });
-
     }
 
     private void HandlePhase2bMessage(
@@ -702,8 +699,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
                 RegisterClassicNegativeVote(
                     phase2bMessage.Sender,
                     nackRound: _currentRank.Round,
-                    highestRoundSeen: phase2bMessage.Rnd.Round,
-                    cancellationToken);
+                    highestRoundSeen: phase2bMessage.Rnd.Round);
                 return;
             }
 
@@ -751,8 +747,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             RegisterClassicNegativeVote(
                 phase1bMessage.Sender,
                 nackRound: _currentRank.Round,
-                highestRoundSeen: phase1bMessage.Rnd.Round,
-                cancellationToken);
+                highestRoundSeen: phase1bMessage.Rnd.Round);
             return;
         }
 
@@ -789,7 +784,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
             ConfigurationId = _configurationId.ToProtobuf(),
             Sender = _myAddr,
             Rnd = _currentRank,
-            Proposal = _candidateValue
+            Proposal = _candidateValue,
         };
 
         var request = phase2a.ToRapidClusterRequest();
@@ -820,15 +815,14 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         var collectedProposals = phase1bMessages
-            .Where(m => RankComparer.Instance.Compare(m.Vrnd, maxVrnd) == 0)
-            .Where(m => m.Proposal != null && m.Proposal.Members.Count > 0)
-            .Select(m => m.Proposal!)
+            .Where(m => RankComparer.Instance.Compare(m.Vrnd, maxVrnd) == 0 && m.Proposal?.Members.Count > 0)
+            .Select(m => m.Proposal)
             .ToList();
 
         if (collectedProposals.Count > 0)
         {
             var firstValue = collectedProposals[0];
-            var allIdentical = collectedProposals.All(p => MembershipProposalComparer.Instance.Equals(p, firstValue));
+            var allIdentical = collectedProposals.TrueForAll(p => MembershipProposalComparer.Instance.Equals(p, firstValue));
             if (allIdentical)
             {
                 return firstValue;
@@ -850,9 +844,9 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         }
 
         return phase1bMessages
-            .Where(m => m.Proposal != null && m.Proposal.Members.Count > 0)
-            .Select(m => m.Proposal!)
-            .OrderBy(p => p, MembershipProposalComparer.Instance)
+            .Where(m => m.Proposal?.Members.Count > 0)
+            .Select(m => m.Proposal)
+            .Order(MembershipProposalComparer.Instance)
             .FirstOrDefault();
     }
 
@@ -925,7 +919,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
     {
         if (request.ContentCase == RapidClusterRequest.ContentOneofCase.None)
         {
-            throw new ArgumentException($"Unexpected message case: {request.ContentCase}");
+            throw new ArgumentException($"Unexpected message case: {request.ContentCase}", nameof(request));
         }
 
         lock (_lock)
@@ -1014,7 +1008,7 @@ internal sealed class ConsensusCoordinator : IAsyncDisposable
         _timer.Dispose();
         _classicRestartTimer.Dispose();
 
-        _onDecidedTcs.TrySetCanceled();
+        _onDecidedTcs.TrySetCanceled(_disposeCts.Token);
 
         _disposeCts.Dispose();
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable IDE0005 // Using directive is unnecessary - needed for implicit usings resolution
@@ -22,7 +23,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
     public async ValueTask InitializeAsync()
     {
         var appHost = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.RapidCluster_EndToEnd_AppHost>();
+            .CreateAsync<Projects.RapidCluster_EndToEnd_AppHost>(TestContext.Current.CancellationToken);
 
         appHost.Services.AddLogging(logging =>
         {
@@ -32,12 +33,9 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
             logging.AddXUnit(outputHelper);
         });
 
-        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
-        {
-            clientBuilder.AddStandardResilienceHandler();
-        });
+        appHost.Services.ConfigureHttpClientDefaults(clientBuilder => clientBuilder.AddStandardResilienceHandler());
 
-        _app = await appHost.BuildAsync();
+        _app = await appHost.BuildAsync(TestContext.Current.CancellationToken);
 
         // Start watching resource logs before starting the app
         _logWatchCts = new CancellationTokenSource();
@@ -45,11 +43,11 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         // Watch logs for all cluster nodes
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             _logWatchTasks.Add(WatchResourceLogsAsync(_app, resourceName, _logWatchCts.Token));
         }
 
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -120,7 +118,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         var waitTasks = new Task[ClusterSize];
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             waitTasks[i] = _app.ResourceNotifications.WaitForResourceAsync(
                 resourceName,
                 KnownResourceStates.Running,
@@ -143,7 +141,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         var waitTasks = new Task[ClusterSize];
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             waitTasks[i] = _app.ResourceNotifications.WaitForResourceHealthyAsync(
                 resourceName,
                 cts.Token);
@@ -184,7 +182,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         var waitTasks = new Task[ClusterSize];
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             waitTasks[i] = _app.ResourceNotifications.WaitForResourceHealthyAsync(
                 resourceName,
                 cts.Token);
@@ -196,7 +194,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         // Verify all nodes respond to health checks
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             using var httpClient = _app.CreateHttpClient(resourceName);
             using var response = await httpClient.GetAsync(HealthUri, cts.Token);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -247,7 +245,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         var waitTasks = new Task[ClusterSize];
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             waitTasks[i] = _app.ResourceNotifications.WaitForResourceHealthyAsync(
                 resourceName,
                 cts.Token);
@@ -255,7 +253,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         await Task.WhenAll(waitTasks);
 
         var elapsed = DateTime.UtcNow - startTime;
-        outputHelper.WriteLine($"All {ClusterSize} nodes became healthy in {elapsed.TotalSeconds:F2} seconds");
+        outputHelper.WriteLine(string.Create(CultureInfo.InvariantCulture, $"All {ClusterSize} nodes became healthy in {elapsed.TotalSeconds:F2} seconds"));
 
         // All nodes should become healthy - this tests the parallel bootstrap mechanism
         Assert.True(elapsed < DefaultTimeout, "Cluster formation took too long");
@@ -272,7 +270,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         var waitTasks = new Task[ClusterSize];
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             waitTasks[i] = _app.ResourceNotifications.WaitForResourceHealthyAsync(
                 resourceName,
                 cts.Token);
@@ -336,7 +334,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         var waitTasks = new Task[ClusterSize];
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             waitTasks[i] = _app.ResourceNotifications.WaitForResourceHealthyAsync(
                 resourceName,
                 cts.Token);
@@ -348,7 +346,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
 
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             var nodeIndex = i;
             healthCheckTasks.Add(Task.Run(async () =>
             {
@@ -384,7 +382,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
             var waitTasks = new Task[ClusterSize];
             for (var i = 0; i < ClusterSize; i++)
             {
-                var resourceName = $"cluster-{i}";
+                var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
                 waitTasks[i] = _app.ResourceNotifications.WaitForResourceHealthyAsync(
                     resourceName,
                     cts.Token);
@@ -392,15 +390,15 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
             await Task.WhenAll(waitTasks);
 
             var elapsed = DateTime.UtcNow - startTime;
-            outputHelper.WriteLine($"Cluster formation completed in {elapsed.TotalSeconds:F2} seconds");
+            outputHelper.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Cluster formation completed in {elapsed.TotalSeconds:F2} seconds"));
 
             // Cluster should form well within 60 seconds
-            Assert.True(elapsed.TotalSeconds < 60, $"Cluster formation took {elapsed.TotalSeconds:F2} seconds, expected < 60 seconds");
+            Assert.True(elapsed.TotalSeconds < 60, string.Create(CultureInfo.InvariantCulture, $"Cluster formation took {elapsed.TotalSeconds:F2} seconds, expected < 60 seconds"));
         }
         catch (OperationCanceledException)
         {
             var elapsed = DateTime.UtcNow - startTime;
-            Assert.Fail($"Cluster formation did not complete within 60 seconds (elapsed: {elapsed.TotalSeconds:F2}s)");
+            Assert.Fail(string.Create(CultureInfo.InvariantCulture, $"Cluster formation did not complete within 60 seconds (elapsed: {elapsed.TotalSeconds:F2}s)"));
         }
     }
 
@@ -442,7 +440,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         // This proves they successfully joined the cluster started by node 0
         for (var i = 1; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             await _app.ResourceNotifications.WaitForResourceHealthyAsync(
                 resourceName,
                 cts.Token);
@@ -452,7 +450,7 @@ public sealed class ClusterEndToEndTests(ITestOutputHelper outputHelper) : IAsyn
         // Final verification - all nodes are healthy
         for (var i = 0; i < ClusterSize; i++)
         {
-            var resourceName = $"cluster-{i}";
+            var resourceName = string.Create(CultureInfo.InvariantCulture, $"cluster-{i}");
             using var httpClient = _app.CreateHttpClient(resourceName);
             using var response = await httpClient.GetAsync(HealthUri, cts.Token);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

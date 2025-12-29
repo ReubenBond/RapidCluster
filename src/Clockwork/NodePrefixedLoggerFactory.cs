@@ -46,21 +46,15 @@ public sealed class NodePrefixedLoggerFactory : ILoggerFactory
 /// <summary>
 /// A logger wrapper that prepends a node name to all log messages.
 /// </summary>
-public sealed class NodePrefixedLogger : ILogger
+/// <remarks>
+/// Creates a new node-prefixed logger.
+/// </remarks>
+/// <param name="innerLogger">The underlying logger.</param>
+/// <param name="nodeName">The node name to prepend to all log messages.</param>
+public sealed class NodePrefixedLogger(ILogger innerLogger, string nodeName) : ILogger
 {
-    private readonly ILogger _innerLogger;
-    private readonly string _nodeName;
-
-    /// <summary>
-    /// Creates a new node-prefixed logger.
-    /// </summary>
-    /// <param name="innerLogger">The underlying logger.</param>
-    /// <param name="nodeName">The node name to prepend to all log messages.</param>
-    public NodePrefixedLogger(ILogger innerLogger, string nodeName)
-    {
-        _innerLogger = innerLogger;
-        _nodeName = nodeName;
-    }
+    private readonly ILogger _innerLogger = innerLogger;
+    private readonly string _nodeName = nodeName;
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull

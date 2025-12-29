@@ -35,7 +35,7 @@ public sealed class EndPointComparer : IEqualityComparer<EndPoint>
             // Cross-type comparison: try to match IP strings
             (IPEndPoint ip, DnsEndPoint dns) => string.Equals(ip.Address.ToString(), dns.Host, StringComparison.OrdinalIgnoreCase) && ip.Port == dns.Port,
             (DnsEndPoint dns, IPEndPoint ip) => string.Equals(dns.Host, ip.Address.ToString(), StringComparison.OrdinalIgnoreCase) && dns.Port == ip.Port,
-            _ => x.Equals(y)
+            _ => x.Equals(y),
         };
     }
 
@@ -48,7 +48,7 @@ public sealed class EndPointComparer : IEqualityComparer<EndPoint>
         {
             IPEndPoint ip => HashCode.Combine(ip.Address.ToString().ToUpperInvariant(), ip.Port),
             DnsEndPoint dns => HashCode.Combine(dns.Host.ToUpperInvariant(), dns.Port),
-            _ => obj.GetHashCode()
+            _ => obj.GetHashCode(),
         };
     }
 }

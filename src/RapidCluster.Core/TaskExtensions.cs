@@ -4,15 +4,15 @@ namespace RapidCluster;
 
 internal static partial class TaskExtensions
 {
-    private static readonly Action<Task> IgnoreTaskContinuation = t => { _ = t.Exception; };
+    private static readonly Action<Task> IgnoreTaskContinuation = t => _ = t.Exception;
 
     public static async Task<T?> WithDefaultOnException<T>(this Task<T> task)
     {
         await ((Task)task).ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext | ConfigureAwaitOptions.SuppressThrowing);
         return task switch
         {
-            { IsCompletedSuccessfully: true } => await task.ConfigureAwait(true),
-            _ => default
+            { IsCompletedSuccessfully: true } => await task,
+            _ => default,
         };
     }
 
@@ -31,7 +31,7 @@ internal static partial class TaskExtensions
         }
         else
         {
-            task.ContinueWith(
+            _ = task.ContinueWith(
                 IgnoreTaskContinuation,
                 CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,

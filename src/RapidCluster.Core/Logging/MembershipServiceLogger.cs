@@ -5,12 +5,10 @@ namespace RapidCluster.Logging;
 
 internal sealed partial class MembershipServiceLogger(ILogger<MembershipService> logger)
 {
-    private readonly ILogger _logger = logger;
-
     /// <summary>
     /// Gets the underlying logger instance.
     /// </summary>
-    public ILogger Logger => _logger;
+    public ILogger Logger { get; } = logger;
 
     [LoggerMessage(EventName = nameof(InitiatingConsensus), Level = LogLevel.Debug, Message = "Initiating consensus for {Proposal}")]
     private partial void InitiatingConsensusCore(LoggableEndpoints proposal);
@@ -175,6 +173,10 @@ internal sealed partial class MembershipServiceLogger(ILogger<MembershipService>
     [LoggerMessage(EventName = nameof(EdgeFailureNotificationEnqueued), Level = LogLevel.Debug, Message = "EdgeFailureNotification: enqueueing DOWN alert for subject {Subject}, ringNumbers={RingNumbers}")]
     private partial void EdgeFailureNotificationEnqueuedCore(LoggableEndpoint subject, LoggableRingNumbers ringNumbers);
     public void EdgeFailureNotificationEnqueued(Endpoint subject, IEnumerable<int> ringNumbers) => EdgeFailureNotificationEnqueuedCore(new(subject), new(ringNumbers));
+
+    [LoggerMessage(EventName = nameof(EdgeFailureNotificationError), Level = LogLevel.Error, Message = "EdgeFailureNotification: error processing failure notification for subject {Subject}, configId={ConfigId}")]
+    private partial void EdgeFailureNotificationErrorCore(LoggableEndpoint subject, LoggableConfigurationId configId, Exception ex);
+    public void EdgeFailureNotificationError(Endpoint subject, ConfigurationId configId, Exception ex) => EdgeFailureNotificationErrorCore(new(subject), new(configId), ex);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Dispose: disposing MembershipService resources")]
     public partial void Dispose();

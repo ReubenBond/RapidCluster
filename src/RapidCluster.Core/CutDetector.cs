@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RapidCluster.Logging;
@@ -7,28 +8,36 @@ using RapidCluster.Pb;
 namespace RapidCluster;
 
 /// <summary>
+/// <para>
 /// Cut detector that aggregates failure/join reports and determines when there is
 /// sufficient agreement to propose a view change.
-/// 
+/// </para>
+/// <para>
 /// This unified implementation handles all cluster sizes:
 /// - For K &lt; 3: Simple threshold mode (require K votes from K observers)
 /// - For K >= 3: Watermark mode with H/L thresholds for batching
-/// 
+/// </para>
+/// <para>
 /// The detector supports updating the view while preserving valid pending state,
 /// which prevents unnecessary delays when nodes catch up to the current view.
+/// </para>
 /// </summary>
 /// <remarks>
+/// <para>
 /// In watermark mode (K >= 3):
 /// - H (high watermark): Reports needed to consider a node "stable" for proposal
 /// - L (low watermark): Reports needed to enter "unstable mode" (blocks other proposals)
 /// - A proposal is output only when all nodes with L+ reports have reached H
-/// 
+/// </para>
+/// <para>
 /// In simple mode (K &lt; 3):
 /// - No unstable region exists (H = L = K)
 /// - Proposals trigger immediately when a node reaches the threshold
-/// 
+/// </para>
+/// <para>
 /// The detector is initialized with an empty membership view. Call <see cref="UpdateView"/>
 /// to set the initial view and begin operation.
+/// </para>
 /// </remarks>
 [DebuggerDisplay("{DebuggerDisplay,nq}")]
 internal sealed partial class CutDetector
@@ -166,7 +175,7 @@ internal sealed partial class CutDetector
         if (ringNumber < 0 || ringNumber >= ObserversPerSubject)
         {
             throw new ArgumentException(
-                $"ringNumber ({ringNumber}) must be in range [0, {ObserversPerSubject})",
+                string.Create(CultureInfo.InvariantCulture, $"ringNumber ({ringNumber}) must be in range [0, {ObserversPerSubject})"),
                 nameof(ringNumber));
         }
 
@@ -198,10 +207,8 @@ internal sealed partial class CutDetector
             {
                 return AggregateSimpleMode(linkDst, numReportsForHost);
             }
-            else
-            {
-                return AggregateWatermarkMode(linkDst, numReportsForHost);
-            }
+
+            return AggregateWatermarkMode(linkDst, numReportsForHost);
         }
     }
 
@@ -330,10 +337,8 @@ internal sealed partial class CutDetector
             {
                 return ForcePromoteSimpleMode();
             }
-            else
-            {
-                return ForcePromoteWatermarkMode();
-            }
+
+            return ForcePromoteWatermarkMode();
         }
     }
 
@@ -544,8 +549,8 @@ internal sealed partial class CutDetector
         // Validate constraints: K > H >= L >= 1
         if (effectiveH < 1 || effectiveL < 1 || effectiveH >= effectiveK || effectiveL > effectiveH)
         {
-            throw new InvalidOperationException(
-                $"Watermark constraints not satisfied: K > H >= L >= 1 required, got K={effectiveK}, H={effectiveH}, L={effectiveL}");
+            throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture,
+                $"Watermark constraints not satisfied: K > H >= L >= 1 required, got K={effectiveK}, H={effectiveH}, L={effectiveL}"));
         }
 
         _highWaterMark = effectiveH;
@@ -554,6 +559,6 @@ internal sealed partial class CutDetector
 
     private string DebuggerDisplay =>
         IsSimpleMode
-            ? $"CutDetector(K={ObserversPerSubject}, Simple, Pending={_preProposal.Count}, Proposals={_proposalCount})"
-            : $"CutDetector(K={ObserversPerSubject}, H={_highWaterMark}, L={_lowWaterMark}, Unstable={_updatesInProgress}, Proposals={_proposalCount})";
+            ? string.Create(CultureInfo.InvariantCulture, $"CutDetector(K={ObserversPerSubject}, Simple, Pending={_preProposal.Count}, Proposals={_proposalCount})")
+            : string.Create(CultureInfo.InvariantCulture, $"CutDetector(K={ObserversPerSubject}, H={_highWaterMark}, L={_lowWaterMark}, Unstable={_updatesInProgress}, Proposals={_proposalCount})");
 }

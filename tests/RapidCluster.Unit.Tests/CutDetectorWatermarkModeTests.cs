@@ -1193,7 +1193,6 @@ public class CutDetectorWatermarkModeTests
 
     /// <summary>
     /// Tests that InvalidateFailingEdges properly handles edges between failing nodes.
-    /// This matches the Java test cutDetectionTestLinkInvalidation.
     /// </summary>
     [Fact]
     public void InvalidateFailingEdges_HandlesFailingObservers()

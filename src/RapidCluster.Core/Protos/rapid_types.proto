@@ -1,8 +1,5 @@
 syntax = "proto3";
 
-option java_multiple_files = true;
-option java_package = "com.vrg.rapid.pb";
-option java_outer_classname = "RapidTypes";
 option csharp_namespace = "RapidCluster.Pb";
 
 package rapidcluster;
@@ -20,27 +17,22 @@ message ConfigurationId
     int64 version = 2;
 }
 
-
 // All-in-one message type.
 message RapidClusterRequest
 {
-    reserved 5, 12;
-    reserved "fastRoundPhase2bMessage", "paxosNackMessage";
-
     oneof content {
          PreJoinMessage preJoinMessage = 1;
          JoinMessage joinMessage = 2;
          BatchedAlertMessage batchedAlertMessage = 3;
          ProbeMessage probeMessage = 4;
-         Phase1aMessage phase1aMessage = 6;
-         Phase1bMessage phase1bMessage = 7;
-         Phase2aMessage phase2aMessage = 8;
-         Phase2bMessage phase2bMessage = 9;
-         LeaveMessage leaveMessage = 10;
-         MembershipViewRequest membershipViewRequest = 11;
+         Phase1aMessage phase1aMessage = 5;
+         Phase1bMessage phase1bMessage = 6;
+         Phase2aMessage phase2aMessage = 7;
+         Phase2bMessage phase2bMessage = 8;
+         LeaveMessage leaveMessage = 9;
+         MembershipViewRequest membershipViewRequest = 10;
      }
 }
-
 
 message RapidClusterResponse
 {
@@ -52,7 +44,6 @@ message RapidClusterResponse
         MembershipViewResponse membershipViewResponse = 5;
    }
 }
-
 
 // ******* Join protocol messages *******
 
@@ -117,7 +108,6 @@ enum EdgeStatus {
 message Response
 {
 }
-
 
 // ******* Consensus proposal - represents the decided membership state *******
 // This message carries all information needed to construct a new MembershipView.
@@ -185,7 +175,6 @@ message Phase2bMessage
 message ConsensusResponse
 {
 }
-
 
 // ******* Node Metadata *********
 message Metadata

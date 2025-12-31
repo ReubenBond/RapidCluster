@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Clockwork;
 using Microsoft.Extensions.Logging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 using RapidCluster.Simulation.Tests.Infrastructure.Logging;
 
@@ -85,7 +86,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     public RapidSimulationNode CreateUninitializedNode(int nodeId, RapidSimulationNode? seedNode = null, RapidClusterProtocolOptions? options = null)
     {
         var address = RapidClusterUtils.HostFromParts("node", nodeId);
-        var node = new RapidSimulationNode(this, address, seedNode?.Address, metadata: null, options, LoggerFactory);
+        var node = new RapidSimulationNode(this, address, seedNode?.Address, metadata: null, options, failureDetectorOptions: null, LoggerFactory);
         RegisterNode(node);
         _log.UninitializedNodeCreated(nodeId);
         return node;
@@ -94,10 +95,10 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     /// <summary>
     /// Creates and starts a new seed node.
     /// </summary>
-    public RapidSimulationNode CreateSeedNode(int nodeId = 0, RapidClusterProtocolOptions? options = null)
+    public RapidSimulationNode CreateSeedNode(int nodeId = 0, RapidClusterProtocolOptions? options = null, PingPongFailureDetectorOptions? failureDetectorOptions = null)
     {
         var address = RapidClusterUtils.HostFromParts("node", nodeId);
-        var node = new RapidSimulationNode(this, address, seedAddress: null, metadata: null, options, LoggerFactory);
+        var node = new RapidSimulationNode(this, address, seedAddress: null, metadata: null, options, failureDetectorOptions, LoggerFactory);
         RegisterNode(node);
 
         // For seed nodes, initialization is synchronous (no network I/O needed),
@@ -115,10 +116,11 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     public RapidSimulationNode CreateJoinerNode(
         RapidSimulationNode seedNode,
         int nodeId,
-        RapidClusterProtocolOptions? options = null)
+        RapidClusterProtocolOptions? options = null,
+        PingPongFailureDetectorOptions? failureDetectorOptions = null)
     {
         ArgumentNullException.ThrowIfNull(seedNode);
-        return CreateJoinerNodeWithMultipleSeeds([seedNode], nodeId, options);
+        return CreateJoinerNodeWithMultipleSeeds([seedNode], nodeId, options, failureDetectorOptions);
     }
 
     /// <summary>
@@ -129,7 +131,8 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     public RapidSimulationNode CreateJoinerNodeWithMultipleSeeds(
         IReadOnlyList<RapidSimulationNode> seedNodes,
         int nodeId,
-        RapidClusterProtocolOptions? options = null)
+        RapidClusterProtocolOptions? options = null,
+        PingPongFailureDetectorOptions? failureDetectorOptions = null)
     {
         ArgumentNullException.ThrowIfNull(seedNodes);
         if (seedNodes.Count == 0)
@@ -138,7 +141,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         }
 
         var seedAddresses = seedNodes.Select(n => n.Address).ToList();
-        return CreateJoinerNodeWithSeedAddresses(seedAddresses, nodeId, options);
+        return CreateJoinerNodeWithSeedAddresses(seedAddresses, nodeId, options, failureDetectorOptions);
     }
 
     /// <summary>
@@ -148,7 +151,8 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     public RapidSimulationNode CreateJoinerNodeWithSeedAddresses(
         IList<Endpoint> seedAddresses,
         int nodeId,
-        RapidClusterProtocolOptions? options = null)
+        RapidClusterProtocolOptions? options = null,
+        PingPongFailureDetectorOptions? failureDetectorOptions = null)
     {
         ArgumentNullException.ThrowIfNull(seedAddresses);
         if (seedAddresses.Count == 0)
@@ -157,7 +161,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         }
 
         var address = RapidClusterUtils.HostFromParts("node", nodeId);
-        var node = new RapidSimulationNode(this, address, seedAddresses, metadata: null, options, LoggerFactory);
+        var node = new RapidSimulationNode(this, address, seedAddresses, metadata: null, options, failureDetectorOptions, LoggerFactory);
         RegisterNode(node);
 
         _log.NodeJoining(nodeId);
@@ -178,7 +182,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
     /// For large clusters (50+ nodes), consider using <see cref="CreateClusterParallel"/>
     /// which batches joins together for O(log N) consensus rounds.
     /// </remarks>
-    public IReadOnlyList<RapidSimulationNode> CreateCluster(int size, RapidClusterProtocolOptions? options = null)
+    public IReadOnlyList<RapidSimulationNode> CreateCluster(int size, RapidClusterProtocolOptions? options = null, PingPongFailureDetectorOptions? failureDetectorOptions = null)
     {
         if (size < 1)
         {
@@ -188,13 +192,13 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
         var result = new List<RapidSimulationNode>(size);
 
         // Create seed node
-        var seedNode = CreateSeedNode(0, options);
+        var seedNode = CreateSeedNode(0, options, failureDetectorOptions);
         result.Add(seedNode);
 
         // Create joiner nodes
         for (var i = 1; i < size; i++)
         {
-            var joiner = CreateJoinerNode(seedNode, i, options);
+            var joiner = CreateJoinerNode(seedNode, i, options, failureDetectorOptions);
             result.Add(joiner);
 
             // Ensure the cluster catches up between sequential joins.
@@ -271,7 +275,7 @@ internal sealed partial class RapidSimulationCluster : SimulationCluster<RapidSi
             for (var i = 0; i < currentBatchSize; i++)
             {
                 var address = RapidClusterUtils.HostFromParts("node", nodeId++);
-                var node = new RapidSimulationNode(this, address, seedNode.Address, metadata: null, options, LoggerFactory);
+                var node = new RapidSimulationNode(this, address, seedNode.Address, metadata: null, options, failureDetectorOptions: null, LoggerFactory);
                 RegisterNode(node);
 
                 _log.NodeJoiningParallel(RapidClusterUtils.Loggable(node.Address));

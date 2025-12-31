@@ -1,6 +1,7 @@
 using Clockwork;
 using Microsoft.Extensions.Logging;
 using RapidCluster.Messaging;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 using RapidCluster.Simulation.Tests.Infrastructure.Logging;
 
@@ -20,20 +21,32 @@ internal sealed class InMemoryMessagingClient(
     RapidSimulationCluster harness,
     RapidSimulationNode sourceNode,
     Endpoint localEndpoint,
-    RapidClusterProtocolOptions options) : IMessagingClient
+    RapidClusterProtocolOptions protocolOptions,
+    PingPongFailureDetectorOptions failureDetectorOptions) : IMessagingClient
 {
-    private readonly RapidClusterProtocolOptions _options = options;
+    private readonly RapidClusterProtocolOptions _protocolOptions = protocolOptions;
+    private readonly PingPongFailureDetectorOptions _failureDetectorOptions = failureDetectorOptions;
     private readonly InMemoryMessagingClientLogger _log = new(harness.LoggerFactory.CreateLogger<InMemoryMessagingClient>());
     private readonly CancellationTokenSource _disposeCts = new();
     private bool _disposed;
 
+    /// <summary>
+    /// Default timeout for general RPC operations in the simulation.
+    /// </summary>
+    private static readonly TimeSpan DefaultRpcTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Default timeout for join operations in the simulation.
+    /// </summary>
+    private static readonly TimeSpan JoinTimeout = TimeSpan.FromSeconds(5);
+
     private TimeSpan GetTimeout(RapidClusterRequest request) => request.ContentCase switch
     {
-        RapidClusterRequest.ContentOneofCase.ProbeMessage => _options.GrpcProbeTimeout,
-        RapidClusterRequest.ContentOneofCase.PreJoinMessage => _options.GrpcJoinTimeout,
-        RapidClusterRequest.ContentOneofCase.JoinMessage => _options.GrpcJoinTimeout,
-        RapidClusterRequest.ContentOneofCase.LeaveMessage => _options.LeaveMessageTimeout,
-        _ => _options.GrpcTimeout,
+        RapidClusterRequest.ContentOneofCase.ProbeMessage => _failureDetectorOptions.ProbeTimeout,
+        RapidClusterRequest.ContentOneofCase.PreJoinMessage => JoinTimeout,
+        RapidClusterRequest.ContentOneofCase.JoinMessage => JoinTimeout,
+        RapidClusterRequest.ContentOneofCase.LeaveMessage => _protocolOptions.LeaveMessageTimeout,
+        _ => DefaultRpcTimeout,
     };
 
     public void SendOneWayMessage(Endpoint remote, RapidClusterRequest request, Rank? rank, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)

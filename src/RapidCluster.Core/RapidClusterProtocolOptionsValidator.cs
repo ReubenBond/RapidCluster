@@ -10,31 +10,6 @@ internal sealed class RapidClusterProtocolOptionsValidator : IValidateOptions<Ra
 {
     public ValidateOptionsResult Validate(string? name, RapidClusterProtocolOptions options)
     {
-        if (options.GrpcTimeout <= TimeSpan.Zero)
-        {
-            return ValidateOptionsResult.Fail("GrpcTimeout must be positive");
-        }
-
-        if (options.GrpcDefaultRetries < 0)
-        {
-            return ValidateOptionsResult.Fail("GrpcDefaultRetries must be non-negative");
-        }
-
-        if (options.GrpcJoinTimeout <= TimeSpan.Zero)
-        {
-            return ValidateOptionsResult.Fail("GrpcJoinTimeout must be positive");
-        }
-
-        if (options.GrpcProbeTimeout <= TimeSpan.Zero)
-        {
-            return ValidateOptionsResult.Fail("GrpcProbeTimeout must be positive");
-        }
-
-        if (options.FailureDetectorInterval <= TimeSpan.Zero)
-        {
-            return ValidateOptionsResult.Fail("FailureDetectorInterval must be positive");
-        }
-
         if (options.BatchingWindow <= TimeSpan.Zero)
         {
             return ValidateOptionsResult.Fail("BatchingWindow must be positive");
@@ -82,11 +57,6 @@ internal sealed class RapidClusterProtocolOptionsValidator : IValidateOptions<Ra
             return ValidateOptionsResult.Fail(string.Create(CultureInfo.InvariantCulture,
                 $"LowWatermark ({options.LowWatermark}) must be less than HighWatermark ({options.HighWatermark}). ") +
                 "The gap between H and L is required for almost-everywhere agreement.");
-        }
-
-        if (options.FailureDetectorConsecutiveFailures <= 0)
-        {
-            return ValidateOptionsResult.Fail("FailureDetectorConsecutiveFailures must be positive");
         }
 
         return ValidateOptionsResult.Success;

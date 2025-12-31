@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using RapidCluster.Monitoring;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
 namespace RapidCluster.Simulation.Tests;
@@ -33,11 +34,11 @@ public sealed class EdgeCaseTests : IAsyncLifetime
     [Fact]
     public void CustomFailureDetectorIntervalWorks()
     {
-        var options = new RapidClusterProtocolOptions
+        var failureDetectorOptions = new PingPongFailureDetectorOptions
         {
-            FailureDetectorInterval = TimeSpan.FromMilliseconds(100),
+            Interval = TimeSpan.FromMilliseconds(100),
         };
-        var seedNode = _harness.CreateSeedNode(options: options);
+        var seedNode = _harness.CreateSeedNode(failureDetectorOptions: failureDetectorOptions);
 
         Assert.True(seedNode.IsInitialized);
     }

@@ -50,7 +50,7 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => { },
-            consecutiveFailuresThreshold: 5);
+            options: new PingPongFailureDetectorOptions { ConsecutiveFailuresThreshold = 5 });
 
         Assert.NotNull(detector);
     }
@@ -74,8 +74,11 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => failureNotified = true,
-            consecutiveFailuresThreshold: 3,
-            probeInterval: TimeSpan.FromSeconds(1),
+            options: new PingPongFailureDetectorOptions
+            {
+                ConsecutiveFailuresThreshold = 3,
+                Interval = TimeSpan.FromSeconds(1),
+            },
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);
 
@@ -115,8 +118,11 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => failureNotified = true,
-            consecutiveFailuresThreshold: 5,
-            probeInterval: TimeSpan.FromSeconds(1),
+            options: new PingPongFailureDetectorOptions
+            {
+                ConsecutiveFailuresThreshold = 5,
+                Interval = TimeSpan.FromSeconds(1),
+            },
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);
 
@@ -162,8 +168,11 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => failureNotified = true,
-            consecutiveFailuresThreshold: 2,
-            probeInterval: TimeSpan.FromSeconds(1),
+            options: new PingPongFailureDetectorOptions
+            {
+                ConsecutiveFailuresThreshold = 2,
+                Interval = TimeSpan.FromSeconds(1),
+            },
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);
 
@@ -323,8 +332,11 @@ public sealed class PingPongFailureDetectorTests
             client,
             sharedResources,
             () => failureNotified = true,
-            consecutiveFailuresThreshold: 2,
-            probeInterval: TimeSpan.FromSeconds(1),
+            options: new PingPongFailureDetectorOptions
+            {
+                ConsecutiveFailuresThreshold = 2,
+                Interval = TimeSpan.FromSeconds(1),
+            },
             metrics: CreateMetrics(),
             logger: NullLogger<PingPongFailureDetector>.Instance);
 
@@ -347,17 +359,17 @@ public sealed class PingPongFailureDetectorTests
         using var client = new TestMessagingClient();
         var localEndpoint = Utils.HostFromParts("127.0.0.1", 1000);
         var subject = Utils.HostFromParts("127.0.0.2", 2000);
-        var protocolOptions = Microsoft.Extensions.Options.Options.Create(new RapidClusterProtocolOptions
+        var failureDetectorOptions = Microsoft.Extensions.Options.Options.Create(new PingPongFailureDetectorOptions
         {
-            FailureDetectorConsecutiveFailures = 5,
-            FailureDetectorInterval = TimeSpan.FromSeconds(2),
+            ConsecutiveFailuresThreshold = 5,
+            Interval = TimeSpan.FromSeconds(2),
         });
 
         var factory = new PingPongFailureDetectorFactory(
             new StaticListenAddressProvider(localEndpoint.ToEndPoint()),
             client,
             sharedResources,
-            protocolOptions,
+            failureDetectorOptions,
             CreateMetrics(),
             NullLogger<PingPongFailureDetector>.Instance);
 

@@ -20,11 +20,13 @@ namespace RapidCluster.Grpc;
 internal sealed partial class GrpcClient(
     IOptions<RapidClusterProtocolOptions> protocolOptions,
     IOptions<RapidClusterGrpcOptions> grpcOptions,
+    SharedResources sharedResources,
     RapidClusterMetrics metrics,
     ILogger<GrpcClient> logger) : IMessagingClient, IHostedService
 {
     private readonly RapidClusterProtocolOptions _protocolOptions = protocolOptions.Value;
     private readonly RapidClusterGrpcOptions _grpcOptions = grpcOptions.Value;
+    private readonly SharedResources _sharedResources = sharedResources;
     private readonly RapidClusterMetrics _metrics = metrics;
 #pragma warning disable CA1823 // Avoid unused private fields
     private readonly ILogger<GrpcClient> _logger = logger;
@@ -101,9 +103,8 @@ internal sealed partial class GrpcClient(
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stoppingCts.Token);
-            cts.CancelAfter(_protocolOptions.GrpcTimeout);
-
-            var response = await client.SendRequestAsync(request, cancellationToken: cts.Token);
+            var response = await client.SendRequestAsync(request, cancellationToken: cts.Token).ResponseAsync
+                .WaitAsync(_grpcOptions.Timeout, _sharedResources.TimeProvider, cts.Token);
             stopwatch.Stop();
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "OK");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "OK", stopwatch);
@@ -141,7 +142,6 @@ internal sealed partial class GrpcClient(
     private async Task SendOneWayMessageInternalAsync(Endpoint remote, RapidClusterRequest request, Rank? rank, int taskId, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stoppingCts.Token);
-        cts.CancelAfter(_protocolOptions.GrpcTimeout);
 
         var client = GetOrCreateClient(remote);
         var stopwatch = Stopwatch.StartNew();
@@ -149,7 +149,8 @@ internal sealed partial class GrpcClient(
 
         try
         {
-            await client.SendRequestAsync(request, cancellationToken: cts.Token);
+            await client.SendRequestAsync(request, cancellationToken: cts.Token).ResponseAsync
+                .WaitAsync(_grpcOptions.Timeout, _sharedResources.TimeProvider, cts.Token);
             stopwatch.Stop();
             LogOneWayDeliverySucceeded(new LoggableEndpoint(remote));
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "OK");
@@ -164,10 +165,10 @@ internal sealed partial class GrpcClient(
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Network);
             onDeliveryFailure?.Invoke(remote, rank ?? throw new InvalidOperationException("Rank required when onDeliveryFailure is provided."));
         }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (TimeoutException)
         {
             stopwatch.Stop();
-            LogOneWayDeliveryFailedTimeout(new LoggableEndpoint(remote), _protocolOptions.GrpcTimeout);
+            LogOneWayDeliveryFailedTimeout(new LoggableEndpoint(remote), _grpcOptions.Timeout);
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "DeadlineExceeded");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "DeadlineExceeded", stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Timeout);
@@ -229,14 +230,17 @@ internal sealed partial class GrpcClient(
         var pendingTasks = _pendingTasks.Values.ToArray();
         if (pendingTasks.Length > 0)
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             try
             {
-                await Task.WhenAll(pendingTasks).WaitAsync(cts.Token);
+                await Task.WhenAll(pendingTasks).WaitAsync(TimeSpan.FromSeconds(5), _sharedResources.TimeProvider);
+            }
+            catch (TimeoutException)
+            {
+                // Timeout waiting for pending tasks
             }
             catch (OperationCanceledException)
             {
-                // Timeout waiting for pending tasks
+                // Cancelled waiting for pending tasks
             }
         }
 

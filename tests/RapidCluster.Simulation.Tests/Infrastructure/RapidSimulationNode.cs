@@ -25,6 +25,7 @@ namespace RapidCluster.Simulation.Tests.Infrastructure;
 internal sealed class RapidSimulationNode : SimulationNode
 {
     private readonly RapidClusterProtocolOptions _protocolOptions;
+    private readonly PingPongFailureDetectorOptions _failureDetectorOptions;
     private readonly ILoggerFactory _loggerFactory;
     private readonly RapidSimulationNodeLogger _log;
     private readonly MembershipService _membershipService;
@@ -95,8 +96,9 @@ internal sealed class RapidSimulationNode : SimulationNode
         Endpoint? seedAddress,
         Metadata? metadata,
         RapidClusterProtocolOptions? protocolOptions,
+        PingPongFailureDetectorOptions? failureDetectorOptions,
         ILoggerFactory? loggerFactory)
-        : this(harness, address, seedAddress != null ? [seedAddress] : null, metadata, protocolOptions, loggerFactory)
+        : this(harness, address, seedAddress != null ? [seedAddress] : null, metadata, protocolOptions, failureDetectorOptions, loggerFactory)
     {
     }
 
@@ -110,6 +112,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         IList<Endpoint>? seedAddresses,
         Metadata? metadata,
         RapidClusterProtocolOptions? protocolOptions,
+        PingPongFailureDetectorOptions? failureDetectorOptions,
         ILoggerFactory? loggerFactory)
     {
         Address = address;
@@ -130,6 +133,7 @@ internal sealed class RapidSimulationNode : SimulationNode
 
         // Create protocol options
         _protocolOptions = protocolOptions ?? new RapidClusterProtocolOptions();
+        _failureDetectorOptions = failureDetectorOptions ?? new PingPongFailureDetectorOptions();
 
         // Create shared resources with the node's time provider, task scheduler, and harness teardown token
         _sharedResources = new SharedResources(
@@ -139,11 +143,11 @@ internal sealed class RapidSimulationNode : SimulationNode
             Context.Random.NextGuid,
             harness.TeardownCancellationToken);
 
-        // Create in-memory messaging client using GrpcTimeout from protocol options.
+        // Create in-memory messaging client using timeouts from options.
         // For tests with suspended nodes requiring Classic Paxos fallback,
         // a longer timeout (e.g., 30 seconds) may be needed to allow
         // for the random jitter delay before Classic Paxos starts.
-        MessagingClient = new InMemoryMessagingClient(harness, this, address, _protocolOptions);
+        MessagingClient = new InMemoryMessagingClient(harness, this, address, _protocolOptions, _failureDetectorOptions);
 
         // Create view accessor
         _viewAccessor = new MembershipViewAccessor();
@@ -159,7 +163,7 @@ internal sealed class RapidSimulationNode : SimulationNode
             listenAddressProvider,
             MessagingClient,
             _sharedResources,
-            Options.Create(_protocolOptions),
+            Options.Create(_failureDetectorOptions),
             _metrics,
             failureDetectorLogger);
 

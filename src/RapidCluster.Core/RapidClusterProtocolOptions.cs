@@ -37,36 +37,6 @@ public sealed class RapidClusterProtocolOptions
     public const int MinObserversPerSubject = 3;
 
     /// <summary>
-    /// Gets or sets a value indicating whether whether to use in-process transport for testing. Default: false.
-    /// </summary>
-    public bool UseInProcessTransport { get; set; }
-
-    /// <summary>
-    /// Gets or sets gRPC request timeout. Default: 10 seconds.
-    /// </summary>
-    public TimeSpan GrpcTimeout { get; set; } = TimeSpan.FromSeconds(10);
-
-    /// <summary>
-    /// Gets or sets number of retries for failed gRPC requests. Default: 5.
-    /// </summary>
-    public int GrpcDefaultRetries { get; set; } = 5;
-
-    /// <summary>
-    /// Gets or sets timeout for join operations. Default: 5 seconds.
-    /// </summary>
-    public TimeSpan GrpcJoinTimeout { get; set; } = TimeSpan.FromSeconds(5);
-
-    /// <summary>
-    /// Gets or sets timeout for failure detector probe messages. Default: 500 milliseconds.
-    /// </summary>
-    public TimeSpan GrpcProbeTimeout { get; set; } = TimeSpan.FromMilliseconds(500);
-
-    /// <summary>
-    /// Gets or sets interval between failure detector probes. Default: 1 second.
-    /// </summary>
-    public TimeSpan FailureDetectorInterval { get; set; } = TimeSpan.FromSeconds(1);
-
-    /// <summary>
     /// Gets or sets window for batching alert messages before broadcasting. Default: 100 milliseconds.
     /// </summary>
     /// <remarks>
@@ -158,11 +128,6 @@ public sealed class RapidClusterProtocolOptions
     /// </para>
     /// </remarks>
     public int LowWatermark { get; set; } = 3;
-
-    /// <summary>
-    /// Gets or sets number of consecutive probe failures required before declaring a node down. Default: 3.
-    /// </summary>
-    public int FailureDetectorConsecutiveFailures { get; set; } = 3;
 
     /// <summary>
     /// Gets or sets maximum number of times to retry join attempts.

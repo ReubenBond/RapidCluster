@@ -15,14 +15,14 @@ public sealed partial class PingPongFailureDetectorFactory(
     IListenAddressProvider listenAddressProvider,
     IMessagingClient client,
     SharedResources sharedResources,
-    IOptions<RapidClusterProtocolOptions> protocolOptions,
+    IOptions<PingPongFailureDetectorOptions> options,
     RapidClusterMetrics metrics,
     ILogger<PingPongFailureDetector> logger) : IEdgeFailureDetectorFactory
 {
     private readonly IListenAddressProvider _listenAddressProvider = listenAddressProvider;
     private readonly IMessagingClient _client = client;
     private readonly SharedResources _sharedResources = sharedResources;
-    private readonly RapidClusterProtocolOptions _protocolOptions = protocolOptions.Value;
+    private readonly PingPongFailureDetectorOptions _options = options.Value;
     private readonly RapidClusterMetrics _metrics = metrics;
     private readonly ILogger<PingPongFailureDetector> _logger = logger;
 
@@ -58,8 +58,7 @@ public sealed partial class PingPongFailureDetectorFactory(
             _client,
             _sharedResources,
             notifier,
-            _protocolOptions.FailureDetectorConsecutiveFailures,
-            _protocolOptions.FailureDetectorInterval,
+            _options,
             OnStaleViewDetected,
             ViewAccessor,
             _metrics,
@@ -80,8 +79,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     private readonly SharedResources _sharedResources;
 #pragma warning restore CA2213
     private readonly Action _notifier;
-    private readonly int _consecutiveFailuresThreshold;
-    private readonly TimeSpan _probeInterval;
+    private readonly PingPongFailureDetectorOptions _options;
     private readonly Action<Endpoint, ConfigurationId, ConfigurationId>? _onStaleViewDetected;
     private readonly IMembershipViewAccessor? _viewAccessor;
     private readonly RapidClusterMetrics _metrics;
@@ -100,8 +98,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
     /// <param name="client">The messaging client for sending probes.</param>
     /// <param name="sharedResources">Shared resources including TimeProvider.</param>
     /// <param name="notifier">Action to invoke when the subject is detected as failed.</param>
-    /// <param name="consecutiveFailuresThreshold">Number of consecutive failures required before declaring node down.</param>
-    /// <param name="probeInterval">Interval between failure detector probes.</param>
+    /// <param name="options">Ping-pong failure detector options.</param>
     /// <param name="onStaleViewDetected">Optional callback when stale view is detected (learner role).</param>
     /// <param name="viewAccessor">Optional view accessor to get local configuration ID.</param>
     /// <param name="metrics">Metrics for recording probe statistics.</param>
@@ -112,8 +109,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         IMessagingClient client,
         SharedResources sharedResources,
         Action notifier,
-        int consecutiveFailuresThreshold = 3,
-        TimeSpan probeInterval = default,
+        PingPongFailureDetectorOptions? options = null,
         Action<Endpoint, ConfigurationId, ConfigurationId>? onStaleViewDetected = null,
         IMembershipViewAccessor? viewAccessor = null,
         RapidClusterMetrics? metrics = null,
@@ -124,8 +120,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         _client = client;
         _sharedResources = sharedResources;
         _notifier = notifier;
-        _consecutiveFailuresThreshold = consecutiveFailuresThreshold;
-        _probeInterval = probeInterval == default ? TimeSpan.FromSeconds(1) : probeInterval;
+        _options = options ?? new PingPongFailureDetectorOptions();
         _onStaleViewDetected = onStaleViewDetected;
         _viewAccessor = viewAccessor;
         _metrics = metrics!;
@@ -162,7 +157,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             while (_disposed == 0)
             {
-                await Task.Delay(_probeInterval, _sharedResources.TimeProvider, _cts.Token);
+                await Task.Delay(_options.Interval, _sharedResources.TimeProvider, _cts.Token);
                 await ProbeOnceAsync();
             }
         }
@@ -189,13 +184,13 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             var localConfigId = _viewAccessor?.CurrentView.ConfigurationId ?? ConfigurationId.Empty;
             var request = new ProbeMessage { Sender = _observer, ConfigurationId = localConfigId.ToProtobuf() }.ToRapidClusterRequest();
-            var response = await _client.SendMessageAsync(_subject, request, _cts.Token).WaitAsync(_probeInterval, _sharedResources.TimeProvider, _cts.Token);
+            var response = await _client.SendMessageAsync(_subject, request, _cts.Token).WaitAsync(_options.ProbeTimeout, _sharedResources.TimeProvider, _cts.Token);
             stopwatch.Stop();
 
             if (response.ProbeResponse == null)
             {
                 _consecutiveFailures++;
-                LogProbeFailed(new LoggableEndpoint(_subject), _consecutiveFailures, _consecutiveFailuresThreshold);
+                LogProbeFailed(new LoggableEndpoint(_subject), _consecutiveFailures, _options.ConsecutiveFailuresThreshold);
                 _metrics.RecordProbeFailure(MetricNames.ErrorTypes.Rejected);
                 _metrics.RecordProbeLatency(MetricNames.Results.Failed, stopwatch);
                 CheckAndNotifyFailure();
@@ -225,7 +220,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
         {
             stopwatch.Stop();
             _consecutiveFailures++;
-            LogProbeException(ex, new LoggableEndpoint(_subject), _consecutiveFailures, _consecutiveFailuresThreshold);
+            LogProbeException(ex, new LoggableEndpoint(_subject), _consecutiveFailures, _options.ConsecutiveFailuresThreshold);
 
             // Determine failure reason from exception type
             var reason = ex switch
@@ -261,7 +256,7 @@ public sealed partial class PingPongFailureDetector : IEdgeFailureDetector
 
     private void CheckAndNotifyFailure()
     {
-        if (_consecutiveFailures >= _consecutiveFailuresThreshold)
+        if (_consecutiveFailures >= _options.ConsecutiveFailuresThreshold)
         {
             LogNodeDeclaredDown(new LoggableEndpoint(_subject), _consecutiveFailures);
             _notifier();

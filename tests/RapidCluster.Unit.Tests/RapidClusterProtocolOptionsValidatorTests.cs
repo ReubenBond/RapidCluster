@@ -8,143 +8,6 @@ public class RapidClusterProtocolOptionsValidatorTests
     private readonly RapidClusterProtocolOptionsValidator _validator = new();
 
     [Fact]
-    public void ValidateGrpcTimeoutZeroFails()
-    {
-        var options = CreateValidOptions();
-        options.GrpcTimeout = TimeSpan.Zero;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("GrpcTimeout", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateGrpcTimeoutNegativeFails()
-    {
-        var options = CreateValidOptions();
-        options.GrpcTimeout = TimeSpan.FromSeconds(-1);
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-    }
-
-    [Fact]
-    public void ValidateGrpcTimeoutPositiveSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.GrpcTimeout = TimeSpan.FromSeconds(10);
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void ValidateGrpcDefaultRetriesNegativeFails()
-    {
-        var options = CreateValidOptions();
-        options.GrpcDefaultRetries = -1;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("GrpcDefaultRetries", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateGrpcDefaultRetriesZeroSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.GrpcDefaultRetries = 0;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void ValidateGrpcDefaultRetriesPositiveSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.GrpcDefaultRetries = 5;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void ValidateGrpcJoinTimeoutZeroFails()
-    {
-        var options = CreateValidOptions();
-        options.GrpcJoinTimeout = TimeSpan.Zero;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("GrpcJoinTimeout", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateGrpcJoinTimeoutPositiveSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.GrpcJoinTimeout = TimeSpan.FromSeconds(5);
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void ValidateGrpcProbeTimeoutZeroFails()
-    {
-        var options = CreateValidOptions();
-        options.GrpcProbeTimeout = TimeSpan.Zero;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("GrpcProbeTimeout", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateGrpcProbeTimeoutPositiveSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.GrpcProbeTimeout = TimeSpan.FromMilliseconds(500);
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void ValidateFailureDetectorIntervalZeroFails()
-    {
-        var options = CreateValidOptions();
-        options.FailureDetectorInterval = TimeSpan.Zero;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("FailureDetectorInterval", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateFailureDetectorIntervalPositiveSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.FailureDetectorInterval = TimeSpan.FromSeconds(1);
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
     public void ValidateBatchingWindowZeroFails()
     {
         var options = CreateValidOptions();
@@ -394,53 +257,6 @@ public class RapidClusterProtocolOptionsValidatorTests
     }
 
     [Fact]
-    public void ValidateFailureDetectorConsecutiveFailuresZeroFails()
-    {
-        var options = CreateValidOptions();
-        options.FailureDetectorConsecutiveFailures = 0;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("FailureDetectorConsecutiveFailures", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateFailureDetectorConsecutiveFailuresNegativeFails()
-    {
-        var options = CreateValidOptions();
-        options.FailureDetectorConsecutiveFailures = -1;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains("FailureDetectorConsecutiveFailures", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ValidateFailureDetectorConsecutiveFailuresOneSucceeds()
-    {
-        var options = CreateValidOptions();
-        options.FailureDetectorConsecutiveFailures = 1;
-
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void ValidateFailureDetectorConsecutiveFailuresDefaultSucceeds()
-    {
-        var options = CreateValidOptions();
-
-        // Default is 3
-        var result = _validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-        Assert.Equal(3, options.FailureDetectorConsecutiveFailures);
-    }
-
-    [Fact]
     public void ValidateAllDefaultValuesSucceeds()
     {
         var options = new RapidClusterProtocolOptions();
@@ -455,11 +271,6 @@ public class RapidClusterProtocolOptionsValidatorTests
     {
         var options = new RapidClusterProtocolOptions
         {
-            GrpcTimeout = TimeSpan.FromSeconds(5),
-            GrpcDefaultRetries = 3,
-            GrpcJoinTimeout = TimeSpan.FromSeconds(3),
-            GrpcProbeTimeout = TimeSpan.FromMilliseconds(250),
-            FailureDetectorInterval = TimeSpan.FromMilliseconds(500),
             BatchingWindow = TimeSpan.FromMilliseconds(50),
             ConsensusFallbackTimeoutBaseDelay = TimeSpan.FromMilliseconds(250),
             LeaveMessageTimeout = TimeSpan.FromMilliseconds(1000),

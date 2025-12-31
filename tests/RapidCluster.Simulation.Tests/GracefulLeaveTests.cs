@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Clockwork;
+using RapidCluster.Monitoring;
 using RapidCluster.Pb;
 using RapidCluster.Simulation.Tests.Infrastructure;
 
@@ -760,11 +761,11 @@ public sealed class GracefulLeaveTests : IAsyncLifetime
     {
         // Arrange: Create a 5-node cluster with long failure detector interval
         // This prevents the suspended node from being detected as failed during the test
-        var options = new RapidClusterProtocolOptions
+        var failureDetectorOptions = new PingPongFailureDetectorOptions
         {
-            FailureDetectorInterval = TimeSpan.FromMinutes(10),
+            Interval = TimeSpan.FromMinutes(10),
         };
-        var nodes = _harness.CreateCluster(size: 5, options);
+        var nodes = _harness.CreateCluster(size: 5, failureDetectorOptions: failureDetectorOptions);
         _harness.WaitForConvergence();
 
         // Suspend one node (not the one leaving)

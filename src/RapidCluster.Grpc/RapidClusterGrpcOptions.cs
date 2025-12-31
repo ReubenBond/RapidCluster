@@ -20,4 +20,9 @@ public sealed class RapidClusterGrpcOptions
     /// </para>
     /// </remarks>
     public bool UseHttps { get; set; }
+
+    /// <summary>
+    /// Gets or sets the timeout for gRPC requests. Default: 10 seconds.
+    /// </summary>
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(10);
 }

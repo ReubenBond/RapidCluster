@@ -22,16 +22,18 @@ public static class RapidClusterServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
     /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
+    /// <param name="configureFailureDetector">Optional configuration action for failure detector options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddRapidCluster(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
         Action<RapidClusterProtocolOptions>? configureProtocol = null,
+        Action<PingPongFailureDetectorOptions>? configureFailureDetector = null,
         TimeProvider? timeProvider = null)
     {
         // Add core services
-        AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
+        AddRapidClusterCore(services, configure, configureProtocol, configureFailureDetector, timeProvider);
 
         // Register the cluster service as a hosted service for automatic lifecycle management
         services.AddHostedService(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
@@ -53,16 +55,18 @@ public static class RapidClusterServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
     /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
+    /// <param name="configureFailureDetector">Optional configuration action for failure detector options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddRapidClusterManual(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
         Action<RapidClusterProtocolOptions>? configureProtocol = null,
+        Action<PingPongFailureDetectorOptions>? configureFailureDetector = null,
         TimeProvider? timeProvider = null)
     {
         // Add core services without the hosted service registration
-        AddRapidClusterCore(services, configure, configureProtocol, timeProvider);
+        AddRapidClusterCore(services, configure, configureProtocol, configureFailureDetector, timeProvider);
 
         // No hosted service registration - caller must manage lifecycle manually via IRapidClusterLifecycle
         return services;
@@ -75,6 +79,7 @@ public static class RapidClusterServiceCollectionExtensions
         IServiceCollection services,
         Action<RapidClusterOptions> configure,
         Action<RapidClusterProtocolOptions>? configureProtocol,
+        Action<PingPongFailureDetectorOptions>? configureFailureDetector,
         TimeProvider? timeProvider)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -91,6 +96,16 @@ public static class RapidClusterServiceCollectionExtensions
         else
         {
             services.Configure<RapidClusterProtocolOptions>(_ => { });
+        }
+
+        // Configure failure detector options
+        if (configureFailureDetector != null)
+        {
+            services.Configure(configureFailureDetector);
+        }
+        else
+        {
+            services.Configure<PingPongFailureDetectorOptions>(_ => { });
         }
 
         // Add validation
@@ -130,12 +145,12 @@ public static class RapidClusterServiceCollectionExtensions
         services.AddSingleton<IEdgeFailureDetectorFactory>(sp =>
         {
             var listenAddressProvider = sp.GetRequiredService<IListenAddressProvider>();
-            var protocolOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterProtocolOptions>>();
+            var failureDetectorOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PingPongFailureDetectorOptions>>();
             var client = sp.GetRequiredService<IMessagingClient>();
             var sharedResources = sp.GetRequiredService<SharedResources>();
             var metrics = sp.GetRequiredService<RapidClusterMetrics>();
             var logger = sp.GetRequiredService<ILogger<PingPongFailureDetector>>();
-            return new PingPongFailureDetectorFactory(listenAddressProvider, client, sharedResources, protocolOptions, metrics, logger);
+            return new PingPongFailureDetectorFactory(listenAddressProvider, client, sharedResources, failureDetectorOptions, metrics, logger);
         });
 
         // Register ConsensusCoordinator factory

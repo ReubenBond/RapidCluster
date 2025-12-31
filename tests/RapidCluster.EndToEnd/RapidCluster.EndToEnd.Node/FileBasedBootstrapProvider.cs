@@ -29,9 +29,9 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     private readonly string _filePath;
     private readonly int _nodeIndex;
     private readonly ILogger<FileBasedBootstrapProvider> _logger;
+    private readonly IListenAddressProvider _listenAddressProvider;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _startupTimeout;
-    private EndPoint? _myAddress;
     private bool _registered;
 
     /// <summary>
@@ -39,51 +39,47 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
     /// </summary>
     /// <param name="filePath">Path to the shared bootstrap file.</param>
     /// <param name="nodeIndex">This node's index (0-based). Node 0 becomes bootstrap coordinator.</param>
+    /// <param name="listenAddressProvider">Provider for obtaining this node's listen address.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="pollInterval">How often to poll the file for updates. Default: 500ms.</param>
     /// <param name="startupTimeout">How long to wait for bootstrap coordinator to appear. Default: 60s.</param>
     public FileBasedBootstrapProvider(
         string filePath,
         int nodeIndex,
+        IListenAddressProvider listenAddressProvider,
         ILogger<FileBasedBootstrapProvider> logger,
         TimeSpan? pollInterval = null,
         TimeSpan? startupTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(filePath);
+        ArgumentNullException.ThrowIfNull(listenAddressProvider);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentOutOfRangeException.ThrowIfNegative(nodeIndex);
 
         _filePath = filePath;
         _nodeIndex = nodeIndex;
+        _listenAddressProvider = listenAddressProvider;
         _logger = logger;
         _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(500);
         _startupTimeout = startupTimeout ?? TimeSpan.FromSeconds(60);
     }
 
-    /// <summary>
-    /// Sets this node's listen address. Must be called before GetSeedsAsync.
-    /// </summary>
-    public void SetMyAddress(EndPoint address) => _myAddress = address;
-
     /// <inheritdoc/>
     public async ValueTask<IReadOnlyList<EndPoint>> GetSeedsAsync(CancellationToken cancellationToken = default)
     {
-        if (_myAddress == null)
-        {
-            throw new InvalidOperationException("SetMyAddress must be called before GetSeedsAsync");
-        }
+        var myAddress = _listenAddressProvider.ListenAddress;
 
         // Register ourselves in the file
         if (!_registered)
         {
-            await RegisterNodeAsync(cancellationToken);
+            await RegisterNodeAsync(myAddress, cancellationToken);
             _registered = true;
         }
 
         // If we're node 0, we're the bootstrap coordinator - return empty list to start new cluster
         if (_nodeIndex == 0)
         {
-            var myAddressStr = EndpointToString(_myAddress);
+            var myAddressStr = EndpointToString(myAddress);
             LogBootstrapCoordinator(_logger, _nodeIndex, myAddressStr);
             return [];
         }
@@ -103,9 +99,9 @@ internal sealed partial class FileBasedBootstrapProvider : ISeedProvider, IDispo
         return [];
     }
 
-    private async Task RegisterNodeAsync(CancellationToken cancellationToken)
+    private async Task RegisterNodeAsync(EndPoint myAddress, CancellationToken cancellationToken)
     {
-        var endpointStr = EndpointToString(_myAddress!);
+        var endpointStr = EndpointToString(myAddress);
         LogRegisteringNode(_logger, _nodeIndex, endpointStr, _filePath);
 
         const int maxRetries = 10;

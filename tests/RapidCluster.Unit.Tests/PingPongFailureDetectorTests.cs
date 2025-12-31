@@ -354,7 +354,7 @@ public sealed class PingPongFailureDetectorTests
         });
 
         var factory = new PingPongFailureDetectorFactory(
-            localEndpoint,
+            new StaticListenAddressProvider(localEndpoint.ToEndPoint()),
             client,
             sharedResources,
             protocolOptions,

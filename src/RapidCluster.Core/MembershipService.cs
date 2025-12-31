@@ -21,7 +21,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
 {
     private readonly MembershipServiceLogger _log;
     private readonly CutDetector _cutDetector;
-    private readonly Endpoint _myAddr;
+    private readonly IListenAddressProvider _listenAddressProvider;
     private readonly IBroadcaster _broadcaster;
 
     // Tracks all pending joiners - nodes that have sent JoinMessages and are waiting to be added.
@@ -58,12 +58,15 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     // Cancelled by StopAsync or when SharedResources signals shutdown
     private readonly CancellationTokenSource _stoppingCts;
 
+    // This node's address - initialized in InitializeAsync via IListenAddressProvider
+    private Endpoint _myAddr = null!;
+
     private MembershipView _membershipView = MembershipView.Empty;
     private int _disposed;
 
     // Fields used by consensus protocol
     private bool _announcedProposal;
-    private ConsensusCoordinator _consensusInstance;
+    private ConsensusCoordinator _consensusInstance = null!; // Initialized in InitializeAsync
 
     // Unstable mode timeout handling (cut detection)
     private ConfigurationId _unstableModeTimerConfigId;
@@ -96,6 +99,7 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
     public MembershipService(
         IOptions<RapidClusterOptions> rapidClusterOptions,
         IOptions<RapidClusterProtocolOptions> protocolOptions,
+        IListenAddressProvider listenAddressProvider,
         IMessagingClient messagingClient,
         IBroadcasterFactory broadcasterFactory,
         IEdgeFailureDetectorFactory edgeFailureDetector,
@@ -108,25 +112,15 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         ILogger<CutDetector> cutDetectorLogger)
     {
         var opts = rapidClusterOptions.Value;
-        _myAddr = opts.ListenAddress.ToProtobuf();
+        _listenAddressProvider = listenAddressProvider;
         _nodeMetadata = opts.Metadata.ToProtobuf();
         _options = protocolOptions.Value;
         _seedProvider = seedProvider;
         _bootstrapExpect = opts.BootstrapExpect;
 
         // Seed addresses will be fetched asynchronously during InitializeAsync
-        // For now, use the static list from options as a fallback
-        var configuredSeeds = opts.SeedAddresses ?? [];
-        var seen = new HashSet<Endpoint>(EndpointAddressComparer.Instance);
+        // We cannot filter self here because _myAddr is not yet known
         _seedAddresses = [];
-        foreach (var seed in configuredSeeds)
-        {
-            var pbSeed = seed.ToProtobuf();
-            if (!EndpointAddressComparer.Instance.Equals(pbSeed, _myAddr) && seen.Add(pbSeed))
-            {
-                _seedAddresses.Add(pbSeed);
-            }
-        }
 
         // Create cut detector with configured thresholds - it will compute effective values via UpdateView()
         _cutDetector = new CutDetector(
@@ -144,7 +138,6 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         _metrics = metrics;
         _log = new MembershipServiceLogger(logger);
         _alertSendQueue = Channel.CreateUnbounded<AlertMessage>();
-        _consensusInstance = _consensusCoordinatorFactory.Create(_myAddr, _membershipView.ConfigurationId, _membershipView.Size, _broadcaster);
 
         // Create linked CTS so background tasks stop on either StopAsync or SharedResources shutdown
         _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(sharedResources.ShuttingDownToken);
@@ -167,6 +160,12 @@ internal sealed class MembershipService : IMembershipServiceHandler, IAsyncDispo
         {
             throw new InvalidOperationException("MembershipService is already initialized");
         }
+
+        // Resolve the listen address now that the server has started
+        _myAddr = _listenAddressProvider.ListenAddress.ToProtobuf();
+
+        // Create initial consensus instance now that we have _myAddr
+        _consensusInstance = _consensusCoordinatorFactory.Create(_myAddr, _membershipView.ConfigurationId, _membershipView.Size, _broadcaster);
 
         // Fetch seeds from the provider
         await RefreshSeedsAsync(cancellationToken);

@@ -111,19 +111,31 @@ public static class RapidClusterServiceCollectionExtensions
         // Register metrics
         services.AddSingleton<RapidClusterMetrics>();
 
+        // Register listen address provider (default reads from options for backward compatibility)
+        // Users can register their own IListenAddressProvider before calling AddRapidCluster
+        // to override this behavior (e.g., for dynamic port scenarios).
+        services.TryAddSingleton<IListenAddressProvider>(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterOptions>>().Value;
+            return new StaticListenAddressProvider(options.ListenAddress);
+        });
+
+        // Register internal wrapper that validates the listen address is not null
+        services.AddSingleton(sp => new ListenAddressProvider(sp.GetRequiredService<IListenAddressProvider>()));
+
         // Register broadcaster factory (requires IMessagingClient to be registered)
         services.AddSingleton<IBroadcasterFactory, UnicastToAllBroadcasterFactory>();
 
         // Register failure detector factory
         services.AddSingleton<IEdgeFailureDetectorFactory>(sp =>
         {
-            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterOptions>>().Value;
+            var listenAddressProvider = sp.GetRequiredService<IListenAddressProvider>();
             var protocolOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterProtocolOptions>>();
             var client = sp.GetRequiredService<IMessagingClient>();
             var sharedResources = sp.GetRequiredService<SharedResources>();
             var metrics = sp.GetRequiredService<RapidClusterMetrics>();
             var logger = sp.GetRequiredService<ILogger<PingPongFailureDetector>>();
-            return new PingPongFailureDetectorFactory(options.ListenAddress.ToProtobuf(), client, sharedResources, protocolOptions, metrics, logger);
+            return new PingPongFailureDetectorFactory(listenAddressProvider, client, sharedResources, protocolOptions, metrics, logger);
         });
 
         // Register ConsensusCoordinator factory

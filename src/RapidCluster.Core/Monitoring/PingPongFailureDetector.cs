@@ -12,19 +12,22 @@ namespace RapidCluster.Monitoring;
 /// Simple ping-pong failure detector factory.
 /// </summary>
 public sealed partial class PingPongFailureDetectorFactory(
-    Endpoint localEndpoint,
+    IListenAddressProvider listenAddressProvider,
     IMessagingClient client,
     SharedResources sharedResources,
     IOptions<RapidClusterProtocolOptions> protocolOptions,
     RapidClusterMetrics metrics,
     ILogger<PingPongFailureDetector> logger) : IEdgeFailureDetectorFactory
 {
-    private readonly Endpoint _localEndpoint = localEndpoint;
+    private readonly IListenAddressProvider _listenAddressProvider = listenAddressProvider;
     private readonly IMessagingClient _client = client;
     private readonly SharedResources _sharedResources = sharedResources;
     private readonly RapidClusterProtocolOptions _protocolOptions = protocolOptions.Value;
     private readonly RapidClusterMetrics _metrics = metrics;
     private readonly ILogger<PingPongFailureDetector> _logger = logger;
+
+    // Lazily resolved local endpoint - resolved on first CreateInstance call
+    private Endpoint? _localEndpoint;
 
     /// <summary>
     /// Gets or sets the callback invoked when a probe response indicates
@@ -42,8 +45,14 @@ public sealed partial class PingPongFailureDetectorFactory(
     /// </summary>
     internal IMembershipViewAccessor? ViewAccessor { get; set; }
 
-    public IEdgeFailureDetector CreateInstance(Endpoint subject, Action notifier) =>
-        new PingPongFailureDetector(
+    public IEdgeFailureDetector CreateInstance(Endpoint subject, Action notifier)
+    {
+        // Lazily resolve the local endpoint on first use
+        // This is safe because CreateInstance is only called after InitializeAsync,
+        // which is after the server has started
+        _localEndpoint ??= _listenAddressProvider.ListenAddress.ToProtobuf();
+
+        return new PingPongFailureDetector(
             subject,
             _localEndpoint,
             _client,
@@ -55,6 +64,7 @@ public sealed partial class PingPongFailureDetectorFactory(
             ViewAccessor,
             _metrics,
             _logger);
+    }
 }
 
 /// <summary>

@@ -15,11 +15,13 @@ internal readonly struct LoggableEndpoint
 
     public LoggableEndpoint(Endpoint endpoint)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
         _display = endpoint.GetNetworkAddressString();
     }
 
     public LoggableEndpoint(EndPoint endpoint)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
         _display = endpoint switch
         {
             IPEndPoint ip => string.Create(CultureInfo.InvariantCulture, $"{ip.Address}:{ip.Port}"),

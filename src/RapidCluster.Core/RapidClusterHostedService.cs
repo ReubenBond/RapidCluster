@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using RapidCluster.Logging;
 
 namespace RapidCluster;
@@ -16,12 +15,12 @@ namespace RapidCluster;
 /// join or accept connections from other nodes.
 /// </remarks>
 internal sealed partial class RapidClusterLifecycleService(
-    IOptions<RapidClusterOptions> options,
+    ListenAddressProvider listenAddressProvider,
     MembershipService membershipService,
     IHostApplicationLifetime applicationLifetime,
     ILogger<RapidClusterLifecycleService> logger) : BackgroundService, IRapidClusterLifecycle
 {
-    private readonly RapidClusterOptions _options = options.Value;
+    private readonly ListenAddressProvider _listenAddressProvider = listenAddressProvider;
     private readonly ILogger<RapidClusterLifecycleService> _logger = logger;
     private bool _started;
 
@@ -92,7 +91,7 @@ internal sealed partial class RapidClusterLifecycleService(
     {
         try
         {
-            LogStarting(new LoggableEndpoint(_options.ListenAddress));
+            LogStarting(new LoggableEndpoint(_listenAddressProvider.ListenAddress));
 
             // Initialize the membership service (start new cluster or join existing)
             await membershipService.InitializeAsync(cancellationToken);

@@ -153,9 +153,10 @@ internal sealed class RapidSimulationNode : SimulationNode
         _metrics = new RapidClusterMetrics(_meterFactory, cluster: null);
 
         // Create failure detector factory
+        var listenAddressProvider = new StaticListenAddressProvider(address.ToEndPointPreferIP());
         var failureDetectorLogger = _loggerFactory.CreateLogger<PingPongFailureDetector>();
         _failureDetectorFactory = new PingPongFailureDetectorFactory(
-            address,
+            listenAddressProvider,
             MessagingClient,
             _sharedResources,
             Options.Create(_protocolOptions),
@@ -187,6 +188,7 @@ internal sealed class RapidSimulationNode : SimulationNode
         _membershipService = new MembershipService(
             Options.Create(rapidClusterOptions),
             Options.Create(_protocolOptions),
+            listenAddressProvider,
             MessagingClient,
             broadcasterFactory,
             _failureDetectorFactory,

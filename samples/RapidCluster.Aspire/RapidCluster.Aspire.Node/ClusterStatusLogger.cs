@@ -9,16 +9,13 @@ namespace RapidCluster.Aspire.Node;
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated via DI")]
 internal sealed partial class ClusterStatusLogger(
     IServiceProvider serviceProvider,
-    DeferredRapidClusterOptionsConfigurator configurator,
     ILogger<ClusterStatusLogger> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            // Wait for the address to be configured before accessing the cluster
-            configurator.WaitForConfiguration(stoppingToken);
-
+            // Get the cluster - the lifecycle service ensures it's initialized after ApplicationStarted
             var cluster = serviceProvider.GetRequiredService<IRapidCluster>();
             await foreach (var view in cluster.ViewUpdates.WithCancellation(stoppingToken))
             {

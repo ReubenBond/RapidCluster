@@ -18,11 +18,13 @@ namespace RapidCluster.Grpc;
 /// Implements IHostedService to ensure proper shutdown ordering.
 /// </summary>
 internal sealed partial class GrpcClient(
-    IOptions<RapidClusterProtocolOptions> options,
+    IOptions<RapidClusterProtocolOptions> protocolOptions,
+    IOptions<RapidClusterGrpcOptions> grpcOptions,
     RapidClusterMetrics metrics,
     ILogger<GrpcClient> logger) : IMessagingClient, IHostedService
 {
-    private readonly RapidClusterProtocolOptions _options = options.Value;
+    private readonly RapidClusterProtocolOptions _protocolOptions = protocolOptions.Value;
+    private readonly RapidClusterGrpcOptions _grpcOptions = grpcOptions.Value;
     private readonly RapidClusterMetrics _metrics = metrics;
 #pragma warning disable CA1823 // Avoid unused private fields
     private readonly ILogger<GrpcClient> _logger = logger;
@@ -99,7 +101,7 @@ internal sealed partial class GrpcClient(
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stoppingCts.Token);
-            cts.CancelAfter(_options.GrpcTimeout);
+            cts.CancelAfter(_protocolOptions.GrpcTimeout);
 
             var response = await client.SendRequestAsync(request, cancellationToken: cts.Token);
             stopwatch.Stop();
@@ -139,7 +141,7 @@ internal sealed partial class GrpcClient(
     private async Task SendOneWayMessageInternalAsync(Endpoint remote, RapidClusterRequest request, Rank? rank, int taskId, DeliveryFailureCallback? onDeliveryFailure, CancellationToken cancellationToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stoppingCts.Token);
-        cts.CancelAfter(_options.GrpcTimeout);
+        cts.CancelAfter(_protocolOptions.GrpcTimeout);
 
         var client = GetOrCreateClient(remote);
         var stopwatch = Stopwatch.StartNew();
@@ -165,7 +167,7 @@ internal sealed partial class GrpcClient(
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
-            LogOneWayDeliveryFailedTimeout(new LoggableEndpoint(remote), _options.GrpcTimeout);
+            LogOneWayDeliveryFailedTimeout(new LoggableEndpoint(remote), _protocolOptions.GrpcTimeout);
             _metrics.RecordGrpcCallCompleted(SendRequestMethod, "DeadlineExceeded");
             _metrics.RecordGrpcCallDuration(SendRequestMethod, "DeadlineExceeded", stopwatch);
             _metrics.RecordGrpcConnectionError(MetricNames.ErrorTypes.Timeout);
@@ -197,9 +199,9 @@ internal sealed partial class GrpcClient(
     private Pb.MembershipService.MembershipServiceClient GetOrCreateClient(Endpoint remote)
     {
         var key = string.Create(CultureInfo.InvariantCulture, $"{remote.Hostname.ToStringUtf8()}:{remote.Port}");
-        return _clients.GetOrAdd(key, static (key, options) =>
+        return _clients.GetOrAdd(key, static (key, grpcOptions) =>
         {
-            var scheme = options.UseHttps ? "https" : "http";
+            var scheme = grpcOptions.UseHttps ? "https" : "http";
             var handler = new SocketsHttpHandler
             {
                 EnableMultipleHttp2Connections = true,
@@ -212,7 +214,7 @@ internal sealed partial class GrpcClient(
                 ThrowOperationCanceledOnCancellation = true,
             });
             return new Pb.MembershipService.MembershipServiceClient(channel);
-        }, _options);
+        }, _grpcOptions);
     }
 
     public async ValueTask DisposeAsync()

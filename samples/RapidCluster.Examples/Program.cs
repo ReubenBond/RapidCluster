@@ -71,8 +71,8 @@ internal sealed partial class Program
         // Add Rapid services
         builder.Services
             .AddRapidCluster(options => options.SeedAddresses = [seed])
-            .UseListenAddress(listen)
-            .UseGrpcTransport();
+            .UseGrpcTransport()
+            .UseListenAddress(listen);
 
         // Add background service to monitor cluster
         builder.Services.AddHostedService<ClusterMonitorService>();

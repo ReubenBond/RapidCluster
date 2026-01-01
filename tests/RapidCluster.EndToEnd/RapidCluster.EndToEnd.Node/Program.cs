@@ -30,11 +30,10 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<ISeedProvider>(sp => sp.GetRequiredService<FileBasedBootstrapProvider>());
 
 // Add RapidCluster services with automatic lifecycle management
-// ListenAddress will be resolved from the server after it starts
+// ListenAddress is automatically resolved from the ASP.NET Core server
 // Disable BootstrapExpect since we're using file-based coordination instead
 builder.Services
     .AddRapidCluster(options => options.BootstrapExpect = 0)
-    .UseServerListenAddress()
     .UseGrpcTransport(options => options.UseHttps = true);
 
 // Add cluster membership health check

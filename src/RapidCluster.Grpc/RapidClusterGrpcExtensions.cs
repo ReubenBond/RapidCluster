@@ -15,8 +15,8 @@ namespace RapidCluster.Grpc;
 public static class RapidClusterGrpcExtensions
 {
     /// <summary>
-    /// Adds RapidCluster gRPC transport services.
-    /// Call this after AddRapidCluster() to add gRPC transport support.
+    /// Adds RapidCluster gRPC transport services using ASP.NET Core hosting.
+    /// The listen address is automatically resolved from the ASP.NET Core server.
     /// </summary>
     /// <param name="builder">The RapidCluster builder.</param>
     /// <returns>The builder for chaining.</returns>
@@ -26,8 +26,8 @@ public static class RapidClusterGrpcExtensions
     }
 
     /// <summary>
-    /// Adds RapidCluster gRPC transport services with configuration.
-    /// Call this after AddRapidCluster() to add gRPC transport support.
+    /// Adds RapidCluster gRPC transport services using ASP.NET Core hosting.
+    /// The listen address is automatically resolved from the ASP.NET Core server.
     /// </summary>
     /// <param name="builder">The RapidCluster builder.</param>
     /// <param name="configure">A delegate to configure the gRPC-specific options.</param>
@@ -45,6 +45,16 @@ public static class RapidClusterGrpcExtensions
         // Add gRPC infrastructure
         services.AddGrpc();
 
+        // Register the server-based listen address provider
+        // This reads the listen address from IServer.Features after the server starts
+        services.RemoveAll<IListenAddressProvider>();
+        services.AddSingleton<IListenAddressProvider>(sp =>
+        {
+            var server = sp.GetRequiredService<IServer>();
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterGrpcOptions>>().Value;
+            return new ServerListenAddressProvider(server, options.UseHttps);
+        });
+
         // Register GrpcClient as the messaging client implementation
         // GrpcClient is registered as a hosted service so it shuts down AFTER RapidClusterService
         // (hosted services are stopped in reverse registration order)
@@ -54,40 +64,6 @@ public static class RapidClusterGrpcExtensions
 
         // Register the gRPC service implementation
         services.TryAddSingleton<MembershipServiceImpl>();
-
-        return builder;
-    }
-
-    /// <summary>
-    /// Configures the cluster to use the ASP.NET Core server's listen address.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Use this method when the listen address is not known until the server starts (e.g., with dynamic port assignment
-    /// in Aspire or when binding to port 0).
-    /// </para>
-    /// <para>
-    /// The provider reads from <see cref="IServer.Features"/> which is only populated after the server starts.
-    /// RapidCluster's lifecycle service waits for ApplicationStarted before initializing, so the address
-    /// will be available by the time it's needed.
-    /// </para>
-    /// </remarks>
-    /// <param name="builder">The RapidCluster builder.</param>
-    /// <param name="preferHttps">Whether to prefer HTTPS addresses over HTTP. Default is true.</param>
-    /// <returns>The builder for chaining.</returns>
-    public static IRapidClusterBuilder UseServerListenAddress(this IRapidClusterBuilder builder, bool preferHttps = true)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        var services = builder.Services;
-
-        // Replace any existing IListenAddressProvider registration with the server-based one
-        services.RemoveAll<IListenAddressProvider>();
-        services.AddSingleton<IListenAddressProvider>(sp =>
-        {
-            var server = sp.GetRequiredService<IServer>();
-            return new ServerListenAddressProvider(server, preferHttps);
-        });
 
         return builder;
     }

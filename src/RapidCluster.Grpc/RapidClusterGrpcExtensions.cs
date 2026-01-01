@@ -15,42 +15,32 @@ namespace RapidCluster.Grpc;
 public static class RapidClusterGrpcExtensions
 {
     /// <summary>
-    /// Adds RapidCluster gRPC transport services to the service collection.
-    /// Call this after <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/> to add gRPC transport support.
+    /// Adds RapidCluster gRPC transport services.
+    /// Call this after AddRapidCluster() to add gRPC transport support.
     /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services) => services.AddRapidClusterGrpc(_ => { }, _ => { });
-
-    /// <summary>
-    /// Adds RapidCluster gRPC transport services to the service collection with gRPC options configuration.
-    /// Call this after <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/> to add gRPC transport support.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configureGrpcOptions">A delegate to configure the gRPC-specific options.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services, Action<RapidClusterGrpcOptions> configureGrpcOptions)
-        => services.AddRapidClusterGrpc(_ => { }, configureGrpcOptions);
-
-    /// <summary>
-    /// Adds RapidCluster gRPC transport services to the service collection with configuration.
-    /// Call this after <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/> to add gRPC transport support.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configureProtocolOptions">A delegate to configure the protocol options.</param>
-    /// <param name="configureGrpcOptions">A delegate to configure the gRPC-specific options.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterGrpc(this IServiceCollection services, Action<RapidClusterProtocolOptions> configureProtocolOptions, Action<RapidClusterGrpcOptions> configureGrpcOptions)
+    /// <param name="builder">The RapidCluster builder.</param>
+    /// <returns>The builder for chaining.</returns>
+    public static IRapidClusterBuilder UseGrpcTransport(this IRapidClusterBuilder builder)
     {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(configureProtocolOptions);
-        ArgumentNullException.ThrowIfNull(configureGrpcOptions);
+        return builder.UseGrpcTransport(_ => { });
+    }
 
-        // Configure protocol options
-        services.Configure(configureProtocolOptions);
+    /// <summary>
+    /// Adds RapidCluster gRPC transport services with configuration.
+    /// Call this after AddRapidCluster() to add gRPC transport support.
+    /// </summary>
+    /// <param name="builder">The RapidCluster builder.</param>
+    /// <param name="configure">A delegate to configure the gRPC-specific options.</param>
+    /// <returns>The builder for chaining.</returns>
+    public static IRapidClusterBuilder UseGrpcTransport(this IRapidClusterBuilder builder, Action<RapidClusterGrpcOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var services = builder.Services;
 
         // Configure gRPC-specific options
-        services.Configure(configureGrpcOptions);
+        services.Configure(configure);
 
         // Add gRPC infrastructure
         services.AddGrpc();
@@ -58,24 +48,23 @@ public static class RapidClusterGrpcExtensions
         // Register GrpcClient as the messaging client implementation
         // GrpcClient is registered as a hosted service so it shuts down AFTER RapidClusterService
         // (hosted services are stopped in reverse registration order)
-        services.AddSingleton<GrpcClient>();
-        services.AddSingleton<IMessagingClient>(sp => sp.GetRequiredService<GrpcClient>());
+        services.TryAddSingleton<GrpcClient>();
+        services.TryAddSingleton<IMessagingClient>(sp => sp.GetRequiredService<GrpcClient>());
         services.AddHostedService(sp => sp.GetRequiredService<GrpcClient>());
 
         // Register the gRPC service implementation
-        services.AddSingleton<MembershipServiceImpl>();
+        services.TryAddSingleton<MembershipServiceImpl>();
 
-        return services;
+        return builder;
     }
 
     /// <summary>
-    /// Registers a <see cref="ServerListenAddressProvider"/> that reads the listen address from the ASP.NET Core server.
+    /// Configures the cluster to use the ASP.NET Core server's listen address.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Use this method when the listen address is not known until the server starts (e.g., with dynamic port assignment
-    /// in Aspire or when binding to port 0). This must be called <strong>before</strong> <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/>
-    /// to ensure the server-based provider takes precedence over the default options-based provider.
+    /// in Aspire or when binding to port 0).
     /// </para>
     /// <para>
     /// The provider reads from <see cref="IServer.Features"/> which is only populated after the server starts.
@@ -83,12 +72,14 @@ public static class RapidClusterGrpcExtensions
     /// will be available by the time it's needed.
     /// </para>
     /// </remarks>
-    /// <param name="services">The service collection.</param>
+    /// <param name="builder">The RapidCluster builder.</param>
     /// <param name="preferHttps">Whether to prefer HTTPS addresses over HTTP. Default is true.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterServerAddressProvider(this IServiceCollection services, bool preferHttps = true)
+    /// <returns>The builder for chaining.</returns>
+    public static IRapidClusterBuilder UseServerListenAddress(this IRapidClusterBuilder builder, bool preferHttps = true)
     {
-        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var services = builder.Services;
 
         // Replace any existing IListenAddressProvider registration with the server-based one
         services.RemoveAll<IListenAddressProvider>();
@@ -98,7 +89,7 @@ public static class RapidClusterGrpcExtensions
             return new ServerListenAddressProvider(server, preferHttps);
         });
 
-        return services;
+        return builder;
     }
 
     /// <summary>

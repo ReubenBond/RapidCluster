@@ -19,10 +19,6 @@ var nodeIndex = builder.Configuration.GetValue("CLUSTER_NODE_INDEX", 0);
 var bootstrapFilePath = builder.Configuration["CLUSTER_BOOTSTRAP_FILE"]
     ?? Path.Combine(Path.GetTempPath(), "rapidcluster-e2e-bootstrap.json");
 
-// Use the server-based listen address provider for dynamic port scenarios
-// This must be registered BEFORE AddRapidCluster to take precedence
-builder.Services.AddRapidClusterServerAddressProvider();
-
 // Register the file-based bootstrap provider for coordinated startup
 // Node 0 will start a new cluster, others will wait for node 0 and join it
 builder.Services.AddSingleton(sp =>
@@ -36,10 +32,10 @@ builder.Services.AddSingleton<ISeedProvider>(sp => sp.GetRequiredService<FileBas
 // Add RapidCluster services with automatic lifecycle management
 // ListenAddress will be resolved from the server after it starts
 // Disable BootstrapExpect since we're using file-based coordination instead
-builder.Services.AddRapidCluster(options => options.BootstrapExpect = 0);
-
-// Add gRPC transport with HTTPS enabled (required for Http1AndHttp2 with TLS)
-builder.Services.AddRapidClusterGrpc(options => options.UseHttps = true);
+builder.Services
+    .AddRapidCluster(options => options.BootstrapExpect = 0)
+    .UseServerListenAddress()
+    .UseGrpcTransport(options => options.UseHttps = true);
 
 // Add cluster membership health check
 builder.Services.AddHealthChecks()

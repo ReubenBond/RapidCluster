@@ -9,13 +9,7 @@ namespace RapidCluster;
 public sealed class RapidClusterOptions
 {
     /// <summary>
-    /// Gets or sets the endpoint this node listens on.
-    /// Use <see cref="IPEndPoint"/> for IP addresses or <see cref="DnsEndPoint"/> for hostnames.
-    /// </summary>
-    public EndPoint ListenAddress { get; set; } = null!;
-
-    /// <summary>
-    /// Gets or sets the seed node endpoints to join. If null/empty or all entries equal ListenAddress, starts a new cluster.
+    /// Gets or sets the seed node endpoints to join. If null/empty, starts a new cluster.
     /// Nodes are tried in round-robin order until join succeeds.
     /// </summary>
     /// <remarks>

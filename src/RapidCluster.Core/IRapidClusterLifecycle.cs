@@ -6,11 +6,9 @@ namespace RapidCluster;
 /// for example when the listen address is only known after the server starts.
 /// </summary>
 /// <remarks>
-/// For typical scenarios, use <see cref="RapidClusterServiceCollectionExtensions.AddRapidCluster"/>
-/// which automatically registers a hosted service to manage the lifecycle.
-/// For scenarios requiring manual control (e.g., Aspire with dynamic ports), use
-/// <see cref="RapidClusterServiceCollectionExtensions.AddRapidClusterManual"/> and call
-/// <see cref="StartAsync"/> after the server is ready.
+/// For typical scenarios, use AddRapidCluster() which automatically registers a hosted service
+/// to manage the lifecycle. For scenarios requiring manual control (e.g., Aspire with dynamic ports),
+/// use AddRapidClusterManual() and call <see cref="StartAsync"/> after the server is ready.
 /// </remarks>
 public interface IRapidClusterLifecycle
 {

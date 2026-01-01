@@ -183,7 +183,6 @@ internal sealed class RapidSimulationNode : SimulationNode
         // Create the MembershipService (but don't initialize it yet)
         var rapidClusterOptions = new RapidClusterOptions
         {
-            ListenAddress = address.ToEndPointPreferIP(),
             SeedAddresses = seedAddresses?.Select(s => s.ToEndPointPreferIP()).ToList(),
             Metadata = metadata?.Metadata_.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToByteArray(), StringComparer.Ordinal) ?? [],
         };

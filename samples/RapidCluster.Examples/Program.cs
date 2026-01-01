@@ -69,14 +69,10 @@ internal sealed partial class Program
         builder.ConfigureRapidClusterKestrel(listenPort);
 
         // Add Rapid services
-        builder.Services.AddRapidCluster(options =>
-        {
-            options.ListenAddress = listen;
-            options.SeedAddresses = [seed];
-        });
-
-        // Add gRPC transport for cluster communication
-        builder.Services.AddRapidClusterGrpc();
+        builder.Services
+            .AddRapidCluster(options => options.SeedAddresses = [seed])
+            .UseListenAddress(listen)
+            .UseGrpcTransport();
 
         // Add background service to monitor cluster
         builder.Services.AddHostedService<ClusterMonitorService>();

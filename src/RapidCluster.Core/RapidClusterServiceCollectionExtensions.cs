@@ -16,29 +16,58 @@ public static class RapidClusterServiceCollectionExtensions
     /// <summary>
     /// Adds RapidCluster core services to the service collection with automatic lifecycle management.
     /// The cluster will start automatically when the host starts and stop when the host stops.
-    /// Note: You must also call AddRapidClusterGrpc() from the RapidCluster.Grpc package
-    /// (or provide your own IMessagingClient implementation) for the cluster to communicate.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// You must configure a listen address using one of the builder extension methods:
+    /// <list type="bullet">
+    /// <item><description><see cref="RapidClusterBuilderExtensions.UseListenAddress"/> for static addresses</description></item>
+    /// <item><description>UseServerListenAddress() from RapidCluster.Grpc for ASP.NET Core server-derived addresses</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// You must also add a transport implementation such as AddRapidClusterGrpc() from the RapidCluster.Grpc package.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <returns>A builder for further configuration.</returns>
+    public static IRapidClusterBuilder AddRapidCluster(this IServiceCollection services)
+    {
+        return services.AddRapidCluster(_ => { });
+    }
+
+    /// <summary>
+    /// Adds RapidCluster core services to the service collection with automatic lifecycle management.
+    /// The cluster will start automatically when the host starts and stop when the host stops.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// You must configure a listen address using one of the builder extension methods:
+    /// <list type="bullet">
+    /// <item><description><see cref="RapidClusterBuilderExtensions.UseListenAddress"/> for static addresses</description></item>
+    /// <item><description>UseServerListenAddress() from RapidCluster.Grpc for ASP.NET Core server-derived addresses</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// You must also add a transport implementation such as AddRapidClusterGrpc() from the RapidCluster.Grpc package.
+    /// </para>
+    /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
-    /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
-    /// <param name="configureFailureDetector">Optional configuration action for failure detector options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidCluster(
+    /// <returns>A builder for further configuration.</returns>
+    public static IRapidClusterBuilder AddRapidCluster(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
-        Action<RapidClusterProtocolOptions>? configureProtocol = null,
-        Action<PingPongFailureDetectorOptions>? configureFailureDetector = null,
         TimeProvider? timeProvider = null)
     {
         // Add core services
-        AddRapidClusterCore(services, configure, configureProtocol, configureFailureDetector, timeProvider);
+        AddRapidClusterCore(services, configure, timeProvider);
 
         // Register the cluster service as a hosted service for automatic lifecycle management
         services.AddHostedService(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
 
-        return services;
+        return new RapidClusterBuilder(services);
     }
 
     /// <summary>
@@ -47,29 +76,67 @@ public static class RapidClusterServiceCollectionExtensions
     /// is only known after the server starts (e.g., with Aspire's dynamic port assignment).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// When using this method, you must manually call <see cref="IRapidClusterLifecycle.StartAsync"/>
     /// after the server has started and <see cref="IRapidClusterLifecycle.StopAsync"/> before shutdown.
     /// Typically, you would hook into <see cref="IHostApplicationLifetime.ApplicationStarted"/> and
     /// <see cref="IHostApplicationLifetime.ApplicationStopping"/> to manage the lifecycle.
+    /// </para>
+    /// <para>
+    /// You must configure a listen address using one of the builder extension methods:
+    /// <list type="bullet">
+    /// <item><description><see cref="RapidClusterBuilderExtensions.UseListenAddress"/> for static addresses</description></item>
+    /// <item><description>UseServerListenAddress() from RapidCluster.Grpc for ASP.NET Core server-derived addresses</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// You must also add a transport implementation such as AddRapidClusterGrpc() from the RapidCluster.Grpc package.
+    /// </para>
+    /// </remarks>
+    /// <param name="services">The service collection.</param>
+    /// <returns>A builder for further configuration.</returns>
+    public static IRapidClusterBuilder AddRapidClusterManual(this IServiceCollection services)
+    {
+        return services.AddRapidClusterManual(_ => { });
+    }
+
+    /// <summary>
+    /// Adds RapidCluster core services to the service collection with manual lifecycle management.
+    /// Use this when you need to control when the cluster starts, for example when the listen address
+    /// is only known after the server starts (e.g., with Aspire's dynamic port assignment).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When using this method, you must manually call <see cref="IRapidClusterLifecycle.StartAsync"/>
+    /// after the server has started and <see cref="IRapidClusterLifecycle.StopAsync"/> before shutdown.
+    /// Typically, you would hook into <see cref="IHostApplicationLifetime.ApplicationStarted"/> and
+    /// <see cref="IHostApplicationLifetime.ApplicationStopping"/> to manage the lifecycle.
+    /// </para>
+    /// <para>
+    /// You must configure a listen address using one of the builder extension methods:
+    /// <list type="bullet">
+    /// <item><description><see cref="RapidClusterBuilderExtensions.UseListenAddress"/> for static addresses</description></item>
+    /// <item><description>UseServerListenAddress() from RapidCluster.Grpc for ASP.NET Core server-derived addresses</description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// You must also add a transport implementation such as AddRapidClusterGrpc() from the RapidCluster.Grpc package.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Configuration action for Rapid options.</param>
-    /// <param name="configureProtocol">Optional configuration action for protocol options.</param>
-    /// <param name="configureFailureDetector">Optional configuration action for failure detector options.</param>
     /// <param name="timeProvider">Optional TimeProvider for testing and time control.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddRapidClusterManual(
+    /// <returns>A builder for further configuration.</returns>
+    public static IRapidClusterBuilder AddRapidClusterManual(
         this IServiceCollection services,
         Action<RapidClusterOptions> configure,
-        Action<RapidClusterProtocolOptions>? configureProtocol = null,
-        Action<PingPongFailureDetectorOptions>? configureFailureDetector = null,
         TimeProvider? timeProvider = null)
     {
         // Add core services without the hosted service registration
-        AddRapidClusterCore(services, configure, configureProtocol, configureFailureDetector, timeProvider);
+        AddRapidClusterCore(services, configure, timeProvider);
 
         // No hosted service registration - caller must manage lifecycle manually via IRapidClusterLifecycle
-        return services;
+        return new RapidClusterBuilder(services);
     }
 
     /// <summary>
@@ -78,8 +145,6 @@ public static class RapidClusterServiceCollectionExtensions
     private static void AddRapidClusterCore(
         IServiceCollection services,
         Action<RapidClusterOptions> configure,
-        Action<RapidClusterProtocolOptions>? configureProtocol,
-        Action<PingPongFailureDetectorOptions>? configureFailureDetector,
         TimeProvider? timeProvider)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -88,35 +153,23 @@ public static class RapidClusterServiceCollectionExtensions
         // Configure options
         services.Configure(configure);
 
-        // Configure protocol options
-        if (configureProtocol != null)
-        {
-            services.Configure(configureProtocol);
-        }
-        else
-        {
-            services.Configure<RapidClusterProtocolOptions>(_ => { });
-        }
+        // Configure default protocol options (can be overridden via builder)
+        services.TryAddSingleton(_ => Microsoft.Extensions.Options.Options.Create(new RapidClusterProtocolOptions()));
+        services.Configure<RapidClusterProtocolOptions>(_ => { });
 
-        // Configure failure detector options
-        if (configureFailureDetector != null)
-        {
-            services.Configure(configureFailureDetector);
-        }
-        else
-        {
-            services.Configure<PingPongFailureDetectorOptions>(_ => { });
-        }
+        // Configure default failure detector options (can be overridden via builder)
+        services.TryAddSingleton(_ => Microsoft.Extensions.Options.Options.Create(new PingPongFailureDetectorOptions()));
+        services.Configure<PingPongFailureDetectorOptions>(_ => { });
 
         // Add validation
         services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<RapidClusterProtocolOptions>, RapidClusterProtocolOptionsValidator>();
 
         // Register TimeProvider
         var provider = timeProvider ?? TimeProvider.System;
-        services.AddSingleton(provider);
+        services.TryAddSingleton(provider);
 
         // Add core services
-        services.AddSingleton(sp =>
+        services.TryAddSingleton(sp =>
         {
             var lifetime = sp.GetService<IHostApplicationLifetime>();
             var shuttingDownToken = lifetime?.ApplicationStopping ?? default;
@@ -124,25 +177,17 @@ public static class RapidClusterServiceCollectionExtensions
         });
 
         // Register metrics
-        services.AddSingleton<RapidClusterMetrics>();
-
-        // Register listen address provider (default reads from options for backward compatibility)
-        // Users can register their own IListenAddressProvider before calling AddRapidCluster
-        // to override this behavior (e.g., for dynamic port scenarios).
-        services.TryAddSingleton<IListenAddressProvider>(sp =>
-        {
-            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RapidClusterOptions>>().Value;
-            return new StaticListenAddressProvider(options.ListenAddress);
-        });
+        services.TryAddSingleton<RapidClusterMetrics>();
 
         // Register internal wrapper that validates the listen address is not null
-        services.AddSingleton(sp => new ListenAddressProvider(sp.GetRequiredService<IListenAddressProvider>()));
+        // Note: IListenAddressProvider must be registered via UseListenAddress() or UseServerListenAddress()
+        services.TryAddSingleton(sp => new ListenAddressProvider(sp.GetRequiredService<IListenAddressProvider>()));
 
         // Register broadcaster factory (requires IMessagingClient to be registered)
-        services.AddSingleton<IBroadcasterFactory, UnicastToAllBroadcasterFactory>();
+        services.TryAddSingleton<IBroadcasterFactory, UnicastToAllBroadcasterFactory>();
 
         // Register failure detector factory
-        services.AddSingleton<IEdgeFailureDetectorFactory>(sp =>
+        services.TryAddSingleton<IEdgeFailureDetectorFactory>(sp =>
         {
             var listenAddressProvider = sp.GetRequiredService<IListenAddressProvider>();
             var failureDetectorOptions = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PingPongFailureDetectorOptions>>();
@@ -154,26 +199,26 @@ public static class RapidClusterServiceCollectionExtensions
         });
 
         // Register ConsensusCoordinator factory
-        services.AddSingleton<IConsensusCoordinatorFactory, ConsensusCoordinatorFactory>();
+        services.TryAddSingleton<IConsensusCoordinatorFactory, ConsensusCoordinatorFactory>();
 
         // Register seed provider (default to ConfigurationSeedProvider if not already registered)
         services.TryAddSingleton<ISeedProvider, ConfigurationSeedProvider>();
 
         // Register MembershipViewAccessor as singleton (used by both MembershipService and consumers)
-        services.AddSingleton<MembershipViewAccessor>();
-        services.AddSingleton<IMembershipViewAccessor>(sp => sp.GetRequiredService<MembershipViewAccessor>());
+        services.TryAddSingleton<MembershipViewAccessor>();
+        services.TryAddSingleton<IMembershipViewAccessor>(sp => sp.GetRequiredService<MembershipViewAccessor>());
 
         // Register MembershipService directly (InitializeAsync is called by RapidClusterLifecycleService)
-        services.AddSingleton<MembershipService>();
+        services.TryAddSingleton<MembershipService>();
 
         // Register the membership service handler
-        services.AddSingleton<IMembershipServiceHandler>(sp => sp.GetRequiredService<MembershipService>());
+        services.TryAddSingleton<IMembershipServiceHandler>(sp => sp.GetRequiredService<MembershipService>());
 
         // Register the lifecycle service (for both manual and automatic scenarios)
-        services.AddSingleton<RapidClusterLifecycleService>();
-        services.AddSingleton<IRapidClusterLifecycle>(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
+        services.TryAddSingleton<RapidClusterLifecycleService>();
+        services.TryAddSingleton<IRapidClusterLifecycle>(sp => sp.GetRequiredService<RapidClusterLifecycleService>());
 
         // Register the cluster interface for application access
-        services.AddSingleton<IRapidCluster, RapidClusterImpl>();
+        services.TryAddSingleton<IRapidCluster, RapidClusterImpl>();
     }
 }
